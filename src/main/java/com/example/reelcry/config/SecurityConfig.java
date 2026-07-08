@@ -88,7 +88,7 @@ public class SecurityConfig {
 
     @Value("${app.auth.username2:family}")
     private String username2;
-    @Value("${app.auth.password2:xemphim@2026}")
+    @Value("${app.auth.password2:reelcry@2026}")
     private String password2;
 
     @Bean

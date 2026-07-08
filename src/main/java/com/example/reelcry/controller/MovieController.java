@@ -28,7 +28,8 @@ public class MovieController {
             model.addAttribute("movies", response.getActualItems());
 
             // Xử lý phân trang an toàn
-            if (response.getData() != null && response.getData().getParams() != null && response.getData().getParams().getPagination() != null) {
+            if (response.getData() != null && response.getData().getParams() != null
+                    && response.getData().getParams().getPagination() != null) {
                 model.addAttribute("currentPage", response.getData().getParams().getPagination().getCurrentPage());
             } else {
                 model.addAttribute("currentPage", page);
@@ -56,14 +57,16 @@ public class MovieController {
     // --- TRANG CHI TIẾT PHIM ---
     @GetMapping("/phim/{slug}")
     public String showDetail(@PathVariable String slug,
-                             @RequestParam(defaultValue = "ophim") String src, Model model) {
+            @RequestParam(defaultValue = "ophim") String src,
+            @RequestParam(required = false) String notice,
+            Model model) {
         MovieDetailResponse detail = movieService.getDetail(slug, src).block();
 
         // SỬA: Dùng hàm isSuccess() mới để check an toàn cho cả 2 API
         if (detail != null && detail.isSuccess() && detail.getActualItem() != null) {
             var movie = detail.getActualItem();
             model.addAttribute("movie", movie);
-            model.addAttribute("currentSource", src);
+            model.addAttribute("notice", notice);
 
             try {
                 MoviePeoplesResponse peoples = movieService.getPeoples(slug).block();
@@ -83,14 +86,15 @@ public class MovieController {
     // --- TRANG XEM PHIM ---
     @GetMapping("/xem-phim/{slug}")
     public String watchMovie(@PathVariable String slug,
-                             @RequestParam(defaultValue = "tap-01") String ep,
-                             @RequestParam(defaultValue = "0") int sv,
-                             @RequestParam(defaultValue = "ophim") String src,
-                             Model model) {
+            @RequestParam(defaultValue = "tap-01") String ep,
+            @RequestParam(defaultValue = "0") int sv,
+            @RequestParam(defaultValue = "ophim") String src,
+            Model model) {
         try {
             MovieDetailResponse response = movieService.getDetail(slug, src).block();
 
-            // SỬA: Dùng hàm isSuccess() để tránh lỗi văng khi API trả về "success" thay vì true
+            // SỬA: Dùng hàm isSuccess() để tránh lỗi văng khi API trả về "success" thay vì
+            // true
             if (response != null && response.isSuccess()) {
                 var movie = response.getActualItem();
                 var allServers = response.getActualEpisodes();
@@ -118,15 +122,16 @@ public class MovieController {
         } catch (Exception e) {
             System.err.println("Lỗi xử lý tại Controller: " + e.getMessage());
         }
-        // Nếu không tìm thấy phim hoặc lỗi, quay lại trang chi tiết thay vì trang chủ
-        return "redirect:/phim/" + slug;
+        // Nếu không tìm thấy phim hoặc lỗi, quay lại trang chi tiết kèm thông báo rõ
+        // ràng
+        return "redirect:/phim/" + slug + "?notice=missing_source";
     }
 
     @GetMapping("/filter/{category}/{slug}")
     public String filterMovies(@PathVariable String category,
-                               @PathVariable String slug,
-                               @RequestParam(defaultValue = "1") int page,
-                               @RequestParam(defaultValue = "ophim") String src, Model model) {
+            @PathVariable String slug,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "ophim") String src, Model model) {
         try {
             MovieResponse response = movieService.getMoviesByFilter(category, slug, page, src).block();
 

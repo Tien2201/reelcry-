@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,11 +8,21 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <style>
-        :root { --netflix-red: #e50914; --bg-dark: #0a0a0a; }
-        body { background-color: var(--bg-dark); color: white; font-family: 'Be Vietnam Pro', sans-serif; overflow-x: hidden; }
+        :root {
+            --netflix-red: #e50914;
+            --bg-dark: #0a0a0a;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Be Vietnam Pro', sans-serif;
+            overflow-x: hidden;
+        }
 
         .home-hero {
             position: relative;
@@ -21,183 +32,393 @@
             padding-bottom: 64px;
             margin-bottom: 8px;
         }
+
         .home-hero-bg {
-            position: absolute; inset: 0;
+            position: absolute;
+            inset: 0;
             background-size: cover;
             background-position: center 15%;
             filter: contrast(1.1) saturate(1.1) brightness(0.9);
             z-index: 0;
         }
+
         .home-hero-overlay {
-            position: absolute; inset: 0;
-            background: linear-gradient(0deg, var(--bg-dark) 2%, rgba(10,10,10,0.2) 45%, rgba(10,10,10,0.75) 100%),
-                        linear-gradient(90deg, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.3) 55%, rgba(10,10,10,0.1) 100%);
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(0deg, var(--bg-dark) 2%, rgba(10, 10, 10, 0.2) 45%, rgba(10, 10, 10, 0.75) 100%),
+                linear-gradient(90deg, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.3) 55%, rgba(10, 10, 10, 0.1) 100%);
             z-index: 1;
         }
-        .home-hero-content { position: relative; z-index: 2; max-width: 620px; }
-        .home-hero-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: rgba(229,9,20,0.15); border: 1px solid rgba(229,9,20,0.4);
-            color: #ff5b62; font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px;
-            text-transform: uppercase; padding: 5px 14px; border-radius: 30px; margin-bottom: 18px;
-        }
-        .home-hero-title {
-            font-size: clamp(2.1rem, 4.5vw, 3.4rem); font-weight: 800; line-height: 1.08;
-            text-shadow: 0 4px 24px rgba(0,0,0,0.9); margin-bottom: 16px;
-        }
-        .home-hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 28px; }
-        .home-hero-meta span {
-            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
-            padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; color: #ddd;
-        }
-        .home-hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-        .btn-hero-play {
-            background: white; color: #111; font-weight: 700; letter-spacing: 0.5px;
-            padding: 13px 30px; border-radius: 8px; text-decoration: none;
-            display: inline-flex; align-items: center; gap: 10px; transition: 0.25s; font-size: 0.9rem;
-        }
-        .btn-hero-play:hover { background: #eee; color: #111; transform: translateY(-2px); }
-        .btn-hero-info {
-            background: rgba(255,255,255,0.12); color: white; font-weight: 700; letter-spacing: 0.5px;
-            padding: 13px 26px; border-radius: 8px; text-decoration: none;
-            display: inline-flex; align-items: center; gap: 10px; transition: 0.25s; font-size: 0.9rem;
-            border: 1px solid rgba(255,255,255,0.15);
-        }
-        .btn-hero-info:hover { background: rgba(255,255,255,0.2); color: white; }
 
-        .section-title-row { display: flex; align-items: center; justify-content: space-between; margin: 46px 0 18px; }
+        .home-hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 620px;
+        }
+
+        .home-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(229, 9, 20, 0.15);
+            border: 1px solid rgba(229, 9, 20, 0.4);
+            color: #ff5b62;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 30px;
+            margin-bottom: 18px;
+        }
+
+        .home-hero-title {
+            font-size: clamp(2.1rem, 4.5vw, 3.4rem);
+            font-weight: 800;
+            line-height: 1.08;
+            text-shadow: 0 4px 24px rgba(0, 0, 0, 0.9);
+            margin-bottom: 16px;
+        }
+
+        .home-hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 28px;
+        }
+
+        .home-hero-meta span {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            color: #ddd;
+        }
+
+        .home-hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-hero-play {
+            background: white;
+            color: #111;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 13px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.25s;
+            font-size: 0.9rem;
+        }
+
+        .btn-hero-play:hover {
+            background: #eee;
+            color: #111;
+            transform: translateY(-2px);
+        }
+
+        .btn-hero-info {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 13px 26px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.25s;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-hero-info:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .section-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 46px 0 18px;
+        }
+
         .section-title {
-            font-size: 1.3rem; font-weight: 700; margin: 0;
-            border-left: 4px solid var(--netflix-red); padding-left: 14px; color: #f2f2f2;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin: 0;
+            border-left: 4px solid var(--netflix-red);
+            padding-left: 14px;
+            color: #f2f2f2;
         }
+
         .section-viewall {
-            color: #999; font-size: 0.82rem; font-weight: 600; text-decoration: none;
-            display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;
-            background: none; border: none; cursor: pointer;
+            color: #999;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.2s;
+            background: none;
+            border: none;
+            cursor: pointer;
         }
-        .section-viewall:hover { color: var(--netflix-red); }
+
+        .section-viewall:hover {
+            color: var(--netflix-red);
+        }
 
         .movie-card {
-            background: #161616; border-radius: 12px; overflow: hidden;
+            background: #161616;
+            border-radius: 12px;
+            overflow: hidden;
             transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 1px solid rgba(255,255,255,0.06); position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            position: relative;
         }
+
         .movie-card:hover {
-            transform: translateY(-6px) scale(1.03); z-index: 5;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.7);
-            border-color: rgba(229,9,20,0.5);
+            transform: translateY(-6px) scale(1.03);
+            z-index: 5;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            border-color: rgba(229, 9, 20, 0.5);
         }
-        .movie-img-container { position: relative; aspect-ratio: 2/3; overflow: hidden; background: #1e1e1e; }
-        .movie-card img { width: 100%; height: 100%; object-fit: cover; transition: 0.5s; }
-        .movie-card:hover img { filter: brightness(0.75); transform: scale(1.06); }
+
+        .movie-img-container {
+            position: relative;
+            aspect-ratio: 2/3;
+            overflow: hidden;
+            background: #1e1e1e;
+        }
+
+        .movie-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: 0.5s;
+        }
+
+        .movie-card:hover img {
+            filter: brightness(0.75);
+            transform: scale(1.06);
+        }
 
         .movie-card-gradient {
-            position: absolute; inset: 0;
-            background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 50%);
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 50%);
             pointer-events: none;
         }
 
         .badge-status {
-            position: absolute; top: 8px; left: 8px;
-            background: var(--netflix-red); color: white;
-            font-size: 0.65rem; padding: 3px 8px; border-radius: 5px;
-            font-weight: 700; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-        .badge-year {
-            position: absolute; top: 8px; right: 8px;
-            background: rgba(0, 0, 0, 0.75); color: #ffc107;
-            font-size: 0.65rem; padding: 3px 8px; border-radius: 5px;
-            z-index: 10; backdrop-filter: blur(5px);
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: var(--netflix-red);
+            color: white;
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-weight: 700;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
         }
 
-        .movie-info { padding: 10px 8px; text-align: center; }
+        .badge-year {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #ffc107;
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 5px;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+        }
+
+        .movie-info {
+            padding: 10px 8px;
+            text-align: center;
+        }
+
         .movie-title {
-            font-weight: 600; font-size: 0.9rem; line-height: 1.3;
-            height: 2.4rem; display: -webkit-box; -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical; overflow: hidden; color: #eee;
+            font-weight: 600;
+            font-size: 0.9rem;
+            line-height: 1.3;
+            height: 2.4rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            color: #eee;
         }
 
         .play-icon {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
-            font-size: 2.6rem; color: white; transition: 0.3s; opacity: 0.9; z-index: 3;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 2.6rem;
+            color: white;
+            transition: 0.3s;
+            opacity: 0.9;
+            z-index: 3;
         }
-        .movie-card:hover .play-icon { transform: translate(-50%, -50%) scale(1); }
 
-        .vn-scroll-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; scroll-snap-type: x mandatory; }
-        .vn-scroll-row::-webkit-scrollbar { height: 6px; }
-        .vn-scroll-row::-webkit-scrollbar-thumb { background: var(--netflix-red); border-radius: 10px; }
-        .vn-scroll-row::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        .vn-card-wrap { flex: 0 0 220px; scroll-snap-align: start; }
+        .movie-card:hover .play-icon {
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .vn-scroll-row {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            scroll-snap-type: x mandatory;
+        }
+
+        .vn-scroll-row::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .vn-scroll-row::-webkit-scrollbar-thumb {
+            background: var(--netflix-red);
+            border-radius: 10px;
+        }
+
+        .vn-scroll-row::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .vn-card-wrap {
+            flex: 0 0 220px;
+            scroll-snap-align: start;
+        }
 
         .pagination .page-link {
-            background-color: #161616; border-color: rgba(255,255,255,0.1); color: #aaa;
-            margin: 0 5px; border-radius: 8px !important; transition: 0.3s;
+            background-color: #161616;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #aaa;
+            margin: 0 5px;
+            border-radius: 8px !important;
+            transition: 0.3s;
         }
+
         .pagination .page-item.active .page-link {
-            background-color: var(--netflix-red); border-color: var(--netflix-red); color: white;
+            background-color: var(--netflix-red);
+            border-color: var(--netflix-red);
+            color: white;
             box-shadow: 0 0 15px rgba(229, 9, 20, 0.3);
         }
-        .pagination .page-link:hover { background-color: var(--netflix-red); color: white; }
+
+        .pagination .page-link:hover {
+            background-color: var(--netflix-red);
+            color: white;
+        }
     </style>
 </head>
+
 <body>
 
-<div th:replace="~{header :: reelcry-header}"></div>
+    <div th:replace="~{header :: reelcry-header}"></div>
 
-<section class="home-hero" th:if="${searchTerm == null and currentCategory == null and movies != null and !movies.isEmpty()}">
-    <div class="home-hero-bg" th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movies[0].getImageUrl())} + ')'"></div>
-    <div class="home-hero-overlay"></div>
+    <section class="home-hero"
+        th:if="${searchTerm == null and currentCategory == null and movies != null and !movies.isEmpty()}">
+        <div class="home-hero-bg"
+            th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movies[0].getImageUrl())} + ')'">
+        </div>
+        <div class="home-hero-overlay"></div>
 
-    <div class="container home-hero-content">
-        <span class="home-hero-badge"><i class="fas fa-fire"></i> Đang hot</span>
-        <h1 class="home-hero-title" th:text="${movies[0].name}"></h1>
+        <div class="container home-hero-content">
+            <span class="home-hero-badge"><i class="fas fa-fire"></i> Đang hot</span>
+            <h1 class="home-hero-title" th:text="${movies[0].name}"></h1>
 
-        <div class="home-hero-meta">
-            <span th:if="${movies[0].year != 0}" th:text="${movies[0].year}"></span>
-            <span th:if="${movies[0].quality}" th:text="${movies[0].quality}"></span>
-            <span th:if="${movies[0].lang}" th:text="${movies[0].lang}"></span>
-            <span th:if="${movies[0].episode_current}" th:text="${movies[0].episode_current}"></span>
+            <div class="home-hero-meta">
+                <span th:if="${movies[0].year != 0}" th:text="${movies[0].year}"></span>
+                <span th:if="${movies[0].quality}" th:text="${movies[0].quality}"></span>
+                <span th:if="${movies[0].lang}" th:text="${movies[0].lang}"></span>
+                <span th:if="${movies[0].episode_current}" th:text="${movies[0].episode_current}"></span>
+            </div>
+
+            <div class="home-hero-actions">
+                <a class="btn-hero-play" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
+                    <i class="fas fa-play"></i> Xem ngay
+                </a>
+                <a class="btn-hero-info" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
+                    <i class="fas fa-circle-info"></i> Chi tiết
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <div class="container my-5">
+
+        <div id="watched-section" style="display:none;">
+            <div class="section-title-row">
+                <h2 class="section-title">Xem Gần Đây</h2>
+                <button class="section-viewall" id="clear-history-btn">Xoá lịch sử <i class="fas fa-trash"></i></button>
+            </div>
+            <div class="vn-scroll-row" id="watched-row"></div>
         </div>
 
-        <div class="home-hero-actions">
-            <a class="btn-hero-play" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
-                <i class="fas fa-play"></i> Xem ngay
-            </a>
-            <a class="btn-hero-info" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
-                <i class="fas fa-circle-info"></i> Chi tiết
-            </a>
+        <div th:if="${searchTerm == null and currentCategory == null and moviesVN != null and !moviesVN.isEmpty()}">
+            <div class="section-title-row">
+                <h2 class="section-title">Phim Việt Nam</h2>
+                <a class="section-viewall" href="/filter/quoc-gia/viet-nam">Xem thêm <i
+                        class="fas fa-chevron-right"></i></a>
+            </div>
+
+            <div class="vn-scroll-row">
+                <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+                    <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                        <div class="movie-card">
+                            <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                            <span class="badge-year" th:text="${movie?.year}"></span>
+
+                            <div class="movie-img-container">
+                                <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}"
+                                    onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
+                                    loading="lazy">
+                                <div class="movie-card-gradient"></div>
+                                <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                            </div>
+
+                            <div class="movie-info">
+                                <div class="movie-title" th:text="${movie.name}"></div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
         </div>
-    </div>
-</section>
 
-<div class="container my-5">
-
-    <div id="watched-section" style="display:none;">
         <div class="section-title-row">
-            <h2 class="section-title">Xem Gần Đây</h2>
-            <button class="section-viewall" id="clear-history-btn">Xoá lịch sử <i class="fas fa-trash"></i></button>
-        </div>
-        <div class="vn-scroll-row" id="watched-row"></div>
-    </div>
-
-    <div th:if="${searchTerm == null and currentCategory == null and moviesVN != null and !moviesVN.isEmpty()}">
-        <div class="section-title-row">
-            <h2 class="section-title">Phim Việt Nam</h2>
-            <a class="section-viewall" href="/filter/quoc-gia/viet-nam">Xem thêm <i class="fas fa-chevron-right"></i></a>
+            <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
         </div>
 
-        <div class="vn-scroll-row">
-            <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
+            <div class="col" th:each="movie, iter : ${movies}"
+                th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
                 <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
                     <div class="movie-card">
                         <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
                         <span class="badge-year" th:text="${movie?.year}"></span>
 
                         <div class="movie-img-container">
-                            <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}"
-                                 th:alt="${movie.name}"
-                                 onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
-                                 loading="lazy">
+                            <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}"
+                                onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
+                                loading="lazy">
                             <div class="movie-card-gradient"></div>
                             <div class="play-icon"><i class="fas fa-play-circle"></i></div>
                         </div>
@@ -209,97 +430,70 @@
                 </a>
             </div>
         </div>
+
+        <nav class="mt-5" th:if="${currentPage != null}">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
+                    <a class="page-link"
+                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+
+                <li class="page-item active">
+                    <span class="page-link" th:text="${currentPage}"></span>
+                </li>
+
+                <li class="page-item">
+                    <a class="page-link"
+                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
     </div>
 
-    <div class="section-title-row">
-        <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
-    </div>
+    <script>
+        (function () {
+            try {
+                var history = JSON.parse(localStorage.getItem('reelcry_history') || '[]');
+                if (!history.length) return;
 
-    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
-        <div class="col" th:each="movie, iter : ${movies}"
-             th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
-            <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                <div class="movie-card">
-                    <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                    <span class="badge-year" th:text="${movie?.year}"></span>
+                var row = document.getElementById('watched-row');
+                var section = document.getElementById('watched-section');
 
-                    <div class="movie-img-container">
-                        <img th:src="${movie.getImageUrl()}"
-                             th:alt="${movie.name}"
-                             onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
-                             loading="lazy">
-                        <div class="movie-card-gradient"></div>
-                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
-                    </div>
-
-                    <div class="movie-info">
-                        <div class="movie-title" th:text="${movie.name}"></div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-
-    <nav class="mt-5" th:if="${currentPage != null}">
-        <ul class="pagination justify-content-center">
-            <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
-                <a class="page-link" th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-
-            <li class="page-item active">
-                <span class="page-link" th:text="${currentPage}"></span>
-            </li>
-
-            <li class="page-item">
-                <a class="page-link" th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-        </ul>
-    </nav>
-</div>
-
-<script>
-(function () {
-    try {
-        var history = JSON.parse(localStorage.getItem('reelcry_history') || '[]');
-        if (!history.length) return;
-
-        var row = document.getElementById('watched-row');
-        var section = document.getElementById('watched-section');
-
-        history.forEach(function (item) {
-            var wrap = document.createElement('div');
-            wrap.className = 'vn-card-wrap';
-            wrap.innerHTML =
-                '<a href="/phim/' + item.slug + '" class="text-decoration-none">' +
-                    '<div class="movie-card">' +
+                history.forEach(function (item) {
+                    var wrap = document.createElement('div');
+                    wrap.className = 'vn-card-wrap';
+                    wrap.innerHTML =
+                        '<a href="/phim/' + item.slug + '" class="text-decoration-none">' +
+                        '<div class="movie-card">' +
                         '<div class="movie-img-container">' +
-                            '<img src="' + item.image + '" alt="' + item.name + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg==\'" loading="lazy">' +
-                            '<div class="movie-card-gradient"></div>' +
-                            '<div class="play-icon"><i class="fas fa-play-circle"></i></div>' +
+                        '<img src="' + item.image + '" alt="' + item.name + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg==\'" loading="lazy">' +
+                        '<div class="movie-card-gradient"></div>' +
+                        '<div class="play-icon"><i class="fas fa-play-circle"></i></div>' +
                         '</div>' +
                         '<div class="movie-info"><div class="movie-title">' + item.name + '</div></div>' +
-                    '</div>' +
-                '</a>';
-            row.appendChild(wrap);
-        });
+                        '</div>' +
+                        '</a>';
+                    row.appendChild(wrap);
+                });
 
-        section.style.display = 'block';
+                section.style.display = 'block';
 
-        document.getElementById('clear-history-btn').addEventListener('click', function () {
-            localStorage.removeItem('reelcry_history');
-            section.style.display = 'none';
-            row.innerHTML = '';
-        });
-    } catch (e) {
-        console.error('Reelcry history render error', e);
-    }
-})();
-</script>
+                document.getElementById('clear-history-btn').addEventListener('click', function () {
+                    localStorage.removeItem('reelcry_history');
+                    section.style.display = 'none';
+                    row.innerHTML = '';
+                });
+            } catch (e) {
+                console.error('Reelcry history render error', e);
+            }
+        })();
+    </script>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

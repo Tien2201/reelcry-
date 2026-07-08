@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - Reelcry</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { --primary-red: #e50914; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at top, #1a1a1a 0%, #000 70%);
+            font-family: 'Be Vietnam Pro', sans-serif;
+            color: white;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 380px;
+            padding: 44px 36px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+        }
+
+        .login-logo {
+            text-align: center;
+            font-size: 1.9rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            color: var(--primary-red);
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: #999;
+            font-size: 0.85rem;
+            margin-bottom: 30px;
+        }
+
+        .form-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #aaa;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .form-control-custom {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: white;
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+            transition: 0.3s;
+        }
+        .form-control-custom:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            background: rgba(255,255,255,0.09);
+        }
+
+        .btn-login {
+            width: 100%;
+            background: var(--primary-red);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-login:hover {
+            background: #ff0a17;
+            box-shadow: 0 10px 25px rgba(229,9,20,0.4);
+            transform: translateY(-2px);
+        }
+
+        .alert-box {
+            background: rgba(229,9,20,0.12);
+            border: 1px solid rgba(229,9,20,0.3);
+            color: #ff8e8e;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            margin-bottom: 20px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .alert-box.success {
+            background: rgba(40,167,69,0.12);
+            border-color: rgba(40,167,69,0.3);
+            color: #7fd99a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <div class="login-logo">REELCRY</div>
+    <div class="login-subtitle">Đăng nhập để tiếp tục xem phim</div>
+
+    <div class="alert-box" th:if="${param.error}">
+        <i class="fas fa-circle-exclamation"></i> Sai tên đăng nhập hoặc mật khẩu.
+    </div>
+    <div class="alert-box success" th:if="${param.logout}">
+        <i class="fas fa-circle-check"></i> Bạn đã đăng xuất thành công.
+    </div>
+
+    <form th:action="@{/login}" method="post">
+        <label class="form-label">Tên đăng nhập</label>
+        <input type="text" name="username" class="form-control-custom" placeholder="Nhập tên đăng nhập" required autofocus>
+
+        <label class="form-label">Mật khẩu</label>
+        <input type="password" name="password" class="form-control-custom" placeholder="Nhập mật khẩu" required>
+
+        <button type="submit" class="btn-login">
+            <i class="fas fa-right-to-bracket me-2"></i> Đăng nhập
+        </button>
+    </form>
+</div>
+
+</body>
+</html>

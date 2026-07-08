@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="'Đang xem: ' + ${movie.name} + ' - Reelcry'"></title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root { --primary-red: #e50914; --bg-black: #0a0a0a; --card-dark: #1a1a1a; }
+    body { background-color: var(--bg-black); color: white; font-family: 'Be Vietnam Pro', sans-serif; overflow-x: hidden; }
+
+    /* Player Wrapper */
+    .video-container { background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #222; }
+    .player-ratio { position: relative; padding-bottom: 56.25%; height: 0; }
+    .player-ratio iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+
+    /* Nguồn API Switcher */
+    .source-switcher { background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 10px; border: 1px solid #333; }
+    .btn-src { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; border-radius: 6px !important; transition: 0.3s; }
+
+    /* Control & Box */
+    .control-box { background: var(--card-dark); border-radius: 12px; padding: 20px; border: 1px solid #333; height: 100%; }
+    .btn-custom { border: 1px solid #333; background: #222; color: #aaa; padding: 8px 12px; border-radius: 8px; font-weight: 500; transition: 0.3s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+    .btn-custom:hover { background: #333; color: white; border-color: #555; transform: translateY(-2px); }
+    .btn-custom.active { background: var(--primary-red); color: white; border-color: var(--primary-red); box-shadow: 0 4px 12px rgba(229,9,20,0.5); }
+
+    /* Mới: Đánh dấu tập đã xem */
+    .btn-custom.watched { border-color: #28a745; color: #28a745; }
+
+    .episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px; }
+    .section-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+    .movie-title-watch { font-weight: 800; font-size: 1.8rem; }
+
+    /* Tắt đèn */
+    #light-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.98); z-index: 1040; display: none; }
+    .lighting-off-active { position: relative; z-index: 1050; box-shadow: 0 0 100px rgba(229, 9, 20, 0.5); border: 1px solid var(--primary-red); }
+    .btn-light-toggle { background: #1a1a1a; color: #ffc107; border: 1px solid #333; }
+    .btn-light-toggle.active { background: #ffc107; color: #000; z-index: 1051; }
+
+    .alert-custom { background: rgba(229, 9, 20, 0.1); border: 1px solid rgba(229, 9, 20, 0.2); color: #ff8e8e; border-radius: 10px; }
+
+    /* Hiệu ứng pháo hoa tim */
+    .heart-particle { position: fixed; pointer-events: none; z-index: 9999; animation: flyUp 1.5s ease-out forwards; }
+    @keyframes flyUp {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-150px) scale(0); opacity: 0; }
+    }
+
+    /* Notify giả lập */
+    #fake-toast { position: fixed; bottom: 20px; left: 20px; background: rgba(20,20,20,0.95); border-left: 4px solid var(--primary-red); padding: 12px 20px; border-radius: 8px; z-index: 1000; display: none; transform: translateX(-120%); transition: 0.5s; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    #fake-toast.show { transform: translateX(0); display: block; }
+  </style>
+</head>
+<body>
+
+<div id="light-overlay" onclick="toggleLights()"></div>
+
+<div th:replace="~{header :: reelcry-header}"></div>
+
+<div id="fake-toast">
+  <span id="toast-msg" style="font-size: 13px;"></span>
+</div>
+
+<div class="container my-4">
+
+  <div class="source-switcher d-flex align-items-center mb-3 flex-wrap gap-3">
+    <span class="section-label"><i class="fas fa-database me-2"></i>Nguồn API:</span>
+    <div class="btn-group">
+      <a th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, src='ophim')}"
+         th:classappend="${currentSource == 'ophim' || currentSource == null} ? 'btn-danger' : 'btn-outline-secondary'"
+         class="btn btn-src px-3 shadow-none">Server 1 (OPhim)</a>
+
+      <a th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, src='kkphim')}"
+         th:classappend="${currentSource == 'kkphim'} ? 'btn-danger' : 'btn-outline-secondary'"
+         class="btn btn-src px-3 shadow-none">Server 2 (KKPhim - Quốc Tế)</a>
+    </div>
+    <small class="text-secondary d-none d-md-inline"><i class="fas fa-info-circle me-1"></i>Ưu tiên <b>Server 2</b> nếu bạn ở nước ngoài.</small>
+  </div>
+
+  <div class="video-container" id="main-player">
+    <div class="player-ratio">
+      <iframe th:src="${currentLink}" allowfullscreen></iframe>
+    </div>
+  </div>
+
+  <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <div>
+      <h1 class="movie-title-watch mb-1" th:text="${movie.name}"></h1>
+      <p class="text-secondary small mb-0"><i class="fas fa-play-circle text-danger me-2"></i> Đang xem tập: <span th:text="${currentEpSlug}"></span></p>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-light-toggle rounded-pill px-3" onclick="toggleLights()">
+        <i class="fas fa-lightbulb me-2"></i> <span id="light-text">Tắt đèn</span>
+      </button>
+      <button class="btn btn-dark border-secondary rounded-pill px-3" onclick="shareMovie()">
+        <i class="fas fa-share-alt me-2"></i>Chia sẻ
+      </button>
+      <button class="btn btn-outline-danger rounded-pill px-4" id="btn-like" onclick="likeEffect(event)">
+        <i class="fas fa-heart"></i>
+      </button>
+    </div>
+  </div>
+
+  <hr class="my-4 border-secondary opacity-25">
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-4">
+      <div class="control-box">
+        <p class="section-label mb-3"><i class="fas fa-language me-2"></i>Chọn Server Ngôn ngữ</p>
+        <div class="d-flex flex-column gap-2">
+          <a th:each="sv, iter : ${movie.episodes}"
+             th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=${iter.index}, src=${currentSource != null ? currentSource : 'ophim'})}"
+             class="btn-custom w-100 justify-content-start"
+             th:classappend="${selectedSv == iter.index} ? 'active' : ''">
+            <i class="fas fa-headset me-3 small"></i>
+            <span th:text="${sv.server_name}"></span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+      <div class="control-box">
+        <p class="section-label mb-3"><i class="fas fa-th-large me-2"></i>Danh sách tập</p>
+        <div class="episode-grid">
+          <a th:each="epItem : ${currentServer.server_data}"
+             th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${epItem.slug}, sv=${selectedSv}, src=${currentSource != null ? currentSource : 'ophim'})}"
+             class="btn-custom ep-btn"
+             th:data-slug="${epItem.slug}"
+             th:classappend="${currentEpSlug == epItem.slug} ? 'active' : ''"
+             th:text="${epItem.name}">
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 1. Chức năng tắt đèn
+  function toggleLights() {
+      const overlay = document.getElementById('light-overlay');
+      const player = document.getElementById('main-player');
+      const btn = document.querySelector('.btn-light-toggle');
+      const text = document.getElementById('light-text');
+
+      if (overlay.style.display === 'none' || overlay.style.display === '') {
+          overlay.style.display = 'block';
+          player.classList.add('lighting-off-active');
+          btn.classList.add('active');
+          text.innerText = 'Bật đèn';
+          window.scrollTo({ top: player.offsetTop - 50, behavior: 'smooth' });
+      } else {
+          overlay.style.display = 'none';
+          player.classList.remove('lighting-off-active');
+          btn.classList.remove('active');
+          text.innerText = 'Tắt đèn';
+      }
+  }
+
+  // 2. Chức năng Like bắn tim
+  function likeEffect(e) {
+      for(let i=0; i<10; i++) {
+          const heart = document.createElement('div');
+          heart.className = 'heart-particle';
+          heart.innerHTML = ['❤️','💖','🔥','⭐'][Math.floor(Math.random()*4)];
+          heart.style.left = (e.clientX + (Math.random()-0.5)*50) + 'px';
+          heart.style.top = (e.clientY + (Math.random()-0.5)*50) + 'px';
+          heart.style.fontSize = (Math.random()*10 + 15) + 'px';
+          document.body.appendChild(heart);
+          setTimeout(() => heart.remove(), 1500);
+      }
+      document.getElementById('btn-like').classList.toggle('btn-danger');
+      document.getElementById('btn-like').classList.toggle('text-white');
+  }
+
+  // 3. Chức năng Thông báo giả
+  const names = ["Anh Tuấn", "Minh Thư", "Hoàng Nam", "Quốc Bảo", "Thanh Trúc", "Văn Kiệt", "Lan Anh"];
+  function showFakeToast() {
+      const toast = document.getElementById('fake-toast');
+      const msg = document.getElementById('toast-msg');
+      const name = names[Math.floor(Math.random() * names.length)];
+      msg.innerHTML = `⚡ <b>${name}</b> vừa xem tập này xong!`;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+      setTimeout(showFakeToast, Math.random() * 15000 + 15000); // 15-30s hiện 1 lần
+  }
+  setTimeout(showFakeToast, 5000);
+
+  // 4. Chức năng lưu lịch sử tập đã xem (LocalStorage)
+  document.addEventListener('DOMContentLoaded', () => {
+      const movieSlug = "[[${movie.slug}]]";
+      const currentEp = "[[${currentEpSlug}]]";
+      let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
+
+      if(!watched.includes(currentEp)) {
+          watched.push(currentEp);
+          localStorage.setItem('watched_' + movieSlug, JSON.stringify(watched));
+      }
+
+      document.querySelectorAll('.ep-btn').forEach(btn => {
+          if(watched.includes(btn.getAttribute('data-slug'))) {
+              btn.classList.add('watched');
+          }
+      });
+  });
+
+  function shareMovie() {
+      alert("Đã sao chép link phim! Gửi cho bạn bè xem cùng nhé 🎬");
+  }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

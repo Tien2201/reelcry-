@@ -1,9 +1,7 @@
 package com.example.reelcry.controller;
 
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +31,7 @@ public class ImageProxyController {
             URI uri = URI.create(url);
             String host = uri.getHost();
             if (host == null || !ALLOWED_HOSTS.contains(host)) {
+                System.err.println("[img-proxy] Host không hợp lệ: " + host);
                 return ResponseEntity.badRequest().build();
             }
 
@@ -45,6 +44,7 @@ public class ImageProxyController {
                     .block();
 
             if (bytes == null || bytes.length == 0) {
+                System.err.println("[img-proxy] Rỗng, url=" + url);
                 return ResponseEntity.notFound().build();
             }
 
@@ -55,6 +55,7 @@ public class ImageProxyController {
                     .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800")
                     .body(bytes);
         } catch (Exception e) {
+            System.err.println("[img-proxy] LỖI khi tải url=" + url + " -> " + e.getClass().getSimpleName() + ": " + e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }

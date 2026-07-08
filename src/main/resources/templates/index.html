@@ -145,7 +145,7 @@
 <div th:replace="~{header :: reelcry-header}"></div>
 
 <section class="home-hero" th:if="${searchTerm == null and currentCategory == null and movies != null and !movies.isEmpty()}">
-    <div class="home-hero-bg" th:style="'background-image: url(' + ${movies[0].getImageUrl()} + ')'"></div>
+    <div class="home-hero-bg" th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movies[0].getImageUrl())} + ')'"></div>
     <div class="home-hero-overlay"></div>
 
     <div class="container home-hero-content">
@@ -194,7 +194,7 @@
                         <span class="badge-year" th:text="${movie?.year}"></span>
 
                         <div class="movie-img-container">
-                            <img th:src="${movie.getImageUrl()}"
+                            <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}"
                                  th:alt="${movie.name}"
                                  onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
                                  loading="lazy">

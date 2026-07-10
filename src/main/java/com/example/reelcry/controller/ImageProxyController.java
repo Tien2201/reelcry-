@@ -98,15 +98,16 @@ public class ImageProxyController {
             "img.phimapi.com");
 
     public ImageProxyController() {
-        HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 4000)
-                .responseTimeout(Duration.ofSeconds(5))
-                .doOnConnected(conn -> conn.addHandlerLast(new ReadTimeoutHandler(5, TimeUnit.SECONDS)));
+    HttpClient httpClient = HttpClient.create()
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 4000)
+            .responseTimeout(Duration.ofSeconds(5))
+            .doOnConnected(conn -> conn.addHandlerLast(new ReadTimeoutHandler(5, TimeUnit.SECONDS)));
 
-        this.imageWebClient = WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .build();
-    }
+    this.imageWebClient = WebClient.builder()
+            .clientConnector(new ReactorClientHttpConnector(httpClient))
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB thay vì 256KB mặc định
+            .build();
+}
 
     @GetMapping("/img-proxy")
     public ResponseEntity<byte[]> proxyImage(@RequestParam String url) {
@@ -164,7 +165,10 @@ public class ImageProxyController {
             }
 
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-            System.err.println("[img-proxy] Lần " + attempt + " lỗi HTTP " + e.getStatusCode() + " cho " + urlForLog);
+            System.err.println("[img-proxy] Lần " + attempt + " lỗi HTTP " + e.getStatusCode()
+                    + " cho " + urlForLog
+                    + " | message=" + e.getMessage()
+                    + " | body=" + e.getResponseBodyAsString());
             return null;
         } catch (Exception e) {
             System.err.println("[img-proxy] Lần " + attempt + " lỗi " + urlForLog + " -> "

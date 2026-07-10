@@ -288,26 +288,92 @@
             display: flex;
             gap: 16px;
             overflow-x: auto;
-            padding-bottom: 12px;
-            scroll-snap-type: x mandatory;
+            overflow-y: hidden;
+            padding-bottom: 4px;
+            scroll-snap-type: x proximity;
+            scrollbar-width: none;
         }
 
         .vn-scroll-row::-webkit-scrollbar {
-            height: 6px;
-        }
-
-        .vn-scroll-row::-webkit-scrollbar-thumb {
-            background: var(--netflix-red);
-            border-radius: 10px;
-        }
-
-        .vn-scroll-row::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
+            display: none;
         }
 
         .vn-card-wrap {
             flex: 0 0 220px;
             scroll-snap-align: start;
+        }
+
+        .vn-row-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .vn-row-inner {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .vn-custom-scrollbar {
+            position: relative;
+            height: 5px;
+            margin-top: 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            transition: height 0.22s ease, background 0.22s ease;
+        }
+
+        .vn-custom-scrollbar:hover,
+        .vn-custom-scrollbar.dragging {
+            height: 11px;
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        .vn-custom-scrollbar-thumb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 20%;
+            border-radius: 10px;
+            background: var(--netflix-red);
+            transition: background 0.22s ease;
+        }
+
+        .vn-custom-scrollbar:hover .vn-custom-scrollbar-thumb,
+        .vn-custom-scrollbar.dragging .vn-custom-scrollbar-thumb {
+            background: #ff3b47;
+        }
+
+        .vn-arrow {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .vn-arrow:hover {
+            background: var(--netflix-red);
+            border-color: var(--netflix-red);
+        }
+
+        @media (max-width: 480px) {
+            .vn-arrow {
+                width: 30px;
+                height: 30px;
+                font-size: 0.8rem;
+            }
         }
 
         .pagination .page-link {
@@ -580,7 +646,14 @@
                 <h2 class="section-title">Đang Xem / Đã Xem</h2>
                 <button class="section-viewall" id="clear-history-btn">Xoá lịch sử <i class="fas fa-trash"></i></button>
             </div>
-            <div class="vn-scroll-row" id="watched-row"></div>
+            <div class="vn-row-wrap">
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <div class="vn-row-inner">
+                    <div class="vn-scroll-row" id="watched-row"></div>
+                    <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                </div>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+            </div>
         </div>
 
         <div id="favorites-section" style="display:none;">
@@ -589,7 +662,14 @@
                 <button class="section-viewall" id="clear-favorites-btn">Xoá yêu thích <i
                         class="fas fa-trash"></i></button>
             </div>
-            <div class="vn-scroll-row" id="favorites-row"></div>
+            <div class="vn-row-wrap">
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <div class="vn-row-inner">
+                    <div class="vn-scroll-row" id="favorites-row"></div>
+                    <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                </div>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+            </div>
         </div>
 
         <div th:if="${searchTerm == null and currentCategory == null and moviesVN != null and !moviesVN.isEmpty()}">
@@ -598,23 +678,30 @@
                 <a class="section-viewall" th:href="@{/filter/quoc-gia/viet-nam}">Xem tất cả <i
                         class="fas fa-chevron-right"></i></a>
             </div>
-            <div class="vn-scroll-row">
-                <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
-                    <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                        <div class="movie-card">
-                            <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                            <span class="badge-year" th:text="${movie?.year}"></span>
-                            <div class="movie-img-container">
-                                <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
-                                <div class="movie-card-gradient"></div>
-                                <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+            <div class="vn-row-wrap">
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <div class="vn-row-inner">
+                <div class="vn-scroll-row">
+                    <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+                        <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                            <div class="movie-card">
+                                <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                                <span class="badge-year" th:text="${movie?.year}"></span>
+                                <div class="movie-img-container">
+                                    <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                    <div class="movie-card-gradient"></div>
+                                    <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                </div>
+                                <div class="movie-info">
+                                    <div class="movie-title" th:text="${movie.name}"></div>
+                                </div>
                             </div>
-                            <div class="movie-info">
-                                <div class="movie-title" th:text="${movie.name}"></div>
-                            </div>
-                        </div>
-                    </a>
+                        </a>
+                    </div>
                 </div>
+                <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                </div>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
             </div>
         </div>
 
@@ -625,78 +712,82 @@
                 <a class="section-viewall" th:href="@{/filter/danh-sach/phim-chieu-rap}">Xem tất cả <i
                         class="fas fa-chevron-right"></i></a>
             </div>
-            <div class="vn-scroll-row">
-                <div class="vn-card-wrap" th:each="movie : ${moviesCinema}">
-                    <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                        <div class="movie-card">
-                            <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                            <span class="badge-year" th:text="${movie?.year}"></span>
-                            <div class="movie-img-container">
-                                <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
-                                <div class="movie-card-gradient"></div>
-                                <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+            <div class="vn-row-wrap">
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <div class="vn-row-inner">
+                <div class="vn-scroll-row">
+                    <div class="vn-card-wrap" th:each="movie : ${moviesCinema}">
+                        <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                            <div class="movie-card">
+                                <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                                <span class="badge-year" th:text="${movie?.year}"></span>
+                                <div class="movie-img-container">
+                                    <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                    <div class="movie-card-gradient"></div>
+                                    <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                </div>
+                                <div class="movie-info">
+                                    <div class="movie-title" th:text="${movie.name}"></div>
+                                </div>
                             </div>
-                            <div class="movie-info">
-                                <div class="movie-title" th:text="${movie.name}"></div>
-                            </div>
-                        </div>
-                    </a>
+                        </a>
+                    </div>
                 </div>
+                <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                </div>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
             </div>
         </div>
-    </div>
 
-
-
-    <div class="section-title-row">
-        <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
-    </div>
-
-    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
-        <div class="col" th:each="movie, iter : ${movies}"
-            th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
-            <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                <div class="movie-card">
-                    <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                    <span class="badge-year" th:text="${movie?.year}"></span>
-
-                    <div class="movie-img-container">
-                        <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}"
-                            onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
-                            loading="lazy">
-                        <div class="movie-card-gradient"></div>
-                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
-                    </div>
-
-                    <div class="movie-info">
-                        <div class="movie-title" th:text="${movie.name}"></div>
-                    </div>
-                </div>
-            </a>
+        <div class="section-title-row">
+            <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
         </div>
-    </div>
 
-    <nav class="mt-5" th:if="${currentPage != null}">
-        <ul class="pagination justify-content-center">
-            <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
-                <a class="page-link"
-                    th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
-                    <i class="fas fa-chevron-left"></i>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
+            <div class="col" th:each="movie, iter : ${movies}"
+                th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
+                <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                    <div class="movie-card">
+                        <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                        <span class="badge-year" th:text="${movie?.year}"></span>
+
+                        <div class="movie-img-container">
+                            <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}"
+                                onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
+                                loading="lazy">
+                            <div class="movie-card-gradient"></div>
+                            <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                        </div>
+
+                        <div class="movie-info">
+                            <div class="movie-title" th:text="${movie.name}"></div>
+                        </div>
+                    </div>
                 </a>
-            </li>
+            </div>
+        </div>
 
-            <li class="page-item active">
-                <span class="page-link" th:text="${currentPage}"></span>
-            </li>
+        <nav class="mt-5" th:if="${currentPage != null}">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
+                    <a class="page-link"
+                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
 
-            <li class="page-item">
-                <a class="page-link"
-                    th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-        </ul>
-    </nav>
+                <li class="page-item active">
+                    <span class="page-link" th:text="${currentPage}"></span>
+                </li>
+
+                <li class="page-item">
+                    <a class="page-link"
+                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
     </div>
 
     <script>
@@ -828,6 +919,142 @@
             });
 
             startAutoplay();
+        })();
+    </script>
+    <script>
+        (function () {
+            var scrollbars = []; // { row, track, thumb }
+
+            function updateThumb(sb) {
+                var row = sb.row, track = sb.track, thumb = sb.thumb;
+                var trackWidth = track.clientWidth;
+                var scrollable = row.scrollWidth - row.clientWidth;
+
+                if (scrollable <= 1) {
+                    track.style.visibility = 'hidden';
+                    return;
+                }
+                track.style.visibility = 'visible';
+
+                var thumbWidth = Math.max((row.clientWidth / row.scrollWidth) * trackWidth, 30);
+                var maxThumbLeft = trackWidth - thumbWidth;
+                var ratio = row.scrollLeft / scrollable;
+                var thumbLeft = maxThumbLeft * ratio;
+
+                thumb.style.width = thumbWidth + 'px';
+                thumb.style.left = thumbLeft + 'px';
+            }
+
+            function wireRow(row) {
+                if (!row || row.dataset.vnWired) return;
+                row.dataset.vnWired = '1';
+
+                row.addEventListener('wheel', function (e) {
+                    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                        e.preventDefault();
+                        row.scrollLeft += e.deltaY;
+                    }
+                }, { passive: false });
+            }
+
+            function wireCustomScrollbar(row, track) {
+                if (!track || track.dataset.vnWired) return;
+                track.dataset.vnWired = '1';
+
+                var thumb = track.querySelector('.vn-custom-scrollbar-thumb');
+                if (!thumb) return;
+
+                var sb = { row: row, track: track, thumb: thumb };
+                scrollbars.push(sb);
+
+                row.addEventListener('scroll', function () { updateThumb(sb); });
+
+                var dragging = false;
+                var startX = 0;
+                var startScrollLeft = 0;
+
+                function onDragMove(e) {
+                    if (!dragging) return;
+                    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    var trackWidth = track.clientWidth;
+                    var thumbWidth = thumb.clientWidth;
+                    var scrollable = row.scrollWidth - row.clientWidth;
+                    var trackScrollable = trackWidth - thumbWidth;
+                    if (trackScrollable <= 0 || scrollable <= 0) return;
+                    var deltaX = clientX - startX;
+                    row.scrollLeft = startScrollLeft + (deltaX / trackScrollable) * scrollable;
+                }
+
+                function stopDrag() {
+                    if (!dragging) return;
+                    dragging = false;
+                    track.classList.remove('dragging');
+                    document.body.style.userSelect = '';
+                }
+
+                thumb.addEventListener('mousedown', function (e) {
+                    dragging = true;
+                    startX = e.clientX;
+                    startScrollLeft = row.scrollLeft;
+                    track.classList.add('dragging');
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                });
+                thumb.addEventListener('touchstart', function (e) {
+                    dragging = true;
+                    startX = e.touches[0].clientX;
+                    startScrollLeft = row.scrollLeft;
+                    track.classList.add('dragging');
+                }, { passive: true });
+
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('touchmove', onDragMove, { passive: true });
+                document.addEventListener('mouseup', stopDrag);
+                document.addEventListener('touchend', stopDrag);
+
+                track.addEventListener('click', function (e) {
+                    if (e.target === thumb) return;
+                    var rect = track.getBoundingClientRect();
+                    var clickRatio = (e.clientX - rect.left) / rect.width;
+                    var scrollable = row.scrollWidth - row.clientWidth;
+                    row.scrollTo({ left: clickRatio * scrollable, behavior: 'smooth' });
+                });
+
+                updateThumb(sb);
+            }
+
+            function wireWrap(wrap) {
+                var row = wrap.querySelector('.vn-scroll-row');
+                var track = wrap.querySelector('.vn-custom-scrollbar');
+                var btnLeft = wrap.querySelector('.vn-arrow-left');
+                var btnRight = wrap.querySelector('.vn-arrow-right');
+                if (!row) return;
+
+                wireRow(row);
+                wireCustomScrollbar(row, track);
+
+                function scrollByAmount(dir) {
+                    var amount = row.clientWidth * 0.85 || 300;
+                    row.scrollBy({ left: dir * amount, behavior: 'smooth' });
+                }
+
+                if (btnLeft) btnLeft.addEventListener('click', function () { scrollByAmount(-1); });
+                if (btnRight) btnRight.addEventListener('click', function () { scrollByAmount(1); });
+            }
+
+            document.querySelectorAll('.vn-row-wrap').forEach(wireWrap);
+
+            window.addEventListener('resize', function () {
+                scrollbars.forEach(updateThumb);
+            });
+
+            // watched-row / favorites-row được đổ nội dung qua JS sau khi trang tải,
+            // observe để gắn listener lại và cập nhật thanh cuộn khi nội dung đổi sau đó.
+            var mo = new MutationObserver(function () {
+                document.querySelectorAll('.vn-scroll-row').forEach(wireRow);
+                scrollbars.forEach(updateThumb);
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
         })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

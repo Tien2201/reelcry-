@@ -11,273 +11,572 @@
 
     <style>
         :root {
+            --yt-bg: #0f0f0f;
+            --yt-elevated: #212121;
+            --yt-border: #303030;
             --netflix-red: #e50914;
-            --dark-gray: #181818;
-            --text-gray: #ccc;
         }
 
         .navbar-custom {
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-            border-bottom: 1px solid transparent;
-            padding: 18px 0;
-            transition: background 0.35s ease, backdrop-filter 0.35s ease, padding 0.35s ease, border-color 0.35s ease;
+            background: var(--yt-bg) !important;
+            border-bottom: 1px solid var(--yt-border);
+            padding: 0;
+            z-index: 1050;
         }
 
-        .navbar-custom.scrolled {
-            background: rgba(6, 6, 6, 0.88);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            padding: 12px 0;
+        .navbar-custom .container-fluid {
+            min-height: 56px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            grid-template-areas: "left search right";
+            align-items: center;
+            column-gap: 16px;
+            row-gap: 8px;
+        }
+
+        .yt-left {
+            grid-area: left;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .yt-hamburger {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: #fff;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .yt-hamburger:hover,
+        .yt-hamburger:focus {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .navbar-brand-custom {
-            color: var(--netflix-red) !important;
-            font-weight: 900;
-            font-size: 1.7rem;
-            letter-spacing: -1px;
-            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #fff !important;
+            font-weight: 700;
+            font-size: 1.3rem;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            white-space: nowrap;
         }
 
-        .navbar-brand-custom:hover {
-            text-shadow: 0 0 18px rgba(229, 9, 20, 0.6);
-            transform: scale(1.03);
+        .yt-logo-icon {
+            width: 30px;
+            height: 21px;
+            background: var(--netflix-red);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
-        .nav-link-custom {
+        .yt-logo-icon i {
+            color: #fff;
+            font-size: 11px;
+        }
+
+        .yt-badge {
+            font-size: 10px;
+            font-weight: 600;
+            color: #aaa;
+            border: 1px solid #555;
+            border-radius: 3px;
+            padding: 1px 4px;
+            line-height: 1.4;
+        }
+
+        /* ===== Sidebar trượt ra (Bootstrap Offcanvas) ===== */
+        .yt-sidebar {
+            width: 280px;
+            top: 56px;
+            height: calc(100vh - 56px);
+            background: var(--yt-bg);
+            color: #fff;
+            border-right: 1px solid var(--yt-border);
+            transition: transform 0.28s ease;
+        }
+
+        .yt-sidebar .offcanvas-body {
+            padding: 8px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4a4a4a transparent;
+        }
+
+        .yt-sidebar .offcanvas-body::-webkit-scrollbar {
+            width: 7px;
+        }
+
+        .yt-sidebar .offcanvas-body::-webkit-scrollbar-thumb {
+            background: #454545;
+            border-radius: 10px;
+        }
+
+        .yt-side-item {
             position: relative;
-            color: var(--text-gray) !important;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: #fff;
             font-size: 14px;
             font-weight: 500;
-            letter-spacing: 0.2px;
-            margin: 0 4px;
-            padding: 6px 10px !important;
-            transition: 0.25s;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 10px;
+            text-align: left;
+            overflow: hidden;
+            transition: background 0.18s ease, transform 0.18s ease;
         }
 
-        .nav-link-custom::after {
+        .yt-side-item::before {
             content: '';
             position: absolute;
-            left: 10px;
-            right: 10px;
-            bottom: 0;
-            height: 2px;
-            background: var(--netflix-red);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.25s ease;
-        }
-
-        .nav-link-custom:hover {
-            color: #fff !important;
-        }
-
-        .nav-link-custom:hover::after {
-            transform: scaleX(1);
-        }
-
-        .dropdown-menu-dark {
-            background: rgba(15, 15, 15, 0.98) !important;
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-            border-radius: 14px;
-            padding: 18px;
-            margin-top: 12px !important;
-        }
-
-        .dropdown-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-            min-width: 440px;
-        }
-
-        .dropdown-item-custom {
-            color: #999 !important;
-            font-size: 13px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            transition: 0.2s;
-        }
-
-        .dropdown-item-custom:hover {
-            background: rgba(229, 9, 20, 0.15) !important;
-            color: #fff !important;
-            transform: translateX(4px);
-        }
-
-        .search-wrap {
-            position: relative;
-        }
-
-        .search-input {
-            background: rgba(255, 255, 255, 0.07) !important;
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
-            color: white !important;
-            border-radius: 30px !important;
-            padding: 8px 42px 8px 18px;
-            font-size: 13.5px;
-            width: 220px;
-            transition: 0.3s;
-        }
-
-        .search-input::placeholder {
-            color: #888;
-        }
-
-        .search-input:focus {
-            background: rgba(255, 255, 255, 0.11) !important;
-            border-color: var(--netflix-red) !important;
-            box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
-            width: 280px;
-        }
-
-        .search-btn {
-            position: absolute;
-            right: 4px;
+            left: 0;
             top: 50%;
             transform: translateY(-50%);
-            background: transparent;
-            border: none;
-            color: #999;
+            width: 3px;
+            height: 0;
+            background: var(--netflix-red);
+            border-radius: 0 4px 4px 0;
+            transition: height 0.18s ease;
+        }
+
+        .yt-side-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            transform: translateX(3px);
+        }
+
+        .yt-side-item:hover::before {
+            height: 58%;
+        }
+
+        .yt-side-icon-wrap {
             width: 32px;
             height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: 0.2s;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.08);
+            color: #eee;
+            font-size: 14px;
+            transition: background 0.18s ease, color 0.18s ease;
+        }
+
+        .yt-side-icon-wrap.c-red {
+            background: rgba(229, 9, 20, 0.16);
+            color: #ff5c5c;
+        }
+
+        .yt-side-icon-wrap.c-blue {
+            background: rgba(28, 98, 185, 0.18);
+            color: #6fa8dc;
+        }
+
+        .yt-side-icon-wrap.c-gray {
+            background: rgba(255, 255, 255, 0.06);
+            color: #aaa;
+        }
+
+        .yt-side-item:hover .yt-side-icon-wrap {
+            filter: brightness(1.25);
+        }
+
+        .yt-side-item .yt-side-chevron {
+            margin-left: auto;
+            font-size: 12px;
+            color: #aaa;
+            transition: transform 0.25s ease;
+        }
+
+        .yt-side-item[aria-expanded="true"] .yt-side-chevron {
+            transform: rotate(180deg);
+        }
+
+        .yt-side-divider {
+            height: 1px;
+            margin: 8px 6px;
+            background: linear-gradient(90deg, transparent, var(--yt-border) 20%, var(--yt-border) 80%, transparent);
+            border: none;
+        }
+
+        .yt-side-section-title {
+            color: #999;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 12px 6px;
+        }
+
+        .yt-side-item.yt-side-sub {
+            padding-left: 12px;
+            font-weight: 400;
+            font-size: 13.5px;
+            color: #ccc;
+        }
+
+        @keyframes ytSideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .yt-anim-in .offcanvas-body>* {
+            animation: ytSideIn 0.32s ease both;
+        }
+
+        .yt-anim-in .collapse.show>div {
+            animation: ytSideIn 0.28s ease both;
+        }
+
+        /* ===== search giữa ===== */
+        .yt-search-area {
+            grid-area: search;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .search-wrap {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 560px;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 0;
+            background: var(--yt-bg) !important;
+            border: 1px solid var(--yt-border) !important;
+            border-right: none !important;
+            color: #fff !important;
+            border-radius: 20px 0 0 20px !important;
+            padding: 8px 16px;
+            font-size: 14px;
+            height: 40px;
+            box-shadow: none !important;
+        }
+
+        .search-input:focus {
+            border-color: #1c62b9 !important;
+            background: #131313 !important;
+        }
+
+        .search-input::placeholder {
+            color: #888;
+        }
+
+        .search-kbd {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 40px;
+            background: var(--yt-bg);
+            border: 1px solid var(--yt-border);
+            border-left: none;
+            color: #aaa;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .search-btn {
+            width: 60px;
+            height: 40px;
+            background: var(--yt-elevated);
+            border: 1px solid var(--yt-border);
+            border-left: none;
+            border-radius: 0 20px 20px 0;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
         .search-btn:hover {
-            background: var(--netflix-red);
-            color: white;
+            background: #3a3a3a;
         }
 
-        .btn-logout {
-            color: #bbb !important;
-            font-size: 13px;
-            font-weight: 600;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 30px;
-            padding: 6px 16px !important;
-            margin-left: 10px;
-            transition: 0.25s;
-            display: inline-flex;
+        .yt-mic-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--yt-elevated);
+            border: none;
+            color: #fff;
+            margin-left: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .yt-mic-btn:hover {
+            background: #3a3a3a;
+        }
+
+        .yt-right {
+            grid-area: right;
+            display: flex;
             align-items: center;
             gap: 6px;
+            justify-self: end;
         }
 
-        .btn-logout:hover {
-            background: rgba(229, 9, 20, 0.15);
-            border-color: var(--netflix-red);
+        .yt-icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: #fff;
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: default;
+        }
+
+        .yt-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .yt-avatar-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--netflix-red), #7a0d12);
+            border: none;
             color: #fff !important;
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        @media (max-width: 992px) {
-            .dropdown-grid {
-                grid-template-columns: repeat(2, 1fr);
-                min-width: 100%;
+        .yt-account-menu {
+            background: var(--yt-elevated) !important;
+            border: 1px solid var(--yt-border) !important;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+            padding: 6px;
+            min-width: 170px;
+        }
+
+        .yt-account-menu button {
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: none;
+            color: #eee;
+            font-size: 13.5px;
+            padding: 9px 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .yt-account-menu button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .navbar-custom .container-fluid {
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "left right"
+                    "search search";
             }
 
-            .navbar-collapse {
-                background: #0e0e0e;
-                padding: 20px;
-                border-radius: 15px;
-                margin-top: 15px;
+            .yt-sidebar {
+                width: 260px;
             }
+        }
 
-            .search-input,
-            .search-input:focus {
-                width: 100%;
-            }
+        @media (max-width: 576px) {
 
-            .btn-logout {
-                margin: 10px 0 0;
-                width: fit-content;
-            }
-
-            .navbar-custom {
-                background: rgba(6, 6, 6, 0.92);
-                backdrop-filter: blur(18px);
+            .yt-mic-btn,
+            .search-kbd {
+                display: none;
             }
         }
     </style>
 
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top navbar-custom" id="reelcryNavbar">
-        <div class="container-fluid px-lg-5">
-            <a class="navbar-brand navbar-brand-custom" href="/">REELCRY</a>
+    <nav class="navbar navbar-dark sticky-top navbar-custom" id="reelcryNavbar">
+        <div class="container-fluid px-lg-4">
+            <div class="yt-left">
+                <button class="yt-hamburger" type="button" data-bs-toggle="offcanvas" data-bs-target="#reelcrySidebar"
+                    aria-controls="reelcrySidebar" aria-label="Menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
 
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
-                data-bs-target="#reelcryNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+                <a class="navbar-brand navbar-brand-custom" href="/">
+                    <span class="yt-logo-icon"><i class="fa-solid fa-play"></i></span>
+                    REELCRY
+                </a>
+            </div>
 
-            <div class="collapse navbar-collapse" id="reelcryNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0 align-items-lg-center">
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom" href="/filter/danh-sach/phim-moi-cap-nhat">PHIM MỚI</a>
-                    </li>
+            <div class="yt-search-area">
+                <form action="/search" method="get" class="search-wrap">
+                    <input class="form-control search-input" type="search" name="keyword"
+                        placeholder="Tìm tên phim...">
+                    <span class="search-kbd" title="Chuyển kiểu gõ (giao diện)"><i
+                            class="fa-regular fa-keyboard"></i></span>
+                    <button class="search-btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i></button>
+                </form>
+                <button type="button" class="yt-mic-btn" title="Tìm bằng giọng nói (chưa hỗ trợ)">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+            </div>
 
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">THỂ
-                            LOẠI</a>
-                        <div class="dropdown-menu dropdown-menu-dark">
-                            <div class="dropdown-grid">
-                                <div th:each="g : ${allGenres}">
-                                    <a class="dropdown-item dropdown-item-custom"
-                                        th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}" th:text="${g.name}"></a>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">QUỐC
-                            GIA</a>
-                        <div class="dropdown-menu dropdown-menu-dark">
-                            <div class="dropdown-grid">
-                                <div th:each="c : ${allCountries}">
-                                    <a class="dropdown-item dropdown-item-custom"
-                                        th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}" th:text="${c.name}"></a>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-
-                    <li class="nav-item">
-                        <form th:action="@{/logout}" method="post" class="d-inline">
+            <div class="yt-right">
+                <button type="button" class="yt-icon-btn" title="Thông báo (chưa hỗ trợ)">
+                    <i class="fa-regular fa-bell"></i>
+                </button>
+                <div class="dropdown">
+                    <button type="button" class="yt-avatar-btn" data-bs-toggle="dropdown" aria-expanded="false"
+                        title="Tài khoản">
+                        <i class="fa-solid fa-user"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end yt-account-menu">
+                        <form th:action="@{/logout}" method="post" class="m-0">
                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
-                            <button type="submit" class="btn-logout border-0">
-                                <i class="fas fa-right-from-bracket"></i> Đăng xuất
+                            <button type="submit">
+                                <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
                             </button>
                         </form>
-                    </li>
-                </ul>
-
-                <form action="/search" method="get" class="search-wrap d-flex">
-                    <input class="form-control search-input" type="search" name="keyword" placeholder="Tìm tên phim...">
-                    <button class="search-btn" type="submit">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </form>
+                    </div>
+                </div>
             </div>
         </div>
     </nav>
 
+    <!-- Sidebar trượt ra từ trái, giống YouTube -->
+    <div class="offcanvas offcanvas-start yt-sidebar" tabindex="-1" id="reelcrySidebar"
+        aria-labelledby="reelcrySidebarLabel">
+        <div class="offcanvas-body">
+            <a class="yt-side-item" href="/">
+                <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-house"></i></span> Trang chủ
+            </a>
+            <a class="yt-side-item" href="/filter/danh-sach/phim-moi-cap-nhat">
+                <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-clock-rotate-left"></i></span> Phim mới
+            </a>
+
+            <div class="yt-side-divider"></div>
+            <div class="yt-side-section-title">Thể loại</div>
+
+            <div th:each="g, iter : ${allGenres}" th:if="${iter.index < 8}">
+                <a class="yt-side-item" th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}">
+                    <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-tag"></i></span>
+                    <span th:text="${g.name}"></span>
+                </a>
+            </div>
+            <button class="yt-side-item" type="button" data-bs-toggle="collapse" data-bs-target="#genresMore"
+                aria-expanded="false" aria-controls="genresMore" th:if="${allGenres != null and allGenres.size() > 8}">
+                <span class="yt-side-icon-wrap c-gray"><i class="fa-solid fa-ellipsis"></i></span>
+                Thêm
+                <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
+            </button>
+            <div class="collapse" id="genresMore">
+                <div th:each="g, iter : ${allGenres}" th:if="${iter.index >= 8}">
+                    <a class="yt-side-item yt-side-sub" th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}">
+                        <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-tag"></i></span>
+                        <span th:text="${g.name}"></span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="yt-side-divider"></div>
+            <div class="yt-side-section-title">Quốc gia</div>
+
+            <div th:each="c, iter : ${allCountries}" th:if="${iter.index < 8}">
+                <a class="yt-side-item" th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}">
+                    <span class="yt-side-icon-wrap c-blue"><i class="fa-solid fa-earth-asia"></i></span>
+                    <span th:text="${c.name}"></span>
+                </a>
+            </div>
+            <button class="yt-side-item" type="button" data-bs-toggle="collapse" data-bs-target="#countriesMore"
+                aria-expanded="false" aria-controls="countriesMore"
+                th:if="${allCountries != null and allCountries.size() > 8}">
+                <span class="yt-side-icon-wrap c-gray"><i class="fa-solid fa-ellipsis"></i></span>
+                Thêm
+                <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
+            </button>
+            <div class="collapse" id="countriesMore">
+                <div th:each="c, iter : ${allCountries}" th:if="${iter.index >= 8}">
+                    <a class="yt-side-item yt-side-sub" th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}">
+                        <span class="yt-side-icon-wrap c-blue"><i class="fa-solid fa-earth-asia"></i></span>
+                        <span th:text="${c.name}"></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        (function () {
-            var nav = document.getElementById('reelcryNavbar');
-            if (!nav) return;
-            function onScroll() {
-                if (window.scrollY > 40) nav.classList.add('scrolled');
-                else nav.classList.remove('scrolled');
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'F5' || e.keyCode === 116) {
+                e.preventDefault();
+                window.location.href = '/';
             }
-            window.addEventListener('scroll', onScroll, { passive: true });
-            onScroll();
+        });
+
+        (function () {
+            var sidebar = document.getElementById('reelcrySidebar');
+            if (!sidebar) return;
+
+            function stagger(container) {
+                var items = container.querySelectorAll(':scope > *');
+                items.forEach(function (el, i) {
+                    el.style.animationDelay = (i * 25) + 'ms';
+                });
+            }
+
+            sidebar.addEventListener('show.bs.offcanvas', function () {
+                sidebar.classList.remove('yt-anim-in');
+                void sidebar.offsetWidth;
+                sidebar.classList.add('yt-anim-in');
+                stagger(sidebar.querySelector('.offcanvas-body'));
+            });
+
+            sidebar.querySelectorAll('.collapse').forEach(function (col) {
+                col.addEventListener('show.bs.collapse', function () {
+                    sidebar.classList.add('yt-anim-in');
+                    stagger(col);
+                });
+            });
         })();
     </script>
 </div>

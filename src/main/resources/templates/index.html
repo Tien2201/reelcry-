@@ -26,11 +26,13 @@
 
         .home-hero {
             position: relative;
-            min-height: 70vh;
+            min-height: 48vh;
+            max-height: 560px;
             display: flex;
             align-items: flex-end;
-            padding-bottom: 64px;
+            padding-bottom: 40px;
             margin-bottom: 8px;
+            overflow: hidden;
         }
 
         .home-hero-bg {
@@ -385,6 +387,143 @@
             background: rgba(229, 9, 20, 0.35);
             color: #fff;
         }
+
+        /* ===== HERO SLIDESHOW ===== */
+        .hero-slides-wrap {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .hero-slide-item {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 1s ease;
+            display: flex;
+            align-items: flex-end;
+            padding-bottom: 64px;
+            overflow: hidden;
+        }
+
+        .hero-slide-item.active {
+            opacity: 1;
+            visibility: visible;
+            z-index: 2;
+        }
+
+        .hero-slide-item .home-hero-bg {
+            transition: transform 8s ease-out;
+            transform: scale(1.02);
+        }
+
+        .hero-slide-item.active .home-hero-bg {
+            transform: scale(1.1);
+        }
+
+        .hero-slide-item .home-hero-title,
+        .hero-slide-item .home-hero-badge,
+        .hero-slide-item .home-hero-meta,
+        .hero-slide-item .home-hero-actions {
+            opacity: 0;
+            transform: translateY(16px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .hero-slide-item.active .home-hero-badge {
+            transition-delay: 0.15s;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hero-slide-item.active .home-hero-title {
+            transition-delay: 0.25s;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hero-slide-item.active .home-hero-meta {
+            transition-delay: 0.35s;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hero-slide-item.active .home-hero-actions {
+            transition-delay: 0.45s;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hero-dots {
+            position: absolute;
+            bottom: 24px;
+            right: 5%;
+            z-index: 5;
+            display: flex;
+            gap: 8px;
+        }
+
+        .hero-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .hero-dot.active {
+            background: var(--netflix-red);
+            width: 26px;
+            border-radius: 4px;
+        }
+
+        .hero-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            z-index: 5;
+            cursor: pointer;
+            transition: 0.25s;
+            opacity: 0;
+        }
+
+        .home-hero:hover .hero-arrow {
+            opacity: 1;
+        }
+
+        .hero-arrow:hover {
+            background: var(--netflix-red);
+            border-color: var(--netflix-red);
+        }
+
+        .hero-arrow-left {
+            left: 24px;
+        }
+
+        .hero-arrow-right {
+            right: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .hero-arrow {
+                display: none;
+            }
+
+            .hero-dots {
+                right: 50%;
+                transform: translateX(50%);
+            }
+        }
     </style>
 </head>
 
@@ -394,31 +533,44 @@
 
     <section class="home-hero"
         th:if="${searchTerm == null and currentCategory == null and movies != null and !movies.isEmpty()}">
-        <div class="home-hero-bg"
-            th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movies[0].getImageUrl())} + ')'">
-        </div>
-        <div class="home-hero-overlay"></div>
+        <div class="hero-slides-wrap" id="heroSlides">
+            <div class="hero-slide-item" th:each="movie, iter : ${movies}" th:if="${iter.index < 6}"
+                th:classappend="${iter.index == 0} ? ' active' : ''">
+                <div class="home-hero-bg"
+                    th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movie.getImageUrl())} + ')'">
+                </div>
+                <div class="home-hero-overlay"></div>
 
-        <div class="container home-hero-content">
-            <span class="home-hero-badge"><i class="fas fa-fire"></i> Đang hot</span>
-            <h1 class="home-hero-title" th:text="${movies[0].name}"></h1>
+                <div class="container home-hero-content">
+                    <span class="home-hero-badge"><i class="fas fa-fire"></i> Đang hot</span>
+                    <h1 class="home-hero-title" th:text="${movie.name}"></h1>
 
-            <div class="home-hero-meta">
-                <span th:if="${movies[0].year != 0}" th:text="${movies[0].year}"></span>
-                <span th:if="${movies[0].quality}" th:text="${movies[0].quality}"></span>
-                <span th:if="${movies[0].lang}" th:text="${movies[0].lang}"></span>
-                <span th:if="${movies[0].episode_current}" th:text="${movies[0].episode_current}"></span>
+                    <div class="home-hero-meta">
+                        <span th:if="${movie.year != 0}" th:text="${movie.year}"></span>
+                        <span th:if="${movie.quality}" th:text="${movie.quality}"></span>
+                        <span th:if="${movie.lang}" th:text="${movie.lang}"></span>
+                        <span th:if="${movie.episode_current}" th:text="${movie.episode_current}"></span>
+                    </div>
+
+                    <div class="home-hero-actions">
+                        <a class="btn-hero-play" th:href="@{/phim/{slug}(slug=${movie.slug})}">
+                            <i class="fas fa-play"></i> Xem ngay
+                        </a>
+                        <a class="btn-hero-info" th:href="@{/phim/{slug}(slug=${movie.slug})}">
+                            <i class="fas fa-circle-info"></i> Chi tiết
+                        </a>
+                    </div>
+                </div>
             </div>
-
-            <div class="home-hero-actions">
-                <a class="btn-hero-play" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
-                    <i class="fas fa-play"></i> Xem ngay
-                </a>
-                <a class="btn-hero-info" th:href="@{/phim/{slug}(slug=${movies[0].slug})}">
-                    <i class="fas fa-circle-info"></i> Chi tiết
-                </a>
-            </div>
         </div>
+
+        <div class="hero-dots" id="heroDots">
+            <span class="hero-dot" th:each="movie, iter : ${movies}" th:if="${iter.index < 6}"
+                th:classappend="${iter.index == 0} ? ' active' : ''" th:attr="data-index=${iter.index}"></span>
+        </div>
+
+        <button class="hero-arrow hero-arrow-left" id="heroPrev"><i class="fas fa-chevron-left"></i></button>
+        <button class="hero-arrow hero-arrow-right" id="heroNext"><i class="fas fa-chevron-right"></i></button>
     </section>
 
     <div class="container my-5">
@@ -587,6 +739,41 @@
             document.querySelectorAll('.movie-card').forEach(function (el) {
                 observer.observe(el);
             });
+        })();
+    </script>
+    <script>
+        (function () {
+            var slides = document.querySelectorAll('.hero-slide-item');
+            var dots = document.querySelectorAll('.hero-dot');
+            if (slides.length <= 1) return;
+
+            var current = 0;
+            var timer;
+
+            function show(idx) {
+                slides[current].classList.remove('active');
+                if (dots[current]) dots[current].classList.remove('active');
+                current = (idx + slides.length) % slides.length;
+                slides[current].classList.add('active');
+                if (dots[current]) dots[current].classList.add('active');
+            }
+
+            function startAutoplay() {
+                clearInterval(timer);
+                timer = setInterval(function () { show(current + 1); }, 6500);
+            }
+
+            document.getElementById('heroNext').addEventListener('click', function () {
+                show(current + 1); startAutoplay();
+            });
+            document.getElementById('heroPrev').addEventListener('click', function () {
+                show(current - 1); startAutoplay();
+            });
+            dots.forEach(function (dot, i) {
+                dot.addEventListener('click', function () { show(i); startAutoplay(); });
+            });
+
+            startAutoplay();
         })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

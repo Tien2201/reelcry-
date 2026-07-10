@@ -592,57 +592,111 @@
             <div class="vn-scroll-row" id="favorites-row"></div>
         </div>
 
-
-
-        <div class="section-title-row">
-            <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
-        </div>
-
-        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
-            <div class="col" th:each="movie, iter : ${movies}"
-                th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
-                <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                    <div class="movie-card">
-                        <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                        <span class="badge-year" th:text="${movie?.year}"></span>
-
-                        <div class="movie-img-container">
-                            <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}"
-                                onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
-                                loading="lazy">
-                            <div class="movie-card-gradient"></div>
-                            <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+        <div th:if="${searchTerm == null and currentCategory == null and moviesVN != null and !moviesVN.isEmpty()}">
+            <div class="section-title-row">
+                <h2 class="section-title">Phim Việt Nam</h2>
+                <a class="section-viewall" th:href="@{/filter/quoc-gia/viet-nam}">Xem tất cả <i
+                        class="fas fa-chevron-right"></i></a>
+            </div>
+            <div class="vn-scroll-row">
+                <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+                    <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                        <div class="movie-card">
+                            <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                            <span class="badge-year" th:text="${movie?.year}"></span>
+                            <div class="movie-img-container">
+                                <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                <div class="movie-card-gradient"></div>
+                                <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                            </div>
+                            <div class="movie-info">
+                                <div class="movie-title" th:text="${movie.name}"></div>
+                            </div>
                         </div>
-
-                        <div class="movie-info">
-                            <div class="movie-title" th:text="${movie.name}"></div>
-                        </div>
-                    </div>
-                </a>
+                    </a>
+                </div>
             </div>
         </div>
 
-        <nav class="mt-5" th:if="${currentPage != null}">
-            <ul class="pagination justify-content-center">
-                <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
-                    <a class="page-link"
-                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
-                        <i class="fas fa-chevron-left"></i>
+        <div
+            th:if="${searchTerm == null and currentCategory == null and moviesCinema != null and !moviesCinema.isEmpty()}">
+            <div class="section-title-row">
+                <h2 class="section-title">Phim Chiếu Rạp</h2>
+                <a class="section-viewall" th:href="@{/filter/danh-sach/phim-chieu-rap}">Xem tất cả <i
+                        class="fas fa-chevron-right"></i></a>
+            </div>
+            <div class="vn-scroll-row">
+                <div class="vn-card-wrap" th:each="movie : ${moviesCinema}">
+                    <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                        <div class="movie-card">
+                            <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                            <span class="badge-year" th:text="${movie?.year}"></span>
+                            <div class="movie-img-container">
+                                <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                <div class="movie-card-gradient"></div>
+                                <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                            </div>
+                            <div class="movie-info">
+                                <div class="movie-title" th:text="${movie.name}"></div>
+                            </div>
+                        </div>
                     </a>
-                </li>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <li class="page-item active">
-                    <span class="page-link" th:text="${currentPage}"></span>
-                </li>
 
-                <li class="page-item">
-                    <a class="page-link"
-                        th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            </ul>
-        </nav>
+
+    <div class="section-title-row">
+        <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
+    </div>
+
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
+        <div class="col" th:each="movie, iter : ${movies}"
+            th:if="${!(searchTerm == null and currentCategory == null and iter.index == 0)}">
+            <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                <div class="movie-card">
+                    <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                    <span class="badge-year" th:text="${movie?.year}"></span>
+
+                    <div class="movie-img-container">
+                        <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}"
+                            onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
+                            loading="lazy">
+                        <div class="movie-card-gradient"></div>
+                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                    </div>
+
+                    <div class="movie-info">
+                        <div class="movie-title" th:text="${movie.name}"></div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <nav class="mt-5" th:if="${currentPage != null}">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled'">
+                <a class="page-link"
+                    th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage - 1})} : @{/(page=${currentPage - 1})}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+
+            <li class="page-item active">
+                <span class="page-link" th:text="${currentPage}"></span>
+            </li>
+
+            <li class="page-item">
+                <a class="page-link"
+                    th:href="${currentCategory != null} ? @{/filter/{cat}/{slug}(cat=${currentCategory}, slug=${currentSlug}, page=${currentPage + 1})} : @{/(page=${currentPage + 1})}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
     </div>
 
     <script>

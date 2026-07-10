@@ -15,7 +15,8 @@ public class MovieService {
 
     public MovieService(WebClient.Builder builder) {
         this.webClient = builder
-                .defaultHeader(HttpHeaders.USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                .defaultHeader(HttpHeaders.USER_AGENT,
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
                 .defaultHeader(HttpHeaders.REFERER, "https://ophim1.com/")
                 .build();
     }
@@ -25,7 +26,8 @@ public class MovieService {
     }
 
     public Mono<MovieResponse> getHomeData(int page) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve().bodyToMono(MovieResponse.class);
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve()
+                .bodyToMono(MovieResponse.class);
     }
 
     // Fix lỗi getDetail: nhận 2 tham số slug và source
@@ -52,21 +54,45 @@ public class MovieService {
     // Fix lỗi getMoviesByFilter: nhận thêm tham số source
     public Mono<MovieResponse> getMoviesByFilter(String category, String slug, int page, String source) {
         String path = "kkphim".equalsIgnoreCase(source) ? "/v1/api/danh-sach/" : "/v1/api/";
-        return webClient.get().uri(getBaseUrl(source) + path + category + "/" + slug + "?page=" + page).retrieve().bodyToMono(MovieResponse.class);
+        return webClient.get().uri(getBaseUrl(source) + path + category + "/" + slug + "?page=" + page).retrieve()
+                .bodyToMono(MovieResponse.class);
     }
 
     // Fix lỗi getMoviesByCountry: Thêm hàm này vào Service
     public Mono<MovieResponse> getMoviesByCountry(String countrySlug, int page) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia/" + countrySlug + "?page=" + page).retrieve().bodyToMono(MovieResponse.class);
+        return webClient.get()
+                .uri(OPHIM_BASE + "/v1/api/quoc-gia/" + countrySlug + "?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class);
+    }
+
+    // Phim chiếu rạp, sắp xếp theo mới cập nhật nhất
+    public Mono<MovieResponse> getCinemaMovies(int page) {
+        return webClient.get()
+                .uri(OPHIM_BASE + "/v1/api/danh-sach/phim-chieu-rap?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class);
     }
 
     // Fix lỗi getPeoples: Thêm hàm này vào Service
     public Mono<MoviePeoplesResponse> getPeoples(String slug) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/phim/" + slug + "/peoples").retrieve().bodyToMono(MoviePeoplesResponse.class)
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/phim/" + slug + "/peoples").retrieve()
+                .bodyToMono(MoviePeoplesResponse.class)
                 .onErrorReturn(new MoviePeoplesResponse());
     }
 
-    public Mono<CategoryResponse> getGenres() { return webClient.get().uri(OPHIM_BASE + "/v1/api/the-loai").retrieve().bodyToMono(CategoryResponse.class); }
-    public Mono<CategoryResponse> getCountries() { return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia").retrieve().bodyToMono(CategoryResponse.class); }
-    public Mono<MovieResponse> searchMovies(String keyword) { return webClient.get().uri(OPHIM_BASE + "/v1/api/tim-kiem?keyword=" + keyword).retrieve().bodyToMono(MovieResponse.class); }
+    public Mono<CategoryResponse> getGenres() {
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/the-loai").retrieve().bodyToMono(CategoryResponse.class);
+    }
+
+    public Mono<CategoryResponse> getCountries() {
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia").retrieve().bodyToMono(CategoryResponse.class);
+    }
+
+    public Mono<MovieResponse> searchMovies(String keyword) {
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/tim-kiem?keyword=" + keyword).retrieve()
+                .bodyToMono(MovieResponse.class);
+    }
 }

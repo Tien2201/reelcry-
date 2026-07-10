@@ -41,6 +41,11 @@ public class MovieController {
             model.addAttribute("moviesVN", vnResponse.getActualItems());
         }
 
+        MovieResponse cinemaResponse = movieService.getCinemaMovies(1).block();
+        if (cinemaResponse != null) {
+            model.addAttribute("moviesCinema", cinemaResponse.getActualItems());
+        }
+
         return "index";
     }
 

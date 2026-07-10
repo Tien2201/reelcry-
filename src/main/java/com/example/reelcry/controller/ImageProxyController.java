@@ -88,14 +88,14 @@ public class ImageProxyController {
     private final ConcurrentHashMap<String, byte[]> imageCache = new ConcurrentHashMap<>();
     private static final int MAX_CACHE_SIZE = 500;
 
-    // Giới hạn tối đa 6 request tải ảnh chạy song song, tránh dội quá tải domain nguồn
+    // Giới hạn tối đa 6 request tải ảnh chạy song song, tránh dội quá tải domain
+    // nguồn
     private final Semaphore semaphore = new Semaphore(6);
 
     private static final Set<String> ALLOWED_HOSTS = Set.of(
             "img.ophim.live",
             "phimimg.com",
-            "img.phimapi.com"
-    );
+            "img.phimapi.com");
 
     public ImageProxyController() {
         HttpClient httpClient = HttpClient.create()
@@ -123,7 +123,7 @@ public class ImageProxyController {
         }
 
         byte[] bytes = null;
-        for (int attempt = 1; attempt <= 3 && bytes == null; attempt++) {
+        for (int attempt = 1; attempt <= 5 && bytes == null; attempt++) {
             bytes = tryFetch(uri, url, attempt);
         }
 
@@ -153,7 +153,8 @@ public class ImageProxyController {
             try {
                 return imageWebClient.get()
                         .uri(uri)
-                        .header(HttpHeaders.USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
+                        .header(HttpHeaders.USER_AGENT,
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
                         .header(HttpHeaders.REFERER, "https://ophim1.com/")
                         .retrieve()
                         .bodyToMono(byte[].class)
@@ -161,8 +162,13 @@ public class ImageProxyController {
             } finally {
                 semaphore.release();
             }
+
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            System.err.println("[img-proxy] Lần " + attempt + " lỗi HTTP " + e.getStatusCode() + " cho " + urlForLog);
+            return null;
         } catch (Exception e) {
-            System.err.println("[img-proxy] Lần " + attempt + " lỗi " + urlForLog + " -> " + e.getClass().getSimpleName());
+            System.err.println("[img-proxy] Lần " + attempt + " lỗi " + urlForLog + " -> "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
             return null;
         }
     }

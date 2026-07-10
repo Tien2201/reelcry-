@@ -1,17 +1,28 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${movie?.name} + ' - Reelcry'"></title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        :root { --primary-red: #e50914; --dark-bg: #060606; }
-        body { background-color: var(--dark-bg); color: white; font-family: 'Be Vietnam Pro', sans-serif; overflow-x: hidden; }
+        :root {
+            --primary-red: #e50914;
+            --dark-bg: #060606;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: white;
+            font-family: 'Be Vietnam Pro', sans-serif;
+            overflow-x: hidden;
+        }
 
         .hero-page-wrap {
             padding: 40px 3%;
@@ -25,12 +36,13 @@
             margin: 0 auto;
             border-radius: 20px;
             overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
         }
 
         .hero-bg {
-            position: absolute; inset: 0;
+            position: absolute;
+            inset: 0;
             background-size: cover;
             background-position: center 20%;
             filter: contrast(1.12) saturate(1.15) brightness(0.95);
@@ -39,25 +51,30 @@
         }
 
         .hero-overlay {
-            position: absolute; inset: 0;
-            background: linear-gradient(100deg, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.65) 40%, rgba(0,0,0,0.25) 75%, rgba(0,0,0,0.55) 100%),
-                        linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.6) 100%);
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(100deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.65) 40%, rgba(0, 0, 0, 0.25) 75%, rgba(0, 0, 0, 0.55) 100%),
+                linear-gradient(0deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0) 65%, rgba(0, 0, 0, 0.6) 100%);
             z-index: -1;
         }
 
         .hero-grain {
-            position: absolute; inset: 0;
+            position: absolute;
+            inset: 0;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
             z-index: -1;
             pointer-events: none;
         }
 
-        .hero-inner { padding: 56px 48px 64px; width: 100%; }
+        .hero-inner {
+            padding: 56px 48px 64px;
+            width: 100%;
+        }
 
         .hero-tag {
             display: inline-block;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,193,7,0.4);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 193, 7, 0.4);
             padding: 5px 16px;
             border-radius: 30px;
             font-size: 0.75rem;
@@ -73,7 +90,7 @@
             font-weight: 800;
             line-height: 1.05;
             letter-spacing: -0.5px;
-            text-shadow: 0 4px 24px rgba(0,0,0,0.9);
+            text-shadow: 0 4px 24px rgba(0, 0, 0, 0.9);
             margin-bottom: 10px;
             color: #fff;
         }
@@ -98,11 +115,12 @@
             align-items: center;
             gap: 8px;
         }
+
         .hero-about-label::after {
             content: '';
             flex: 1;
             height: 1px;
-            background: linear-gradient(90deg, rgba(229,9,20,0.4), transparent);
+            background: linear-gradient(90deg, rgba(229, 9, 20, 0.4), transparent);
         }
 
         .hero-content {
@@ -133,23 +151,29 @@
             font-size: 0.8rem;
             border: none;
         }
+
         .btn-watch-now:hover {
             background: #ff0a17;
             color: white;
-            box-shadow: 0 10px 30px rgba(229,9,20,0.5);
+            box-shadow: 0 10px 30px rgba(229, 9, 20, 0.5);
             transform: translateY(-3px);
         }
 
         .hero-socials a {
-            width: 34px; height: 34px;
-            display: inline-flex; align-items: center; justify-content: center;
-            border: 1px solid rgba(255,255,255,0.25);
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.25);
             border-radius: 50%;
-            color: #ccc; font-size: 0.85rem;
+            color: #ccc;
+            font-size: 0.85rem;
             margin-right: 10px;
             transition: 0.3s;
         }
-        .hero-socials a:hover { background: var(--primary-red); border-color: var(--primary-red); color: white; }
+
+        .hero-socials a.active { background: var(--primary-red); border-color: var(--primary-red); color: white; }
 
         .hero-credit {
             font-size: 0.72rem;
@@ -158,11 +182,15 @@
             text-transform: uppercase;
             margin-top: 26px;
         }
-        .hero-credit b { color: #ccc; letter-spacing: 0.5px; }
+
+        .hero-credit b {
+            color: #ccc;
+            letter-spacing: 0.5px;
+        }
 
         .movie-meta-item {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             padding: 4px 13px;
             border-radius: 20px;
             font-size: 0.72rem;
@@ -174,7 +202,11 @@
             display: inline-block;
         }
 
-        .side-panel { max-width: 290px; margin-left: auto; }
+        .side-panel {
+            max-width: 290px;
+            margin-left: auto;
+        }
+
         .panel-title {
             font-size: 0.9rem;
             font-weight: 800;
@@ -183,143 +215,240 @@
             margin-bottom: 16px;
             color: #fff;
         }
-        .info-list { list-style: none; padding: 0; margin: 0 0 32px; }
-        .info-list li { padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; }
-        .info-list li .label { color: #888; display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 3px;}
-        .info-list li .value { color: #eee; font-weight: 500; }
+
+        .info-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 32px;
+        }
+
+        .info-list li {
+            padding: 9px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.85rem;
+        }
+
+        .info-list li .label {
+            color: #888;
+            display: block;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 3px;
+        }
+
+        .info-list li .value {
+            color: #eee;
+            font-weight: 500;
+        }
 
         .trailer-thumb {
-            position: relative; border-radius: 10px; overflow: hidden;
-            width: 100%; max-width: 290px; aspect-ratio: 16/9; display: block;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 290px;
+            aspect-ratio: 16/9;
+            display: block;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .trailer-thumb img { width: 100%; height: 100%; object-fit: cover; filter: contrast(1.1) saturate(1.15); transition: 0.4s; }
-        .trailer-thumb:hover img { transform: scale(1.08); filter: brightness(0.7) contrast(1.1); }
+
+        .trailer-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: contrast(1.1) saturate(1.15);
+            transition: 0.4s;
+        }
+
+        .trailer-thumb:hover img {
+            transform: scale(1.08);
+            filter: brightness(0.7) contrast(1.1);
+        }
+
         .trailer-play {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px; background: var(--primary-red); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; color: white; font-size: 1.1rem;
-            box-shadow: 0 0 25px rgba(229,9,20,0.6); transition: 0.3s;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            background: var(--primary-red);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.1rem;
+            box-shadow: 0 0 25px rgba(229, 9, 20, 0.6);
+            transition: 0.3s;
         }
-        .trailer-thumb:hover .trailer-play { transform: translate(-50%, -50%) scale(1.15); }
+
+        .trailer-thumb:hover .trailer-play {
+            transform: translate(-50%, -50%) scale(1.15);
+        }
 
         @media (max-width: 991px) {
-            .hero-inner { padding: 32px 24px 40px; }
-            .side-panel { max-width: 100%; margin: 30px 0 0; }
+            .hero-inner {
+                padding: 32px 24px 40px;
+            }
+
+            .side-panel {
+                max-width: 100%;
+                margin: 30px 0 0;
+            }
         }
 
-        .server-section-wrap { background: #0d0d0d; padding: 60px 3%; }
-        .section-heading { font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; max-width: 1400px; margin-left: auto; margin-right: auto; }
-        .server-list { max-width: 1400px; margin: 0 auto; }
-        .btn-server {
-            background: rgba(255,255,255,0.05); color: white; text-decoration: none;
-            padding: 14px 28px; border-radius: 15px; font-weight: 700; transition: 0.4s;
-            border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 12px;
+        .server-section-wrap {
+            background: #0d0d0d;
+            padding: 60px 3%;
         }
+
+        .section-heading {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .server-list {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .btn-server {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            text-decoration: none;
+            padding: 14px 28px;
+            border-radius: 15px;
+            font-weight: 700;
+            transition: 0.4s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .btn-server:hover {
-            background: var(--primary-red); transform: translateY(-5px);
-            color: white; box-shadow: 0 12px 25px rgba(229, 9, 20, 0.4); border-color: var(--primary-red);
+            background: var(--primary-red);
+            transform: translateY(-5px);
+            color: white;
+            box-shadow: 0 12px 25px rgba(229, 9, 20, 0.4);
+            border-color: var(--primary-red);
         }
     </style>
 </head>
+
 <body>
 
-<div th:replace="~{header :: reelcry-header}"></div>
-<div th:if="${notice == 'missing_source'}"
-     style="background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.35); color: #ffc107; padding: 12px 20px; text-align: center; font-size: 0.9rem;">
-    <i class="fas fa-triangle-exclamation"></i>
-    Phim này chưa có trên Server 2 (KKPhim) — đang hiển thị Server 1 (OPhim).
-</div>
-<div class="hero-page-wrap">
-    <div class="hero-card">
-        <div class="hero-bg" th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movie?.getPosterFull())} + ')'"></div>
-        <div class="hero-overlay"></div>
-        <div class="hero-grain"></div>
+    <div th:replace="~{header :: reelcry-header}"></div>
+    <div th:if="${notice == 'missing_source'}"
+        style="background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.35); color: #ffc107; padding: 12px 20px; text-align: center; font-size: 0.9rem;">
+        <i class="fas fa-triangle-exclamation"></i>
+        Phim này chưa có trên Server 2 (KKPhim) — đang hiển thị Server 1 (OPhim).
+    </div>
+    <div class="hero-page-wrap">
+        <div class="hero-card">
+            <div class="hero-bg"
+                th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movie?.getPosterFull())} + ')'">
+            </div>
+            <div class="hero-overlay"></div>
+            <div class="hero-grain"></div>
 
-        <div class="hero-inner">
-            <div class="row align-items-start g-4">
-                <div class="col-lg-7">
-                    <span class="hero-tag" th:if="${movie?.quality}" th:text="${movie?.quality} + ' · ' + ${movie?.year}"></span>
+            <div class="hero-inner">
+                <div class="row align-items-start g-4">
+                    <div class="col-lg-7">
+                        <span class="hero-tag" th:if="${movie?.quality}"
+                            th:text="${movie?.quality} + ' · ' + ${movie?.year}"></span>
 
-                    <h1 class="hero-title" th:text="${movie?.name}"></h1>
-                    <p class="hero-subtitle" th:text="${movie?.origin_name}"></p>
+                        <h1 class="hero-title" th:text="${movie?.name}"></h1>
+                        <p class="hero-subtitle" th:text="${movie?.origin_name}"></p>
 
-                    <div class="mb-4">
-                        <span class="movie-meta-item" th:each="cat : ${movie?.category}" th:text="${cat.name}"></span>
-                    </div>
+                        <div class="mb-4">
+                            <span class="movie-meta-item" th:each="cat : ${movie?.category}"
+                                th:text="${cat.name}"></span>
+                        </div>
 
-                    <div class="hero-about-label">Nội dung phim</div>
-                    <div class="hero-content" th:utext="${movie?.content}"></div>
+                        <div class="hero-about-label">Nội dung phim</div>
+                        <div class="hero-content" th:utext="${movie?.content}"></div>
 
-                    <a class="btn-watch-now"
-                       th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
-                       th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
-                        <i class="fas fa-play"></i> Xem ngay
-                    </a>
-
-                    <div class="hero-socials mt-4">
-                        <a href="#"><i class="fab fa-facebook"></i></a>
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#" onclick="navigator.share ? navigator.share({title: document.title, url: location.href}) : alert('Đã sao chép link!')"><i class="fas fa-share-alt"></i></a>
-                    </div>
-
-                    <p class="hero-credit" th:if="${movie?.director != null and !movie.director.isEmpty()}">
-                        Đạo diễn: <b th:text="${#strings.listJoin(movie.director, ', ')}"></b>
-                    </p>
-                </div>
-
-                <div class="col-lg-4 offset-lg-1 d-none d-lg-block">
-                    <div class="side-panel">
-                        <div class="panel-title">Thông tin phim</div>
-                        <ul class="info-list">
-                            <li th:if="${movie?.time}">
-                                <span class="label">Thời lượng</span>
-                                <span class="value" th:text="${movie?.time}"></span>
-                            </li>
-                            <li th:if="${movie?.lang}">
-                                <span class="label">Ngôn ngữ</span>
-                                <span class="value" th:text="${movie?.lang}"></span>
-                            </li>
-                            <li th:if="${movie?.episode_current}">
-                                <span class="label">Trạng thái</span>
-                                <span class="value" th:text="${movie?.episode_current}"></span>
-                            </li>
-                            <li th:if="${movie?.country != null and !movie.country.isEmpty()}">
-                                <span class="label">Quốc gia</span>
-                                <span class="value" th:text="${#strings.listJoin(movie.country.![name], ', ')}"></span>
-                            </li>
-                            <li th:if="${movie?.actor != null and !movie.actor.isEmpty()}">
-                                <span class="label">Diễn viên</span>
-                                <span class="value" th:text="${#strings.listJoin(movie.actor, ', ')}"></span>
-                            </li>
-                        </ul>
-
-                        <div class="panel-title">Xem ngay</div>
-                        <a class="trailer-thumb"
-                           th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
-                           th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
-                            <img th:src="@{/img-proxy(url=${movie?.getPosterFull()})}" alt="thumbnail">
-                            <span class="trailer-play"><i class="fas fa-play"></i></span>
+                        <a class="btn-watch-now" th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
+                            th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
+                            <i class="fas fa-play"></i> Xem ngay
                         </a>
+
+                        <div class="hero-socials mt-4">
+                            <a href="#"><i class="fab fa-facebook"></i></a>
+                            <a href="#"><i class="fab fa-twitter"></i></a>
+                            <a href="#"
+                                onclick="navigator.share ? navigator.share({title: document.title, url: location.href}) : alert('Đã sao chép link!')"><i
+                                    class="fas fa-share-alt"></i></a>
+                            <a href="#" id="favoriteBtn" onclick="toggleFavorite(event)"><i class="fas fa-heart"
+                                    id="favoriteIcon"></i></a>
+                        </div>
+
+                        <p class="hero-credit" th:if="${movie?.director != null and !movie.director.isEmpty()}">
+                            Đạo diễn: <b th:text="${#strings.listJoin(movie.director, ', ')}"></b>
+                        </p>
+                    </div>
+
+                    <div class="col-lg-4 offset-lg-1 d-none d-lg-block">
+                        <div class="side-panel">
+                            <div class="panel-title">Thông tin phim</div>
+                            <ul class="info-list">
+                                <li th:if="${movie?.time}">
+                                    <span class="label">Thời lượng</span>
+                                    <span class="value" th:text="${movie?.time}"></span>
+                                </li>
+                                <li th:if="${movie?.lang}">
+                                    <span class="label">Ngôn ngữ</span>
+                                    <span class="value" th:text="${movie?.lang}"></span>
+                                </li>
+                                <li th:if="${movie?.episode_current}">
+                                    <span class="label">Trạng thái</span>
+                                    <span class="value" th:text="${movie?.episode_current}"></span>
+                                </li>
+                                <li th:if="${movie?.country != null and !movie.country.isEmpty()}">
+                                    <span class="label">Quốc gia</span>
+                                    <span class="value"
+                                        th:text="${#strings.listJoin(movie.country.![name], ', ')}"></span>
+                                </li>
+                                <li th:if="${movie?.actor != null and !movie.actor.isEmpty()}">
+                                    <span class="label">Diễn viên</span>
+                                    <span class="value" th:text="${#strings.listJoin(movie.actor, ', ')}"></span>
+                                </li>
+                            </ul>
+
+                            <div class="panel-title">Xem ngay</div>
+                            <a class="trailer-thumb" th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
+                                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
+                                <img th:src="@{/img-proxy(url=${movie?.getPosterFull()})}" alt="thumbnail">
+                                <span class="trailer-play"><i class="fas fa-play"></i></span>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<section class="server-section-wrap">
-    <h3 class="section-heading">Chọn server</h3>
-    <div class="d-flex gap-3 flex-wrap server-list">
-        <a th:each="server, iter : ${movie?.episodes}"
-           th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=${iter.index}, src=${currentSource != null ? currentSource : 'ophim'})}"
-           class="btn-server">
-            <i class="fas fa-play-circle fs-4"></i>
-            <span th:text="${server.server_name}"></span>
-        </a>
-    </div>
-</section>
+    <section class="server-section-wrap">
+        <h3 class="section-heading">Chọn server</h3>
+        <div class="d-flex gap-3 flex-wrap server-list">
+            <a th:each="server, iter : ${movie?.episodes}"
+                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=${iter.index}, src=${currentSource != null ? currentSource : 'ophim'})}"
+                class="btn-server">
+                <i class="fas fa-play-circle fs-4"></i>
+                <span th:text="${server.server_name}"></span>
+            </a>
+        </div>
+    </section>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

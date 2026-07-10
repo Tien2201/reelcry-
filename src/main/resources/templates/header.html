@@ -4,7 +4,7 @@
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-6G8P923RSQ"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
+        function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
         gtag('config', 'G-6G8P923RSQ');
     </script>
@@ -17,12 +17,20 @@
         }
 
         .navbar-custom {
-            background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 100%);
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border-bottom: 1px solid transparent;
+            padding: 18px 0;
+            transition: background 0.35s ease, backdrop-filter 0.35s ease, padding 0.35s ease, border-color 0.35s ease;
+        }
+
+        .navbar-custom.scrolled {
+            background: rgba(6, 6, 6, 0.88);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-            padding: 14px 0;
-            transition: all 0.3s ease;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 12px 0;
         }
 
         .navbar-brand-custom {
@@ -32,8 +40,9 @@
             letter-spacing: -1px;
             transition: 0.3s;
         }
+
         .navbar-brand-custom:hover {
-            text-shadow: 0 0 18px rgba(229,9,20,0.6);
+            text-shadow: 0 0 18px rgba(229, 9, 20, 0.6);
             transform: scale(1.03);
         }
 
@@ -47,24 +56,33 @@
             padding: 6px 10px !important;
             transition: 0.25s;
         }
+
         .nav-link-custom::after {
             content: '';
             position: absolute;
-            left: 10px; right: 10px; bottom: 0;
+            left: 10px;
+            right: 10px;
+            bottom: 0;
             height: 2px;
             background: var(--netflix-red);
             transform: scaleX(0);
             transform-origin: left;
             transition: transform 0.25s ease;
         }
-        .nav-link-custom:hover { color: #fff !important; }
-        .nav-link-custom:hover::after { transform: scaleX(1); }
+
+        .nav-link-custom:hover {
+            color: #fff !important;
+        }
+
+        .nav-link-custom:hover::after {
+            transform: scaleX(1);
+        }
 
         .dropdown-menu-dark {
-            background: rgba(15,15,15,0.98) !important;
+            background: rgba(15, 15, 15, 0.98) !important;
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.08) !important;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
             border-radius: 14px;
             padding: 18px;
             margin-top: 12px !important;
@@ -84,16 +102,20 @@
             border-radius: 8px;
             transition: 0.2s;
         }
+
         .dropdown-item-custom:hover {
-            background: rgba(229,9,20,0.15) !important;
+            background: rgba(229, 9, 20, 0.15) !important;
             color: #fff !important;
             transform: translateX(4px);
         }
 
-        .search-wrap { position: relative; }
+        .search-wrap {
+            position: relative;
+        }
+
         .search-input {
             background: rgba(255, 255, 255, 0.07) !important;
-            border: 1px solid rgba(255,255,255,0.12) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
             color: white !important;
             border-radius: 30px !important;
             padding: 8px 42px 8px 18px;
@@ -101,107 +123,134 @@
             width: 220px;
             transition: 0.3s;
         }
-        .search-input::placeholder { color: #888; }
+
+        .search-input::placeholder {
+            color: #888;
+        }
+
         .search-input:focus {
             background: rgba(255, 255, 255, 0.11) !important;
             border-color: var(--netflix-red) !important;
-            box-shadow: 0 0 0 3px rgba(229,9,20,0.15);
+            box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
             width: 280px;
         }
+
         .search-btn {
-            position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-            background: transparent; border: none; color: #999;
-            width: 32px; height: 32px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #999;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: 0.2s;
         }
-        .search-btn:hover { background: var(--netflix-red); color: white; }
 
-        .btn-donate {
-            color: #ffc107 !important;
-            font-weight: 700;
-            font-size: 13px;
-            border: 1px solid rgba(255,193,7,0.5);
-            border-radius: 30px;
-            padding: 6px 16px !important;
-            margin-left: 6px;
-            transition: 0.25s;
-        }
-        .btn-donate:hover {
-            background: #ffc107;
-            color: #000 !important;
-            box-shadow: 0 0 15px rgba(255,193,7,0.4);
+        .search-btn:hover {
+            background: var(--netflix-red);
+            color: white;
         }
 
         .btn-logout {
             color: #bbb !important;
             font-size: 13px;
             font-weight: 600;
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 30px;
             padding: 6px 16px !important;
             margin-left: 10px;
             transition: 0.25s;
-            display: inline-flex; align-items: center; gap: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
+
         .btn-logout:hover {
-            background: rgba(229,9,20,0.15);
+            background: rgba(229, 9, 20, 0.15);
             border-color: var(--netflix-red);
             color: #fff !important;
         }
 
         @media (max-width: 992px) {
-            .dropdown-grid { grid-template-columns: repeat(2, 1fr); min-width: 100%; }
-            .navbar-collapse { background: #0e0e0e; padding: 20px; border-radius: 15px; margin-top: 15px; }
-            .search-input, .search-input:focus { width: 100%; }
-            .btn-logout { margin: 10px 0 0; width: fit-content; }
+            .dropdown-grid {
+                grid-template-columns: repeat(2, 1fr);
+                min-width: 100%;
+            }
+
+            .navbar-collapse {
+                background: #0e0e0e;
+                padding: 20px;
+                border-radius: 15px;
+                margin-top: 15px;
+            }
+
+            .search-input,
+            .search-input:focus {
+                width: 100%;
+            }
+
+            .btn-logout {
+                margin: 10px 0 0;
+                width: fit-content;
+            }
+
+            .navbar-custom {
+                background: rgba(6, 6, 6, 0.92);
+                backdrop-filter: blur(18px);
+            }
         }
     </style>
 
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top navbar-custom">
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top navbar-custom" id="reelcryNavbar">
         <div class="container-fluid px-lg-5">
             <a class="navbar-brand navbar-brand-custom" href="/">REELCRY</a>
 
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#reelcryNav">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
+                data-bs-target="#reelcryNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="reelcryNav">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0 align-items-lg-center">
                     <li class="nav-item">
-                        <a class="nav-link nav-link-custom" href="/filter/danh-sach/phim-moi">PHIM MỚI</a>
+                        <a class="nav-link nav-link-custom" href="/filter/danh-sach/phim-moi-cap-nhat">PHIM MỚI</a>
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">THỂ LOẠI</a>
+                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">THỂ
+                            LOẠI</a>
                         <div class="dropdown-menu dropdown-menu-dark">
                             <div class="dropdown-grid">
                                 <div th:each="g : ${allGenres}">
-                                    <a class="dropdown-item dropdown-item-custom" th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}" th:text="${g.name}"></a>
+                                    <a class="dropdown-item dropdown-item-custom"
+                                        th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}" th:text="${g.name}"></a>
                                 </div>
                             </div>
                         </div>
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">QUỐC GIA</a>
+                        <a class="nav-link dropdown-toggle nav-link-custom" href="#" data-bs-toggle="dropdown">QUỐC
+                            GIA</a>
                         <div class="dropdown-menu dropdown-menu-dark">
                             <div class="dropdown-grid">
                                 <div th:each="c : ${allCountries}">
-                                    <a class="dropdown-item dropdown-item-custom" th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}" th:text="${c.name}"></a>
+                                    <a class="dropdown-item dropdown-item-custom"
+                                        th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}" th:text="${c.name}"></a>
                                 </div>
                             </div>
                         </div>
-                    </li>
-
-                    <li class="nav-item">
-                        <a class="nav-link btn-donate" href="#" data-bs-toggle="modal" data-bs-target="#donateModal">
-                            <i class="fas fa-coffee me-1"></i> DONATE
-                        </a>
                     </li>
 
                     <li class="nav-item">
                         <form th:action="@{/logout}" method="post" class="d-inline">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
                             <button type="submit" class="btn-logout border-0">
                                 <i class="fas fa-right-from-bracket"></i> Đăng xuất
                             </button>
@@ -218,5 +267,19 @@
             </div>
         </div>
     </nav>
+
+    <script>
+        (function () {
+            var nav = document.getElementById('reelcryNavbar');
+            if (!nav) return;
+            function onScroll() {
+                if (window.scrollY > 40) nav.classList.add('scrolled');
+                else nav.classList.remove('scrolled');
+            }
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+        })();
+    </script>
 </div>
+
 </html>

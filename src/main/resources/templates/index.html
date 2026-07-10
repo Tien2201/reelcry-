@@ -328,6 +328,63 @@
             background-color: var(--netflix-red);
             color: white;
         }
+
+        /* ===== HIỆU ỨNG MƯỢT MÀ BỔ SUNG ===== */
+        .movie-card {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+        }
+
+        .movie-card.reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .home-hero-title,
+        .home-hero-badge,
+        .home-hero-meta,
+        .home-hero-actions {
+            opacity: 0;
+            animation: heroFadeUp 0.8s ease forwards;
+        }
+
+        .home-hero-badge {
+            animation-delay: 0.05s;
+        }
+
+        .home-hero-title {
+            animation-delay: 0.15s;
+        }
+
+        .home-hero-meta {
+            animation-delay: 0.28s;
+        }
+
+        .home-hero-actions {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes heroFadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        ::selection {
+            background: rgba(229, 9, 20, 0.35);
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -510,6 +567,26 @@
             } catch (e) {
                 console.error('Reelcry favorites render error', e);
             }
+        })();
+    </script>
+    <script>
+        (function () {
+            if (!('IntersectionObserver' in window)) {
+                document.querySelectorAll('.movie-card').forEach(function (el) { el.classList.add('reveal'); });
+                return;
+            }
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('reveal');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+            document.querySelectorAll('.movie-card').forEach(function (el) {
+                observer.observe(el);
+            });
         })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

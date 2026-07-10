@@ -13,29 +13,24 @@
     :root { --primary-red: #e50914; --bg-black: #0a0a0a; --card-dark: #1a1a1a; }
     body { background-color: var(--bg-black); color: white; font-family: 'Be Vietnam Pro', sans-serif; overflow-x: hidden; }
 
-    /* Player Wrapper */
     .video-container { background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #222; }
     .player-ratio { position: relative; padding-bottom: 56.25%; height: 0; }
     .player-ratio iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
 
-    /* Nguồn API Switcher */
     .source-switcher { background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 10px; border: 1px solid #333; }
     .btn-src { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; border-radius: 6px !important; transition: 0.3s; }
 
-    /* Control & Box */
     .control-box { background: var(--card-dark); border-radius: 12px; padding: 20px; border: 1px solid #333; height: 100%; }
     .btn-custom { border: 1px solid #333; background: #222; color: #aaa; padding: 8px 12px; border-radius: 8px; font-weight: 500; transition: 0.3s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; }
     .btn-custom:hover { background: #333; color: white; border-color: #555; transform: translateY(-2px); }
     .btn-custom.active { background: var(--primary-red); color: white; border-color: var(--primary-red); box-shadow: 0 4px 12px rgba(229,9,20,0.5); }
 
-    /* Mới: Đánh dấu tập đã xem */
     .btn-custom.watched { border-color: #28a745; color: #28a745; }
 
     .episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px; }
     .section-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
     .movie-title-watch { font-weight: 800; font-size: 1.8rem; }
 
-    /* Tắt đèn */
     #light-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.98); z-index: 1040; display: none; }
     .lighting-off-active { position: relative; z-index: 1050; box-shadow: 0 0 100px rgba(229, 9, 20, 0.5); border: 1px solid var(--primary-red); }
     .btn-light-toggle { background: #1a1a1a; color: #ffc107; border: 1px solid #333; }
@@ -43,16 +38,11 @@
 
     .alert-custom { background: rgba(229, 9, 20, 0.1); border: 1px solid rgba(229, 9, 20, 0.2); color: #ff8e8e; border-radius: 10px; }
 
-    /* Hiệu ứng pháo hoa tim */
     .heart-particle { position: fixed; pointer-events: none; z-index: 9999; animation: flyUp 1.5s ease-out forwards; }
     @keyframes flyUp {
         0% { transform: translateY(0) scale(1); opacity: 1; }
         100% { transform: translateY(-150px) scale(0); opacity: 0; }
     }
-
-    /* Notify giả lập */
-    #fake-toast { position: fixed; bottom: 20px; left: 20px; background: rgba(20,20,20,0.95); border-left: 4px solid var(--primary-red); padding: 12px 20px; border-radius: 8px; z-index: 1000; display: none; transform: translateX(-120%); transition: 0.5s; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-    #fake-toast.show { transform: translateX(0); display: block; }
   </style>
 </head>
 <body>
@@ -60,10 +50,6 @@
 <div id="light-overlay" onclick="toggleLights()"></div>
 
 <div th:replace="~{header :: reelcry-header}"></div>
-
-<div id="fake-toast">
-  <span id="toast-msg" style="font-size: 13px;"></span>
-</div>
 
 <div class="container my-4">
 
@@ -141,7 +127,6 @@
 </div>
 
 <script>
-  // 1. Chức năng tắt đèn
   function toggleLights() {
       const overlay = document.getElementById('light-overlay');
       const player = document.getElementById('main-player');
@@ -162,7 +147,6 @@
       }
   }
 
-  // 2. Chức năng Like bắn tim
   function likeEffect(e) {
       for(let i=0; i<10; i++) {
           const heart = document.createElement('div');
@@ -178,20 +162,6 @@
       document.getElementById('btn-like').classList.toggle('text-white');
   }
 
-  // 3. Chức năng Thông báo giả
-  const names = ["Anh Tuấn", "Minh Thư", "Hoàng Nam", "Quốc Bảo", "Thanh Trúc", "Văn Kiệt", "Lan Anh"];
-  function showFakeToast() {
-      const toast = document.getElementById('fake-toast');
-      const msg = document.getElementById('toast-msg');
-      const name = names[Math.floor(Math.random() * names.length)];
-      msg.innerHTML = `⚡ <b>${name}</b> vừa xem tập này xong!`;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 4000);
-      setTimeout(showFakeToast, Math.random() * 15000 + 15000); // 15-30s hiện 1 lần
-  }
-  setTimeout(showFakeToast, 5000);
-
-  // 4. Chức năng lưu lịch sử tập đã xem (LocalStorage)
   document.addEventListener('DOMContentLoaded', () => {
       const movieSlug = "[[${movie.slug}]]";
       const currentEp = "[[${currentEpSlug}]]";

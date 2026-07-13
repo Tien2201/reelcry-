@@ -1,4 +1,3 @@
-// src/main/java/com/example/reelcry/entity/WatchHistory.java
 package com.example.reelcry.entity;
 
 import lombok.Getter;
@@ -24,5 +23,7 @@ public class WatchHistory {
     private String movieSlug;
     private String movieName;
     private String movieImage;
+    private String episodeLabel;
+    private Integer progressPercent;
     private Instant watchedAt;
 }

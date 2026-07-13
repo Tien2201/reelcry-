@@ -300,6 +300,36 @@
             scrollbar-width: none;
         }
 
+        .watch-progress-track {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.25);
+            z-index: 10;
+        }
+
+        .watch-progress-fill {
+            height: 100%;
+            background: var(--netflix-red);
+        }
+        .watched-badge {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #4ade80;
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-weight: 700;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
         .vn-scroll-row::-webkit-scrollbar {
             display: none;
         }
@@ -684,7 +714,8 @@
                 <button class="section-viewall" id="clear-history-btn">Xoá lịch sử <i class="fas fa-trash"></i></button>
             </div>
             <div class="vn-row-wrap">
-                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
+                        class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row">
                         <div class="vn-card-wrap" th:each="h : ${watchHistory}">
@@ -694,6 +725,13 @@
                                         <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                        <div class="watch-progress-track" th:if="${h.progressPercent != null}">
+                                            <div class="watch-progress-fill"
+                                                th:style="'width:' + ${h.progressPercent} + '%'"></div>
+                                        </div>
+                                        <div class="watched-badge" th:if="${h.progressPercent == null}">
+                                            <i class="fas fa-check"></i> Đã xem
+                                        </div>
                                     </div>
                                     <div class="movie-info">
                                         <div class="movie-title" th:text="${h.movieName}"></div>
@@ -702,9 +740,12 @@
                             </a>
                         </div>
                     </div>
-                    <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                    <div class="vn-custom-scrollbar">
+                        <div class="vn-custom-scrollbar-thumb"></div>
+                    </div>
                 </div>
-                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i
+                        class="fas fa-chevron-right"></i></button>
             </div>
         </div>
 
@@ -715,12 +756,16 @@
                         class="fas fa-trash"></i></button>
             </div>
             <div class="vn-row-wrap">
-                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
+                        class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row" id="favorites-row"></div>
-                    <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
+                    <div class="vn-custom-scrollbar">
+                        <div class="vn-custom-scrollbar-thumb"></div>
+                    </div>
                 </div>
-                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i
+                        class="fas fa-chevron-right"></i></button>
             </div>
         </div>
 
@@ -731,29 +776,33 @@
                         class="fas fa-chevron-right"></i></a>
             </div>
             <div class="vn-row-wrap">
-                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
+                        class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
-                <div class="vn-scroll-row">
-                    <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
-                        <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                            <div class="movie-card">
-                                <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                                <span class="badge-year" th:text="${movie?.year}"></span>
-                                <div class="movie-img-container">
-                                    <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
-                                    <div class="movie-card-gradient"></div>
-                                    <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                    <div class="vn-scroll-row">
+                        <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+                            <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                                <div class="movie-card">
+                                    <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                                    <span class="badge-year" th:text="${movie?.year}"></span>
+                                    <div class="movie-img-container">
+                                        <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                        <div class="movie-card-gradient"></div>
+                                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="movie-info">
+                                        <div class="movie-title" th:text="${movie.name}"></div>
+                                    </div>
                                 </div>
-                                <div class="movie-info">
-                                    <div class="movie-title" th:text="${movie.name}"></div>
-                                </div>
-                            </div>
-                        </a>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="vn-custom-scrollbar">
+                        <div class="vn-custom-scrollbar-thumb"></div>
                     </div>
                 </div>
-                <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
-                </div>
-                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i
+                        class="fas fa-chevron-right"></i></button>
             </div>
         </div>
 
@@ -765,29 +814,33 @@
                         class="fas fa-chevron-right"></i></a>
             </div>
             <div class="vn-row-wrap">
-                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i class="fas fa-chevron-left"></i></button>
+                <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
+                        class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
-                <div class="vn-scroll-row">
-                    <div class="vn-card-wrap" th:each="movie : ${moviesCinema}">
-                        <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
-                            <div class="movie-card">
-                                <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
-                                <span class="badge-year" th:text="${movie?.year}"></span>
-                                <div class="movie-img-container">
-                                    <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
-                                    <div class="movie-card-gradient"></div>
-                                    <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                    <div class="vn-scroll-row">
+                        <div class="vn-card-wrap" th:each="movie : ${moviesCinema}">
+                            <a th:href="@{/phim/{slug}(slug=${movie.slug})}" class="text-decoration-none">
+                                <div class="movie-card">
+                                    <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
+                                    <span class="badge-year" th:text="${movie?.year}"></span>
+                                    <div class="movie-img-container">
+                                        <img th:src="${movie.getImageUrl()}" th:alt="${movie.name}" loading="lazy">
+                                        <div class="movie-card-gradient"></div>
+                                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="movie-info">
+                                        <div class="movie-title" th:text="${movie.name}"></div>
+                                    </div>
                                 </div>
-                                <div class="movie-info">
-                                    <div class="movie-title" th:text="${movie.name}"></div>
-                                </div>
-                            </div>
-                        </a>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="vn-custom-scrollbar">
+                        <div class="vn-custom-scrollbar-thumb"></div>
                     </div>
                 </div>
-                <div class="vn-custom-scrollbar"><div class="vn-custom-scrollbar-thumb"></div></div>
-                </div>
-                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i class="fas fa-chevron-right"></i></button>
+                <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i
+                        class="fas fa-chevron-right"></i></button>
             </div>
         </div>
 

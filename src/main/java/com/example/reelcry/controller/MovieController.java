@@ -124,7 +124,7 @@ public class MovieController {
                     model.addAttribute("episodes", allServers);
                     model.addAttribute("currentServer", currentServer);
                     model.addAttribute("currentLink", episodeData.getLink_embed());
-                    model.addAttribute("currentEpSlug", ep);
+                    model.addAttribute("currentEpSlug", episodeData.getSlug());
                     model.addAttribute("selectedSv", serverIndex);
                     model.addAttribute("currentSource", src);
 

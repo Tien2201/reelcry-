@@ -20,19 +20,30 @@ public class HistoryController {
     }
 
     @PostMapping
-    public ResponseEntity<Void> save(@RequestBody Map<String, String> body, Authentication authentication) {
-        if (authentication == null) return ResponseEntity.status(401).build();
+    public ResponseEntity<Void> save(@RequestBody Map<String, Object> body, Authentication authentication) {
+        if (authentication == null)
+            return ResponseEntity.status(401).build();
 
-        String slug = body.get("slug");
-        if (slug == null || slug.isBlank()) return ResponseEntity.badRequest().build();
+        String slug = (String) body.get("slug");
+        if (slug == null || slug.isBlank())
+            return ResponseEntity.badRequest().build();
 
         String username = authentication.getName();
 
         WatchHistory entry = repo.findByUsernameAndMovieSlug(username, slug).orElseGet(WatchHistory::new);
         entry.setUsername(username);
         entry.setMovieSlug(slug);
-        entry.setMovieName(body.getOrDefault("name", ""));
-        entry.setMovieImage(body.getOrDefault("image", ""));
+        entry.setMovieName((String) body.getOrDefault("name", ""));
+        entry.setMovieImage((String) body.getOrDefault("image", ""));
+        entry.setEpisodeLabel((String) body.get("episodeLabel"));
+
+        Object progressObj = body.get("progress");
+        if (progressObj instanceof Number) {
+            entry.setProgressPercent(((Number) progressObj).intValue());
+        } else {
+            entry.setProgressPercent(null);
+        }
+
         entry.setWatchedAt(Instant.now());
         repo.save(entry);
 
@@ -41,7 +52,8 @@ public class HistoryController {
 
     @DeleteMapping
     public ResponseEntity<Void> clear(Authentication authentication) {
-        if (authentication == null) return ResponseEntity.status(401).build();
+        if (authentication == null)
+            return ResponseEntity.status(401).build();
         repo.deleteByUsername(authentication.getName());
         return ResponseEntity.ok().build();
     }

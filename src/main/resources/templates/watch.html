@@ -181,8 +181,7 @@
   </style>
 </head>
 
-<body>
-
+<body th:attr="data-movie-image=@{/img-proxy(url=${movie?.getPosterFull()})}">
   <div id="light-overlay" onclick="toggleLights()"></div>
 
   <div th:replace="~{header :: reelcry-header}"></div>
@@ -262,7 +261,7 @@
     </div>
   </div>
 
-  <script>
+  <script th:inline="javascript">
     function toggleLights() {
       const overlay = document.getElementById('light-overlay');
       const player = document.getElementById('main-player');
@@ -299,30 +298,42 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      const movieSlug = "[[${movie.slug}]]";
-      const movieName = "[[${movie.name}]]";
-      const movieImage = "[[@{/img-proxy(url=${movie?.getPosterFull()})}]]";
-      const currentEp = "[[${currentEpSlug}]]";
-      let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
+      const movieSlug = [[${ movie.slug }]];
+      const movieName = [[${ movie.name }]];
+      const movieImage = [[@{/img-proxy(url=${movie?.getPosterFull()})}]];
+    const currentEp = [[${ currentEpSlug }]];
+    const allEpSlugs = [[${ currentServer.server_data.![slug] }]];
+    let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
 
-      if (!watched.includes(currentEp)) {
-        watched.push(currentEp);
-        localStorage.setItem('watched_' + movieSlug, JSON.stringify(watched));
+    if (!watched.includes(currentEp)) {
+      watched.push(currentEp);
+      localStorage.setItem('watched_' + movieSlug, JSON.stringify(watched));
+    }
+
+    document.querySelectorAll('.ep-btn').forEach(btn => {
+      if (watched.includes(btn.getAttribute('data-slug'))) {
+        btn.classList.add('watched');
       }
+    });
 
-      document.querySelectorAll('.ep-btn').forEach(btn => {
-        if (watched.includes(btn.getAttribute('data-slug'))) {
-          btn.classList.add('watched');
-        }
-      });
-
-      fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: movieSlug, name: movieName, image: movieImage })
-      }).catch(function (e) {
-        console.error('Reelcry history save error', e);
-      });
+    const idx = allEpSlugs.indexOf(currentEp);
+    const total = allEpSlugs.length;
+    const isSeries = total > 1;
+    const progress = (isSeries && idx >= 0) ? Math.round(((idx + 1) / total) * 100) : null;
+    const episodeLabel = (isSeries && idx >= 0) ? ('Tập ' + (idx + 1) + '/' + total) : '';
+    fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: movieSlug,
+        name: movieName,
+        image: movieImage,
+        episodeLabel: episodeLabel,
+        progress: progress
+      })
+    }).catch(function (e) {
+      console.error('Reelcry history save error', e);
+    });
     });
 
     function shareMovie() {

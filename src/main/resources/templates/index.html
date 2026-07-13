@@ -641,7 +641,8 @@
 
     <div class="container my-5">
 
-        <div id="watched-section" style="display:none;" th:if="${searchTerm == null and currentCategory == null}">
+        <div id="watched-section"
+            th:if="${searchTerm == null and currentCategory == null and watchHistory != null and !watchHistory.isEmpty()}">
             <div class="section-title-row">
                 <h2 class="section-title">Đang Xem / Đã Xem</h2>
                 <button class="section-viewall" id="clear-history-btn">Xoá lịch sử <i class="fas fa-trash"></i></button>
@@ -650,7 +651,22 @@
                 <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
-                    <div class="vn-scroll-row" id="watched-row"></div>
+                    <div class="vn-scroll-row">
+                        <div class="vn-card-wrap" th:each="h : ${watchHistory}">
+                            <a th:href="@{/phim/{slug}(slug=${h.movieSlug})}" class="text-decoration-none">
+                                <div class="movie-card">
+                                    <div class="movie-img-container">
+                                        <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
+                                        <div class="movie-card-gradient"></div>
+                                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="movie-info">
+                                        <div class="movie-title" th:text="${h.movieName}"></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
                     <div class="vn-custom-scrollbar">
                         <div class="vn-custom-scrollbar-thumb"></div>
                     </div>
@@ -808,41 +824,13 @@
 
     <script>
         (function () {
-            try {
-                var row = document.getElementById('watched-row');
-                var section = document.getElementById('watched-section');
-                if (!row || !section) return; // đang ở trang tìm kiếm/lọc, không hiện mục này
-
-                var history = JSON.parse(localStorage.getItem('reelcry_history') || '[]');
-                if (!history.length) return;
-
-                history.forEach(function (item) {
-                    var wrap = document.createElement('div');
-                    wrap.className = 'vn-card-wrap';
-                    wrap.innerHTML =
-                        '<a href="/phim/' + item.slug + '" class="text-decoration-none">' +
-                        '<div class="movie-card">' +
-                        '<div class="movie-img-container">' +
-                        '<img src="' + item.image + '" alt="' + item.name + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg==\'" loading="lazy">' +
-                        '<div class="movie-card-gradient"></div>' +
-                        '<div class="play-icon"><i class="fas fa-play-circle"></i></div>' +
-                        '</div>' +
-                        '<div class="movie-info"><div class="movie-title">' + item.name + '</div></div>' +
-                        '</div>' +
-                        '</a>';
-                    row.appendChild(wrap);
-                });
-
-                section.style.display = 'block';
-
-                document.getElementById('clear-history-btn').addEventListener('click', function () {
-                    localStorage.removeItem('reelcry_history');
-                    section.style.display = 'none';
-                    row.innerHTML = '';
-                });
-            } catch (e) {
-                console.error('Reelcry history render error', e);
-            }
+            var btn = document.getElementById('clear-history-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                fetch('/api/history', { method: 'DELETE' })
+                    .then(function () { window.location.reload(); })
+                    .catch(function (e) { console.error('Xoá lịch sử lỗi', e); });
+            });
         })();
     </script>
     <script>

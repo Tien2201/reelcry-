@@ -316,15 +316,13 @@
         }
       });
 
-      try {
-        let history = JSON.parse(localStorage.getItem('reelcry_history') || '[]');
-        history = history.filter(function (h) { return h.slug !== movieSlug; });
-        history.unshift({ slug: movieSlug, name: movieName, image: movieImage });
-        if (history.length > 20) history = history.slice(0, 20);
-        localStorage.setItem('reelcry_history', JSON.stringify(history));
-      } catch (e) {
+      fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: movieSlug, name: movieName, image: movieImage })
+      }).catch(function (e) {
         console.error('Reelcry history save error', e);
-      }
+      });
     });
 
     function shareMovie() {

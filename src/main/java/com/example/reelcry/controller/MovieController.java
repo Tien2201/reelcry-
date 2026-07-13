@@ -8,18 +8,22 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import com.example.reelcry.repository.WatchHistoryRepository;
+import org.springframework.security.core.Authentication;
 
 @Controller
 public class MovieController {
 
     private final MovieService movieService;
+    private final WatchHistoryRepository watchHistoryRepository;
 
-    public MovieController(MovieService movieService) {
+    public MovieController(MovieService movieService, WatchHistoryRepository watchHistoryRepository) {
         this.movieService = movieService;
+        this.watchHistoryRepository = watchHistoryRepository;
     }
 
     @GetMapping("/")
-    public String getIndex(@RequestParam(defaultValue = "1") int page, Model model) {
+    public String getIndex(@RequestParam(defaultValue = "1") int page, Model model, Authentication authentication) {
         // Mặc định trang chủ lấy OPhim, nếu muốn Kiệt có thể đổi thành "kkphim"
         MovieResponse response = movieService.getHomeData(page).block();
 
@@ -45,7 +49,10 @@ public class MovieController {
         if (cinemaResponse != null) {
             model.addAttribute("moviesCinema", cinemaResponse.getActualItems());
         }
-
+        if (authentication != null) {
+            model.addAttribute("watchHistory",
+                    watchHistoryRepository.findByUsernameOrderByWatchedAtDesc(authentication.getName()));
+        }
         return "index";
     }
 

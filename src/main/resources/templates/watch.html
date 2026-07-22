@@ -155,40 +155,73 @@
 
     .server-fallback-toast {
       position: absolute;
-      bottom: 16px;
+      bottom: 20px;
       left: 50%;
-      transform: translateX(-50%);
-      background: rgba(20, 20, 20, 0.95);
-      border: 1px solid rgba(229, 9, 20, 0.5);
-      border-radius: 10px;
-      padding: 10px 16px;
-      display: none;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(18, 18, 18, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(229, 9, 20, 0.45);
+      border-radius: 12px;
+      padding: 12px 18px;
+      display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       z-index: 20;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
       font-size: 0.85rem;
-      max-width: 90%;
+      max-width: 92%;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+    }
+
+    .server-fallback-toast.show {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .server-fallback-toast .toast-icon {
+      color: #ffc107;
+      font-size: 1.05rem;
+      flex-shrink: 0;
     }
 
     .btn-switch-server {
       background: var(--primary-red);
       color: white;
-      padding: 6px 14px;
-      border-radius: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
       text-decoration: none;
       font-weight: 700;
       font-size: 0.8rem;
       white-space: nowrap;
+      transition: 0.2s;
+    }
+
+    .btn-switch-server:hover {
+      background: #ff2028;
+      color: white;
+      transform: translateY(-1px);
     }
 
     .btn-close-toast {
       background: none;
       border: none;
-      color: #aaa;
-      font-size: 1.1rem;
+      color: #999;
+      font-size: 1.2rem;
       cursor: pointer;
       line-height: 1;
+      padding: 0 2px;
+      flex-shrink: 0;
+      transition: color 0.2s;
+    }
+
+    .btn-close-toast:hover {
+      color: white;
     }
 
     .alert-custom {
@@ -245,6 +278,7 @@
       <div class="player-ratio">
         <iframe th:src="${currentLink}" allowfullscreen></iframe>
         <div class="server-fallback-toast" id="server-fallback-toast">
+          <i class="fas fa-triangle-exclamation toast-icon"></i>
           <span>Video không phát được?</span>
           <a class="btn-switch-server"
             th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=0, src=${currentSource == 'kkphim' ? 'ophim' : 'kkphim'})}">
@@ -344,10 +378,23 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Gợi ý đổi server: nếu người dùng bấm vào khung video (focus chuyển vào iframe)
+      // thì coi như video đã load được, không hiện thông báo nữa. Không có cách nào
+      // đọc trực tiếp được nội dung iframe (khác domain) nên đây là suy đoán tốt nhất có thể.
+      var playerFrame = document.querySelector('#main-player iframe');
+      var iframeInteracted = false;
+
+      window.addEventListener('blur', function () {
+        if (document.activeElement === playerFrame) {
+          iframeInteracted = true;
+        }
+      });
+
       setTimeout(function () {
+        if (iframeInteracted) return;
         var toast = document.getElementById('server-fallback-toast');
-        if (toast) toast.style.display = 'flex';
-      }, 6000);
+        if (toast) toast.classList.add('show');
+      }, 9000);
 
       const movieSlug = [[${ movie.slug }]];
       const movieName = [[${ movie.name }]];
@@ -394,7 +441,7 @@
 
     function dismissServerToast() {
       var toast = document.getElementById('server-fallback-toast');
-      if (toast) toast.style.display = 'none';
+      if (toast) toast.classList.remove('show');
     }
 
     function shareMovie() {

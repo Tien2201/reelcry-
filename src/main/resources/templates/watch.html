@@ -300,9 +300,11 @@
     document.addEventListener('DOMContentLoaded', () => {
       const movieSlug = [[${ movie.slug }]];
       const movieName = [[${ movie.name }]];
-      const movieImage = [[@{/img-proxy(url=${movie?.getPosterFull()})}]];
+      const movieImage = document.body.dataset.movieImage;
     const currentEp = [[${ currentEpSlug }]];
     const allEpSlugs = [[${ currentServer.server_data.![slug] }]];
+    const selectedSv = [[${ selectedSv }]];
+    const currentSource = [[${ currentSource }]] || 'ophim';
     let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
 
     if (!watched.includes(currentEp)) {
@@ -322,16 +324,19 @@
     const progress = (isSeries && idx >= 0) ? Math.round(((idx + 1) / total) * 100) : null;
     const episodeLabel = (isSeries && idx >= 0) ? ('Tập ' + (idx + 1) + '/' + total) : '';
     fetch('/api/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        slug: movieSlug,
-        name: movieName,
-        image: movieImage,
-        episodeLabel: episodeLabel,
-        progress: progress
-      })
-    }).catch(function (e) {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: movieSlug,
+          name: movieName,
+          image: movieImage,
+          episodeLabel: episodeLabel,
+          progress: progress,
+          epSlug: currentEp,
+          sv: selectedSv,
+          source: currentSource
+        })
+      }).catch(function (e) {
       console.error('Reelcry history save error', e);
     });
     });

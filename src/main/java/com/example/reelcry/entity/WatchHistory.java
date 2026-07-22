@@ -26,4 +26,7 @@ public class WatchHistory {
     private String episodeLabel;
     private Integer progressPercent;
     private Instant watchedAt;
+    private String epSlug;
+    private Integer serverIndex;
+    private String source;
 }

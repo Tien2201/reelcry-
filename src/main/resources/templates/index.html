@@ -719,7 +719,7 @@
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row">
                         <div class="vn-card-wrap" th:each="h : ${watchHistory}">
-                            <a th:href="@{/phim/{slug}(slug=${h.movieSlug})}" class="text-decoration-none">
+                            <a th:href="@{/xem-phim/{slug}(slug=${h.movieSlug}, ep=${h.epSlug}, sv=${h.serverIndex}, src=${h.source})}" class="text-decoration-none">
                                 <div class="movie-card">
                                     <div class="movie-img-container">
                                         <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
@@ -729,8 +729,8 @@
                                             <div class="watch-progress-fill"
                                                 th:style="'width:' + ${h.progressPercent} + '%'"></div>
                                         </div>
-                                        <div class="watched-badge" th:if="${h.progressPercent == null}">
-                                            <i class="fas fa-check"></i> Đã xem
+                                        <div class="watch-progress-track" th:if="${h.progressPercent == null}">
+                                            <div class="watch-progress-fill" style="width:100%; background:#22c55e;"></div>
                                         </div>
                                     </div>
                                     <div class="movie-info">

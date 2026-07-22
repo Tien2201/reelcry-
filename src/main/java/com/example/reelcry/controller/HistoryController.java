@@ -36,7 +36,16 @@ public class HistoryController {
         entry.setMovieName((String) body.getOrDefault("name", ""));
         entry.setMovieImage((String) body.getOrDefault("image", ""));
         entry.setEpisodeLabel((String) body.get("episodeLabel"));
+        entry.setEpSlug((String) body.get("epSlug"));
 
+        Object svObj = body.get("sv");
+        if (svObj instanceof Number) {
+            entry.setServerIndex(((Number) svObj).intValue());
+        } else {
+            entry.setServerIndex(null);
+        }
+
+        entry.setSource((String) body.getOrDefault("source", "ophim"));
         Object progressObj = body.get("progress");
         if (progressObj instanceof Number) {
             entry.setProgressPercent(((Number) progressObj).intValue());

@@ -153,6 +153,44 @@
       z-index: 1051;
     }
 
+    .server-fallback-toast {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.95);
+      border: 1px solid rgba(229, 9, 20, 0.5);
+      border-radius: 10px;
+      padding: 10px 16px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      font-size: 0.85rem;
+      max-width: 90%;
+    }
+
+    .btn-switch-server {
+      background: var(--primary-red);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    .btn-close-toast {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 1.1rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
     .alert-custom {
       background: rgba(229, 9, 20, 0.1);
       border: 1px solid rgba(229, 9, 20, 0.2);
@@ -206,6 +244,14 @@
     <div class="video-container" id="main-player">
       <div class="player-ratio">
         <iframe th:src="${currentLink}" allowfullscreen></iframe>
+        <div class="server-fallback-toast" id="server-fallback-toast">
+          <span>Video không phát được?</span>
+          <a class="btn-switch-server"
+            th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=0, src=${currentSource == 'kkphim' ? 'ophim' : 'kkphim'})}">
+            Đổi sang <span th:text="${currentSource == 'kkphim' ? 'Server 1' : 'Server 2'}"></span>
+          </a>
+          <button type="button" class="btn-close-toast" onclick="dismissServerToast()">&times;</button>
+        </div>
       </div>
     </div>
 
@@ -298,6 +344,11 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(function () {
+        var toast = document.getElementById('server-fallback-toast');
+        if (toast) toast.style.display = 'flex';
+      }, 6000);
+
       const movieSlug = [[${ movie.slug }]];
       const movieName = [[${ movie.name }]];
       const movieImage = document.body.dataset.movieImage;
@@ -340,6 +391,11 @@
       console.error('Reelcry history save error', e);
     });
     });
+
+    function dismissServerToast() {
+      var toast = document.getElementById('server-fallback-toast');
+      if (toast) toast.style.display = 'none';
+    }
 
     function shareMovie() {
       alert("Đã sao chép link phim! Gửi cho bạn bè xem cùng nhé 🎬");

@@ -52,6 +52,25 @@ public class MovieService {
                 .onErrorReturn(new MovieResponse());
     }
 
+    // Phim hoạt hình / anime
+    public Mono<MovieResponse> getAnimeMovies(int page) {
+        return webClient.get()
+                .uri(OPHIM_BASE + "/v1/api/danh-sach/hoat-hinh?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
+    public Mono<MovieResponse> getAnimeMoviesKK(int page) {
+        return webClient.get()
+                .uri(KKPHIM_API_BASE + "/v1/api/danh-sach/hoat-hinh?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
     public Mono<MovieResponse> getCinemaMoviesKK(int page) {
         return webClient.get()
                 .uri(KKPHIM_API_BASE + "/v1/api/danh-sach/phim-chieu-rap?page=" + page
@@ -124,6 +143,13 @@ public class MovieService {
         return Mono.zip(
                 getCinemaMovies(page).onErrorReturn(new MovieResponse()),
                 getCinemaMoviesKK(page))
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+    }
+
+    public Mono<List<MovieResponse.MovieItem>> getAnimeMoviesMerged(int page) {
+        return Mono.zip(
+                getAnimeMovies(page).onErrorReturn(new MovieResponse()),
+                getAnimeMoviesKK(page))
                 .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
     }
 

@@ -376,7 +376,7 @@
                         <div class="hero-about-label">Nội dung phim</div>
                         <div class="hero-content" th:utext="${movie?.content}"></div>
 
-                        <a class="btn-watch-now" th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
+                        <a class="btn-watch-now" th:if="${episodes != null and !episodes.isEmpty()}"
                             th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
                             <i class="fas fa-play"></i> Xem ngay
                         </a>
@@ -424,7 +424,7 @@
                             </ul>
 
                             <div class="panel-title">Xem ngay</div>
-                            <a class="trailer-thumb" th:if="${movie?.episodes != null and !movie.episodes.isEmpty()}"
+                            <a class="trailer-thumb" th:if="${episodes != null and !episodes.isEmpty()}"
                                 th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
                                 <img th:src="@{/img-proxy(url=${movie?.getPosterFull()})}" alt="thumbnail">
                                 <span class="trailer-play"><i class="fas fa-play"></i></span>
@@ -439,7 +439,7 @@
     <section class="server-section-wrap">
         <h3 class="section-heading">Chọn server</h3>
         <div class="d-flex gap-3 flex-wrap server-list">
-            <a th:each="server, iter : ${movie?.episodes}"
+            <a th:each="server, iter : ${episodes}"
                 th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=${iter.index}, src=${currentSource != null ? currentSource : 'ophim'})}"
                 class="btn-server">
                 <i class="fas fa-play-circle fs-4"></i>

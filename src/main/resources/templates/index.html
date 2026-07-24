@@ -1057,10 +1057,10 @@
             </div>
         </div>
 
-        <div th:if="${searchTerm == null and currentCategory == null and moviesVN != null and !moviesVN.isEmpty()}">
+        <div th:if="${searchTerm == null and currentCategory == null and moviesAnime != null and !moviesAnime.isEmpty()}">
             <div class="section-title-row">
-                <h2 class="section-title">Phim Việt Nam</h2>
-                <a class="section-viewall" th:href="@{/filter/quoc-gia/viet-nam}">Xem tất cả <i
+                <h2 class="section-title">Phim Hoạt Hình</h2>
+                <a class="section-viewall" th:href="@{/filter/danh-sach/hoat-hinh}">Xem tất cả <i
                         class="fas fa-chevron-right"></i></a>
             </div>
             <div class="vn-row-wrap">
@@ -1068,7 +1068,7 @@
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row">
-                        <div class="vn-card-wrap" th:each="movie : ${moviesVN}">
+                        <div class="vn-card-wrap" th:each="movie : ${moviesAnime}">
                             <a th:href="@{/phim/{slug}(slug=${movie.slug}, src=${movie.source})}" class="text-decoration-none">
                                 <div class="movie-card">
                                     <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>

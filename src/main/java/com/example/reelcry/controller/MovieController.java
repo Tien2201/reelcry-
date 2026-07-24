@@ -29,8 +29,8 @@ public class MovieController {
         model.addAttribute("movies", movies);
         model.addAttribute("currentPage", page);
 
-        var moviesVN = movieService.getMoviesByCountryMerged("viet-nam", 1).block();
-        model.addAttribute("moviesVN", moviesVN);
+        var moviesAnime = movieService.getAnimeMoviesMerged(1).block();
+        model.addAttribute("moviesAnime", moviesAnime);
 
         var moviesCinema = movieService.getCinemaMoviesMerged(1).block();
         model.addAttribute("moviesCinema", moviesCinema);
@@ -64,6 +64,9 @@ public class MovieController {
             model.addAttribute("movie", movie);
             model.addAttribute("notice", notice);
             model.addAttribute("currentSource", src);
+            // KKPhim trả "episodes" ở ngoài cùng JSON (không nằm trong "movie"), nên phải lấy
+            // qua getActualEpisodes() thay vì movie.episodes để dùng được cho cả 2 nguồn
+            model.addAttribute("episodes", detail.getActualEpisodes());
 
             try {
                 MoviePeoplesResponse peoples = movieService.getPeoples(slug).block();

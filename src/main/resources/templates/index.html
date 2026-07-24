@@ -72,6 +72,8 @@
             align-items: center;
             gap: 6px;
             background: rgba(229, 9, 20, 0.15);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             border: 1px solid rgba(229, 9, 20, 0.4);
             color: #ff5b62;
             font-size: 0.72rem;
@@ -100,6 +102,8 @@
 
         .home-hero-meta span {
             background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.12);
             padding: 5px 14px;
             border-radius: 20px;
@@ -135,7 +139,10 @@
         }
 
         .btn-hero-info {
-            background: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             color: white;
             font-weight: 700;
             letter-spacing: 0.5px;
@@ -190,18 +197,21 @@
         }
 
         .movie-card {
-            background: #161616;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(14px) saturate(140%);
+            -webkit-backdrop-filter: blur(14px) saturate(140%);
             border-radius: 12px;
             overflow: hidden;
             transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             position: relative;
         }
 
         .movie-card:hover {
             transform: translateY(-6px) scale(1.03);
             z-index: 5;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            background: rgba(255, 255, 255, 0.07);
+            box-shadow: 0 20px 44px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(229, 9, 20, 0.25);
             border-color: rgba(229, 9, 20, 0.5);
         }
 
@@ -235,7 +245,9 @@
             position: absolute;
             top: 8px;
             left: 8px;
-            background: var(--netflix-red);
+            background: rgba(229, 9, 20, 0.85);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             color: white;
             font-size: 0.65rem;
             padding: 3px 8px;
@@ -419,6 +431,8 @@
             height: 36px;
             border-radius: 50%;
             background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             color: #fff;
             display: flex;
@@ -442,7 +456,9 @@
         }
 
         .pagination .page-link {
-            background-color: #161616;
+            background-color: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-color: rgba(255, 255, 255, 0.1);
             color: #aaa;
             margin: 0 5px;

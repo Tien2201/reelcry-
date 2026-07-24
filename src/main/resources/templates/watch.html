@@ -29,7 +29,7 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-      border: 1px solid #222;
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .player-ratio {
@@ -49,9 +49,11 @@
 
     .source-switcher {
       background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
       padding: 10px 20px;
       border-radius: 10px;
-      border: 1px solid #333;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .btn-src {
@@ -63,16 +65,20 @@
     }
 
     .control-box {
-      background: var(--card-dark);
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(16px) saturate(140%);
+      -webkit-backdrop-filter: blur(16px) saturate(140%);
       border-radius: 12px;
       padding: 20px;
-      border: 1px solid #333;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       height: 100%;
     }
 
     .btn-custom {
-      border: 1px solid #333;
-      background: #222;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       color: #aaa;
       padding: 8px 12px;
       border-radius: 8px;
@@ -86,9 +92,9 @@
     }
 
     .btn-custom:hover {
-      background: #333;
+      background: rgba(255, 255, 255, 0.1);
       color: white;
-      border-color: #555;
+      border-color: rgba(255, 255, 255, 0.25);
       transform: translateY(-2px);
     }
 

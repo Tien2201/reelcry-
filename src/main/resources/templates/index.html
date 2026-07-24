@@ -127,8 +127,12 @@
             font-size: clamp(2.1rem, 4.5vw, 3.4rem);
             font-weight: 800;
             line-height: 1.08;
-            text-shadow: 0 4px 24px rgba(0, 0, 0, 0.9);
             margin-bottom: 16px;
+            background: linear-gradient(100deg, #ffffff 30%, #ffd9db 60%, #ff5b62 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.7));
         }
 
         .home-hero-meta {
@@ -156,6 +160,8 @@
         }
 
         .btn-hero-play {
+            position: relative;
+            overflow: hidden;
             background: white;
             color: #111;
             font-weight: 700;
@@ -168,12 +174,30 @@
             gap: 10px;
             transition: 0.25s;
             font-size: 0.9rem;
+            box-shadow: 0 4px 18px rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-hero-play::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -75%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent, rgba(229, 9, 20, 0.35), transparent);
+            transform: skewX(-20deg);
+            transition: left 0.6s ease;
+        }
+
+        .btn-hero-play:hover::before {
+            left: 130%;
         }
 
         .btn-hero-play:hover {
             background: #eee;
             color: #111;
             transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(229, 9, 20, 0.35), 0 4px 18px rgba(255, 255, 255, 0.2);
         }
 
         .btn-hero-info {
@@ -364,6 +388,95 @@
         .watch-progress-fill {
             height: 100%;
             background: var(--netflix-red);
+        }
+
+        .watched-card-wrap {
+            flex: 0 0 260px;
+        }
+
+        .watched-card .movie-img-container {
+            box-shadow: inset 0 -40px 40px -20px rgba(0, 0, 0, 0.5);
+        }
+
+        .watched-continue-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 12;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(229, 9, 20, 0.85);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            padding: 4px 9px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.35);
+        }
+
+        .watched-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.6);
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(229, 9, 20, 0.9);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            color: white;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            z-index: 12;
+            box-shadow: 0 8px 24px rgba(229, 9, 20, 0.5);
+            transition: transform 0.3s ease, opacity 0.3s ease, background 0.2s ease;
+        }
+
+        .watched-card:hover .watched-play-btn {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .watched-play-btn:hover {
+            background: #ff2028;
+        }
+
+        .watched-card .play-icon {
+            display: none;
+        }
+
+        .watch-progress-track-glow {
+            height: 5px;
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .watch-progress-track-glow .watch-progress-fill {
+            background: linear-gradient(90deg, #ff5b62, var(--netflix-red));
+            box-shadow: 0 0 10px rgba(229, 9, 20, 0.8), 0 0 2px rgba(255, 255, 255, 0.5);
+            position: relative;
+        }
+
+        .watch-progress-label {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            z-index: 12;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            color: #fff;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 5px;
         }
         .watched-badge {
             position: absolute;
@@ -624,6 +737,19 @@
             transition-delay: 0.15s;
             opacity: 1;
             transform: translateY(0);
+            animation: heroBadgePulse 2.2s ease-in-out infinite;
+        }
+
+        @keyframes heroBadgePulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(229, 9, 20, 0.45);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(229, 9, 20, 0);
+            }
         }
 
         .hero-slide-item.active .home-hero-title {
@@ -680,8 +806,20 @@
             transform: translate(-50%, -50%) scale(1.15);
             z-index: 5;
             filter: brightness(1);
-            border-color: rgba(229, 9, 20, 0.7);
-            box-shadow: 0 22px 46px rgba(229, 9, 20, 0.35), 0 10px 30px rgba(0, 0, 0, 0.7);
+            border-color: rgba(229, 9, 20, 0.8);
+            animation: cfGlowPulse 2.4s ease-in-out infinite;
+        }
+
+        @keyframes cfGlowPulse {
+
+            0%,
+            100% {
+                box-shadow: 0 22px 46px rgba(229, 9, 20, 0.3), 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 0 rgba(229, 9, 20, 0.35);
+            }
+
+            50% {
+                box-shadow: 0 22px 46px rgba(229, 9, 20, 0.45), 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 8px rgba(229, 9, 20, 0);
+            }
         }
 
         .cf-item[data-offset="-1"] {
@@ -869,16 +1007,18 @@
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row">
-                        <div class="vn-card-wrap" th:each="h : ${watchHistory}">
+                        <div class="vn-card-wrap watched-card-wrap" th:each="h : ${watchHistory}">
                             <a th:href="@{/xem-phim/{slug}(slug=${h.movieSlug}, ep=${h.epSlug}, sv=${h.serverIndex}, src=${h.source})}" class="text-decoration-none">
-                                <div class="movie-card">
+                                <div class="movie-card watched-card">
                                     <div class="movie-img-container">
                                         <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
-                                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
-                                        <div class="watch-progress-track" th:if="${h.progressPercent != null}">
+                                        <span class="watched-continue-badge"><i class="fas fa-rotate-right"></i> Tiếp tục xem</span>
+                                        <div class="watched-play-btn"><i class="fas fa-play"></i></div>
+                                        <div class="watch-progress-track watch-progress-track-glow" th:if="${h.progressPercent != null}">
                                             <div class="watch-progress-fill"
                                                 th:style="'width:' + ${h.progressPercent} + '%'"></div>
+                                            <span class="watch-progress-label" th:text="${h.progressPercent} + '%'"></span>
                                         </div>
                                     </div>
                                     <div class="movie-info">

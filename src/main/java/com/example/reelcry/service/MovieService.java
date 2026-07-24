@@ -7,11 +7,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Service
 public class MovieService {
     private final WebClient webClient;
     private final String OPHIM_BASE = "https://ophim1.com";
     private final String KKPHIM_BASE = "https://kkphim.vip";
+    private final String KKPHIM_API_BASE = "https://phimapi.com";
 
     public MovieService(WebClient.Builder builder) {
         this.webClient = builder
@@ -28,6 +34,104 @@ public class MovieService {
     public Mono<MovieResponse> getHomeData(int page) {
         return webClient.get().uri(OPHIM_BASE + "/v1/api/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve()
                 .bodyToMono(MovieResponse.class);
+    }
+
+    // ===== KKPhim (phimapi.com) - dùng để gộp chung vào danh sách trang chủ =====
+    public Mono<MovieResponse> getHomeDataKK(int page) {
+        return webClient.get().uri(KKPHIM_API_BASE + "/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
+    public Mono<MovieResponse> getMoviesByCountryKK(String countrySlug, int page) {
+        return webClient.get()
+                .uri(KKPHIM_API_BASE + "/v1/api/quoc-gia/" + countrySlug + "?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
+    public Mono<MovieResponse> getCinemaMoviesKK(int page) {
+        return webClient.get()
+                .uri(KKPHIM_API_BASE + "/v1/api/danh-sach/phim-chieu-rap?page=" + page
+                        + "&sort_field=modified.time&sort_type=desc")
+                .retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
+    public Mono<MovieResponse> searchMoviesKK(String keyword) {
+        return webClient.get().uri(KKPHIM_API_BASE + "/v1/api/tim-kiem?keyword=" + keyword).retrieve()
+                .bodyToMono(MovieResponse.class)
+                .onErrorReturn(new MovieResponse());
+    }
+
+    // Gộp danh sách từ OPhim + KKPhim: gắn nguồn, loại trùng theo slug, sắp xếp theo thời gian cập nhật mới nhất
+    private List<MovieResponse.MovieItem> mergeAndSort(List<MovieResponse.MovieItem> ophimItems,
+            List<MovieResponse.MovieItem> kkphimItems) {
+        List<MovieResponse.MovieItem> merged = new ArrayList<>();
+        Set<String> seenSlugs = new HashSet<>();
+
+        if (ophimItems != null) {
+            for (MovieResponse.MovieItem item : ophimItems) {
+                item.setSource("ophim");
+                if (item.getSlug() != null && seenSlugs.add(item.getSlug())) {
+                    merged.add(item);
+                }
+            }
+        }
+        if (kkphimItems != null) {
+            for (MovieResponse.MovieItem item : kkphimItems) {
+                item.setSource("kkphim");
+                if (item.getSlug() != null && seenSlugs.add(item.getSlug())) {
+                    merged.add(item);
+                }
+            }
+        }
+
+        merged.sort((a, b) -> {
+            String ta = (a.getModified() != null) ? a.getModified().getTime() : null;
+            String tb = (b.getModified() != null) ? b.getModified().getTime() : null;
+            if (ta == null && tb == null)
+                return 0;
+            if (ta == null)
+                return 1;
+            if (tb == null)
+                return -1;
+            return tb.compareTo(ta);
+        });
+
+        return merged;
+    }
+
+    // Gọi song song OPhim + KKPhim rồi gộp lại, dùng cho trang chủ
+    public Mono<List<MovieResponse.MovieItem>> getHomeDataMerged(int page) {
+        return Mono.zip(
+                getHomeData(page).onErrorReturn(new MovieResponse()),
+                getHomeDataKK(page))
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+    }
+
+    public Mono<List<MovieResponse.MovieItem>> getMoviesByCountryMerged(String countrySlug, int page) {
+        return Mono.zip(
+                getMoviesByCountry(countrySlug, page).onErrorReturn(new MovieResponse()),
+                getMoviesByCountryKK(countrySlug, page))
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+    }
+
+    public Mono<List<MovieResponse.MovieItem>> getCinemaMoviesMerged(int page) {
+        return Mono.zip(
+                getCinemaMovies(page).onErrorReturn(new MovieResponse()),
+                getCinemaMoviesKK(page))
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+    }
+
+    public Mono<List<MovieResponse.MovieItem>> searchMoviesMerged(String keyword) {
+        return Mono.zip(
+                searchMovies(keyword).onErrorReturn(new MovieResponse()),
+                searchMoviesKK(keyword))
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
     }
 
     // Fix lỗi getDetail: nhận 2 tham số slug và source

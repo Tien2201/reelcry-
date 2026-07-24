@@ -24,31 +24,17 @@ public class MovieController {
 
     @GetMapping("/")
     public String getIndex(@RequestParam(defaultValue = "1") int page, Model model, Authentication authentication) {
-        // Mặc định trang chủ lấy OPhim, nếu muốn Kiệt có thể đổi thành "kkphim"
-        MovieResponse response = movieService.getHomeData(page).block();
+        // Gộp phim mới từ cả OPhim và KKPhim, sắp xếp theo thời gian cập nhật mới nhất
+        var movies = movieService.getHomeDataMerged(page).block();
+        model.addAttribute("movies", movies);
+        model.addAttribute("currentPage", page);
 
-        if (response != null) {
-            // SỬA: Dùng getActualItems() để không bị lỗi Null khi đổi API
-            model.addAttribute("movies", response.getActualItems());
+        var moviesVN = movieService.getMoviesByCountryMerged("viet-nam", 1).block();
+        model.addAttribute("moviesVN", moviesVN);
 
-            // Xử lý phân trang an toàn
-            if (response.getData() != null && response.getData().getParams() != null
-                    && response.getData().getParams().getPagination() != null) {
-                model.addAttribute("currentPage", response.getData().getParams().getPagination().getCurrentPage());
-            } else {
-                model.addAttribute("currentPage", page);
-            }
-        }
+        var moviesCinema = movieService.getCinemaMoviesMerged(1).block();
+        model.addAttribute("moviesCinema", moviesCinema);
 
-        MovieResponse vnResponse = movieService.getMoviesByCountry("viet-nam", 1).block();
-        if (vnResponse != null) {
-            model.addAttribute("moviesVN", vnResponse.getActualItems());
-        }
-
-        MovieResponse cinemaResponse = movieService.getCinemaMovies(1).block();
-        if (cinemaResponse != null) {
-            model.addAttribute("moviesCinema", cinemaResponse.getActualItems());
-        }
         if (authentication != null) {
             model.addAttribute("watchHistory",
                     watchHistoryRepository.findByUsernameOrderByWatchedAtDesc(authentication.getName()));
@@ -58,11 +44,9 @@ public class MovieController {
 
     @GetMapping("/search")
     public String search(@RequestParam String keyword, Model model) {
-        MovieResponse response = movieService.searchMovies(keyword).block();
-        if (response != null) {
-            model.addAttribute("movies", response.getActualItems());
-            model.addAttribute("searchTerm", keyword);
-        }
+        var movies = movieService.searchMoviesMerged(keyword).block();
+        model.addAttribute("movies", movies);
+        model.addAttribute("searchTerm", keyword);
         return "index";
     }
 
@@ -79,6 +63,7 @@ public class MovieController {
             var movie = detail.getActualItem();
             model.addAttribute("movie", movie);
             model.addAttribute("notice", notice);
+            model.addAttribute("currentSource", src);
 
             try {
                 MoviePeoplesResponse peoples = movieService.getPeoples(slug).block();

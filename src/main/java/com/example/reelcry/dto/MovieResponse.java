@@ -63,14 +63,26 @@ public class MovieResponse implements Serializable {
         private String episode_current;
         private String quality;
         private String lang;
+        private ModifiedInfo modified;
+
+        // Không lấy từ JSON - tự set trong code để biết phim này lấy từ nguồn nào (ophim/kkphim)
+        private transient String source;
 
         // Bổ sung Getter cho ảnh để dùng được cho cả 2 server
         public String getImageUrl() {
-            if (thumb_url != null && !thumb_url.isEmpty()) {
-                // Nếu link đã có http (như KKPhim) thì trả về luôn, nếu không thì ghép host OPhim
-                return thumb_url.startsWith("http") ? thumb_url : "https://img.ophim.live/uploads/movies/" + thumb_url;
+            String path = (thumb_url != null && !thumb_url.isEmpty()) ? thumb_url : poster_url;
+            if (path == null || path.isEmpty()) return null;
+            if (path.startsWith("http")) return path;
+            if ("kkphim".equals(source)) {
+                return "https://phimimg.com/" + path;
             }
-            return poster_url;
+            return "https://img.ophim.live/uploads/movies/" + path;
         }
+    }
+
+    @Data
+    public static class ModifiedInfo implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private String time;
     }
 }

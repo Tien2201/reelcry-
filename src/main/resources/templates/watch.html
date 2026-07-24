@@ -24,6 +24,35 @@
       overflow-x: hidden;
     }
 
+    .ambient-glow {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-glow-1 {
+      width: 480px;
+      height: 480px;
+      top: -140px;
+      right: -120px;
+      background: rgba(229, 9, 20, 0.28);
+    }
+
+    .ambient-glow-2 {
+      width: 420px;
+      height: 420px;
+      bottom: -120px;
+      left: -100px;
+      background: rgba(58, 84, 209, 0.2);
+    }
+
+    .container.my-4 {
+      position: relative;
+      z-index: 1;
+    }
+
     .video-container {
       background: #000;
       border-radius: 12px;
@@ -259,6 +288,8 @@
 </head>
 
 <body th:attr="data-movie-image=@{/img-proxy(url=${movie?.getPosterFull()})}">
+  <div class="ambient-glow ambient-glow-1"></div>
+  <div class="ambient-glow ambient-glow-2"></div>
   <div id="light-overlay" onclick="toggleLights()"></div>
 
   <div th:replace="~{header :: reelcry-header}"></div>

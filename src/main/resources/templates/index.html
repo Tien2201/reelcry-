@@ -589,6 +589,91 @@
             transform: translateY(0);
         }
 
+        .hero-coverflow {
+            position: absolute;
+            right: 6%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 3;
+            width: 380px;
+            height: 230px;
+            perspective: 1200px;
+        }
+
+        .cf-item {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 112px;
+            height: 162px;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+            transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, filter 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+        }
+
+        .cf-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .cf-item[data-offset="0"] {
+            transform: translate(-50%, -50%) scale(1.15);
+            z-index: 5;
+            filter: brightness(1);
+            border-color: rgba(229, 9, 20, 0.7);
+            box-shadow: 0 22px 46px rgba(229, 9, 20, 0.35), 0 10px 30px rgba(0, 0, 0, 0.7);
+        }
+
+        .cf-item[data-offset="-1"] {
+            transform: translate(-150%, -50%) scale(0.82) rotateY(18deg);
+            z-index: 4;
+            filter: brightness(0.55);
+            opacity: 0.92;
+        }
+
+        .cf-item[data-offset="1"] {
+            transform: translate(50%, -50%) scale(0.82) rotateY(-18deg);
+            z-index: 4;
+            filter: brightness(0.55);
+            opacity: 0.92;
+        }
+
+        .cf-item[data-offset="-2"] {
+            transform: translate(-230%, -50%) scale(0.62) rotateY(24deg);
+            z-index: 3;
+            filter: brightness(0.35);
+            opacity: 0.7;
+        }
+
+        .cf-item[data-offset="2"] {
+            transform: translate(130%, -50%) scale(0.62) rotateY(-24deg);
+            z-index: 3;
+            filter: brightness(0.35);
+            opacity: 0.7;
+        }
+
+        .cf-item[data-offset="hidden"] {
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(0.4);
+            z-index: 0;
+        }
+
+        .cf-item:hover:not([data-offset="0"]) {
+            filter: brightness(0.8);
+        }
+
+        @media (max-width: 992px) {
+            .hero-coverflow {
+                display: none;
+            }
+        }
+
         .hero-dots {
             position: absolute;
             bottom: 24px;
@@ -693,6 +778,13 @@
                         </a>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="hero-coverflow" id="heroCoverflow">
+            <div class="cf-item" th:each="movie, iter : ${movies}" th:if="${iter.index < 6}"
+                th:attr="data-index=${iter.index}">
+                <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
             </div>
         </div>
 
@@ -966,10 +1058,27 @@
         (function () {
             var slides = document.querySelectorAll('.hero-slide-item');
             var dots = document.querySelectorAll('.hero-dot');
+            var cfItems = document.querySelectorAll('.cf-item');
             if (slides.length <= 1) return;
 
             var current = 0;
             var timer;
+
+            function updateCoverflow(idx) {
+                var total = cfItems.length;
+                if (!total) return;
+                cfItems.forEach(function (item, i) {
+                    var diff = i - idx;
+                    if (diff > total / 2) diff -= total;
+                    if (diff < -total / 2) diff += total;
+
+                    if (diff >= -2 && diff <= 2) {
+                        item.setAttribute('data-offset', diff);
+                    } else {
+                        item.setAttribute('data-offset', 'hidden');
+                    }
+                });
+            }
 
             function show(idx) {
                 slides[current].classList.remove('active');
@@ -977,6 +1086,7 @@
                 current = (idx + slides.length) % slides.length;
                 slides[current].classList.add('active');
                 if (dots[current]) dots[current].classList.add('active');
+                updateCoverflow(current);
             }
 
             function startAutoplay() {
@@ -993,7 +1103,11 @@
             dots.forEach(function (dot, i) {
                 dot.addEventListener('click', function () { show(i); startAutoplay(); });
             });
+            cfItems.forEach(function (item, i) {
+                item.addEventListener('click', function () { show(i); startAutoplay(); });
+            });
 
+            updateCoverflow(0);
             startAutoplay();
         })();
     </script>

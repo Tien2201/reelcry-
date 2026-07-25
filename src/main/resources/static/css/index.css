@@ -593,6 +593,14 @@
             }
         }
 
+        /* Trên điện thoại/máy tính bảng, người dùng vuốt trực tiếp bằng tay nên
+           không cần thanh cuộn tuỳ chỉnh này nữa - ẩn đi cho gọn giao diện */
+        @media (hover: none) and (pointer: coarse) {
+            .vn-custom-scrollbar {
+                display: none;
+            }
+        }
+
         .pagination .page-link {
             background-color: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);

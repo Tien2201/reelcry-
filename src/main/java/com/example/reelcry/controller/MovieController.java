@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.example.reelcry.repository.WatchHistoryRepository;
 import org.springframework.security.core.Authentication;
+import reactor.core.publisher.Mono;
 
 @Controller
 public class MovieController {
@@ -24,16 +25,18 @@ public class MovieController {
 
     @GetMapping("/")
     public String getIndex(@RequestParam(defaultValue = "1") int page, Model model, Authentication authentication) {
-        // Gộp phim mới từ cả OPhim và KKPhim, sắp xếp theo thời gian cập nhật mới nhất
-        var movies = movieService.getHomeDataMerged(page).block();
-        model.addAttribute("movies", movies);
+        // Chạy song song 3 nguồn dữ liệu trang chủ (mới cập nhật, hoạt hình, chiếu
+        // rạp) thay vì gọi tuần tự -> giảm thời gian tải trang chủ đáng kể
+        var combined = Mono.zip(
+                movieService.getHomeDataMerged(page),
+                movieService.getAnimeMoviesMerged(1),
+                movieService.getCinemaMoviesMerged(1))
+                .block();
+
+        model.addAttribute("movies", combined.getT1());
         model.addAttribute("currentPage", page);
-
-        var moviesAnime = movieService.getAnimeMoviesMerged(1).block();
-        model.addAttribute("moviesAnime", moviesAnime);
-
-        var moviesCinema = movieService.getCinemaMoviesMerged(1).block();
-        model.addAttribute("moviesCinema", moviesCinema);
+        model.addAttribute("moviesAnime", combined.getT2());
+        model.addAttribute("moviesCinema", combined.getT3());
 
         if (authentication != null) {
             model.addAttribute("watchHistory",

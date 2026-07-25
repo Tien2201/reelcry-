@@ -1,7 +1,6 @@
 package com.example.reelcry.service;
 
 import com.example.reelcry.dto.*;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -10,7 +9,10 @@ import reactor.core.publisher.Mono;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 @Service
 public class MovieService {
@@ -18,6 +20,38 @@ public class MovieService {
     private final String OPHIM_BASE = "https://ophim1.com";
     private final String KKPHIM_BASE = "https://kkphim.vip";
     private final String KKPHIM_API_BASE = "https://phimapi.com";
+
+    // Cache thủ công (TTL) cho các danh sách phim trang chủ - tránh gọi lại API
+    // ngoài (OPhim/KKPhim) mỗi lượt truy cập, vì danh sách "mới cập nhật" ít
+    // thay đổi trong vài phút
+    private static final long LIST_CACHE_TTL_MS = 3 * 60 * 1000; // 3 phút
+    private final Map<String, CachedList> listCache = new ConcurrentHashMap<>();
+
+    private static class CachedList {
+        final List<MovieResponse.MovieItem> data;
+        final long timestamp;
+
+        CachedList(List<MovieResponse.MovieItem> data) {
+            this.data = data;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > LIST_CACHE_TTL_MS;
+        }
+    }
+
+    // Trả về bản cache còn hạn nếu có, nếu không thì gọi loader rồi lưu lại kết
+    // quả. Lưu ý: không cache Mono trực tiếp (Mono nguội sẽ gọi lại API mỗi lần
+    // subscribe), mà cache giá trị List đã resolve.
+    private Mono<List<MovieResponse.MovieItem>> getCachedList(String key,
+            Supplier<Mono<List<MovieResponse.MovieItem>>> loader) {
+        CachedList cached = listCache.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return Mono.just(cached.data);
+        }
+        return loader.get().doOnNext(data -> listCache.put(key, new CachedList(data)));
+    }
 
     public MovieService(WebClient.Builder builder) {
         this.webClient = builder
@@ -124,12 +158,12 @@ public class MovieService {
         return merged;
     }
 
-    // Gọi song song OPhim + KKPhim rồi gộp lại, dùng cho trang chủ
+    // Gọi song song OPhim + KKPhim rồi gộp lại, dùng cho trang chủ (có cache TTL)
     public Mono<List<MovieResponse.MovieItem>> getHomeDataMerged(int page) {
-        return Mono.zip(
+        return getCachedList("home_" + page, () -> Mono.zip(
                 getHomeData(page).onErrorReturn(new MovieResponse()),
                 getHomeDataKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
     }
 
     public Mono<List<MovieResponse.MovieItem>> getMoviesByCountryMerged(String countrySlug, int page) {
@@ -140,17 +174,17 @@ public class MovieService {
     }
 
     public Mono<List<MovieResponse.MovieItem>> getCinemaMoviesMerged(int page) {
-        return Mono.zip(
+        return getCachedList("cinema_" + page, () -> Mono.zip(
                 getCinemaMovies(page).onErrorReturn(new MovieResponse()),
                 getCinemaMoviesKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
     }
 
     public Mono<List<MovieResponse.MovieItem>> getAnimeMoviesMerged(int page) {
-        return Mono.zip(
+        return getCachedList("anime_" + page, () -> Mono.zip(
                 getAnimeMovies(page).onErrorReturn(new MovieResponse()),
                 getAnimeMoviesKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
     }
 
     public Mono<List<MovieResponse.MovieItem>> searchMoviesMerged(String keyword) {

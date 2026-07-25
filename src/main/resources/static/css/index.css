@@ -217,6 +217,22 @@
             margin: 46px 0 18px;
         }
 
+        /* Khi bấm "Đã xem" / "Yêu thích" ở thanh menu dưới cùng, trang nhảy
+           thẳng tới các mục này bằng #anchor - nếu không có scroll-margin-top
+           thì tiêu đề sẽ bị dính sát/khuất sau thanh header dính (sticky) phía
+           trên. Chừa khoảng đệm để tiêu đề luôn cách xa thanh header. */
+        #watched-section,
+        #favorites-section {
+            scroll-margin-top: 90px;
+        }
+
+        @media (max-width: 768px) {
+            #watched-section,
+            #favorites-section {
+                scroll-margin-top: 130px;
+            }
+        }
+
         .section-title {
             font-size: 1.3rem;
             font-weight: 700;

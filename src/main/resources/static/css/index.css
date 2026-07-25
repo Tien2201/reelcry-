@@ -594,10 +594,23 @@
         }
 
         /* Trên điện thoại/máy tính bảng, người dùng vuốt trực tiếp bằng tay nên
-           không cần thanh cuộn tuỳ chỉnh này nữa - ẩn đi cho gọn giao diện */
-        @media (hover: none) and (pointer: coarse) {
+           không cần thanh cuộn tuỳ chỉnh này nữa - ẩn đi cho gọn giao diện.
+           Dùng cả 2 điều kiện (hover/pointer VÀ độ rộng màn hình) để chắc chắn
+           bắt được trên mọi trình duyệt/thiết bị, kể cả khi 1 trong 2 không
+           khớp chính xác. Nút mũi tên trái/phải cũng ẩn theo vì đã vuốt được. */
+        @media (hover: none) and (pointer: coarse), (max-width: 992px) {
             .vn-custom-scrollbar {
-                display: none;
+                display: none !important;
+            }
+        }
+
+        @media (hover: none) and (pointer: coarse), (max-width: 768px) {
+            .vn-arrow {
+                display: none !important;
+            }
+
+            .vn-scroll-row {
+                scroll-padding: 0 12px;
             }
         }
 

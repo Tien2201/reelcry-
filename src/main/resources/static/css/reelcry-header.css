@@ -549,6 +549,11 @@
 
         @media (max-width: 768px) {
             .navbar-custom .container-fluid {
+                min-height: 48px;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                column-gap: 10px;
+                row-gap: 6px;
                 grid-template-columns: 1fr auto;
                 grid-template-areas:
                     "left right"
@@ -557,6 +562,34 @@
 
             .yt-sidebar {
                 width: 260px;
+            }
+
+            /* Thu gọn logo để dành chỗ, nhưng vẫn giữ nút bấm đủ lớn để chạm tay */
+            .navbar-brand-custom {
+                font-size: 1.05rem;
+                gap: 4px;
+            }
+
+            .yt-hamburger {
+                width: 44px;
+                height: 44px;
+            }
+
+            .yt-avatar-btn {
+                width: 40px;
+                height: 40px;
+            }
+
+            .yt-mic-btn {
+                width: 44px;
+                height: 44px;
+                margin-left: 8px;
+            }
+
+            .search-input,
+            .search-btn,
+            .search-kbd {
+                height: 42px;
             }
         }
 
@@ -608,8 +641,73 @@
             .back-to-top-btn {
                 right: 16px;
                 bottom: 16px;
-                width: 42px;
-                height: 42px;
+                width: 44px;
+                height: 44px;
                 font-size: 1rem;
             }
+        }
+
+        /* ===== Thanh điều hướng dưới cùng (bottom nav) - chỉ hiện trên di động ===== */
+        .yt-bottom-nav {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .yt-bottom-nav {
+                display: flex;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1060;
+                background: rgba(13, 13, 13, 0.88);
+                backdrop-filter: blur(20px) saturate(160%);
+                -webkit-backdrop-filter: blur(20px) saturate(160%);
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
+                padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+            }
+
+            body {
+                padding-bottom: calc(60px + env(safe-area-inset-bottom));
+            }
+
+            .back-to-top-btn {
+                bottom: calc(72px + env(safe-area-inset-bottom));
+            }
+        }
+
+        .bn-item {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            background: transparent;
+            border: none;
+            color: #999;
+            text-decoration: none;
+            padding: 6px 2px;
+            font-size: 10.5px;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: color 0.2s;
+        }
+
+        .bn-item i {
+            font-size: 18px;
+        }
+
+        .bn-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .bn-item.active,
+        .bn-item:active {
+            color: var(--netflix-red);
         }

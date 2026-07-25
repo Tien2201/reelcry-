@@ -315,6 +315,19 @@
             }
         }
 
+        @media (max-width: 768px) {
+            .btn-watch-now,
+            .btn-favorite {
+                min-height: 46px;
+                padding: 13px 22px;
+            }
+
+            .btn-server {
+                min-height: 46px;
+                padding: 13px 22px;
+            }
+        }
+
         .server-section-wrap {
             background: #0d0d0d;
             padding: 60px 3%;

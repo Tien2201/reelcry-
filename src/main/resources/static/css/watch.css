@@ -132,6 +132,25 @@
       gap: 10px;
     }
 
+    @media (max-width: 768px) {
+      .btn-custom,
+      .btn-src {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+      }
+
+      .episode-grid {
+        grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+        gap: 8px;
+      }
+
+      .episode-grid .btn-custom {
+        min-height: 44px;
+        padding: 8px 4px;
+      }
+    }
+
     .section-label {
       color: #888;
       font-size: 0.8rem;

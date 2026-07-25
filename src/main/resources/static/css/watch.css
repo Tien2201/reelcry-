@@ -1,0 +1,273 @@
+    :root {
+      --primary-red: #e50914;
+      --bg-black: #0a0a0a;
+      --card-dark: #1a1a1a;
+    }
+
+    body {
+      background-color: var(--bg-black);
+      color: white;
+      font-family: 'Be Vietnam Pro', sans-serif;
+      overflow-x: hidden;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-glow-1 {
+      width: 480px;
+      height: 480px;
+      top: -140px;
+      right: -120px;
+      background: rgba(229, 9, 20, 0.28);
+    }
+
+    .ambient-glow-2 {
+      width: 420px;
+      height: 420px;
+      bottom: -120px;
+      left: -100px;
+      background: rgba(58, 84, 209, 0.2);
+    }
+
+    .container.my-4 {
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-container {
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .player-ratio {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+    }
+
+    .player-ratio iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .source-switcher {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-src {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border-radius: 6px !important;
+      transition: 0.3s;
+    }
+
+    .control-box {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(16px) saturate(140%);
+      -webkit-backdrop-filter: blur(16px) saturate(140%);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      height: 100%;
+    }
+
+    .btn-custom {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #aaa;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: 0.3s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+    }
+
+    .btn-custom:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .btn-custom.active {
+      background: var(--primary-red);
+      color: white;
+      border-color: var(--primary-red);
+      box-shadow: 0 4px 12px rgba(229, 9, 20, 0.5);
+    }
+
+    .btn-custom.watched {
+      border-color: #28a745;
+      color: #28a745;
+    }
+
+    .episode-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      gap: 10px;
+    }
+
+    .section-label {
+      color: #888;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+    }
+
+    .movie-title-watch {
+      font-weight: 800;
+      font-size: 1.8rem;
+    }
+
+    #light-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.98);
+      z-index: 1040;
+      display: none;
+    }
+
+    .lighting-off-active {
+      position: relative;
+      z-index: 1050;
+      box-shadow: 0 0 100px rgba(229, 9, 20, 0.5);
+      border: 1px solid var(--primary-red);
+    }
+
+    .btn-light-toggle {
+      background: #1a1a1a;
+      color: #ffc107;
+      border: 1px solid #333;
+    }
+
+    .btn-light-toggle.active {
+      background: #ffc107;
+      color: #000;
+      z-index: 1051;
+    }
+
+    .server-fallback-toast {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(18, 18, 18, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(229, 9, 20, 0.45);
+      border-radius: 12px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 20;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      font-size: 0.85rem;
+      max-width: 92%;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+    }
+
+    .server-fallback-toast.show {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .server-fallback-toast .toast-icon {
+      color: #ffc107;
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .btn-switch-server {
+      background: var(--primary-red);
+      color: white;
+      padding: 7px 16px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      transition: 0.2s;
+    }
+
+    .btn-switch-server:hover {
+      background: #ff2028;
+      color: white;
+      transform: translateY(-1px);
+    }
+
+    .btn-close-toast {
+      background: none;
+      border: none;
+      color: #999;
+      font-size: 1.2rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      flex-shrink: 0;
+      transition: color 0.2s;
+    }
+
+    .btn-close-toast:hover {
+      color: white;
+    }
+
+    .alert-custom {
+      background: rgba(229, 9, 20, 0.1);
+      border: 1px solid rgba(229, 9, 20, 0.2);
+      color: #ff8e8e;
+      border-radius: 10px;
+    }
+
+    .heart-particle {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      animation: flyUp 1.5s ease-out forwards;
+    }
+
+    @keyframes flyUp {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translateY(-150px) scale(0);
+        opacity: 0;
+      }
+    }

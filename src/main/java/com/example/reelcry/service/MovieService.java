@@ -53,6 +53,27 @@ public class MovieService {
         return loader.get().doOnNext(data -> listCache.put(key, new CachedList(data)));
     }
 
+    // Cache riêng cho chi tiết phim (kèm episodes) - vì mỗi lần bấm "Xem ngay",
+    // đổi tập, đổi server đều gọi lại getDetail() với CÙNG slug+source, dù
+    // thông tin phim không hề đổi trong vài phút -> gây chậm rõ rệt, nhất là
+    // trên mobile (thêm 1 chặng gọi API ngoài mỗi lần bấm)
+    private static final long DETAIL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+    private final Map<String, CachedDetail> detailCache = new ConcurrentHashMap<>();
+
+    private static class CachedDetail {
+        final MovieDetailResponse data;
+        final long timestamp;
+
+        CachedDetail(MovieDetailResponse data) {
+            this.data = data;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > DETAIL_CACHE_TTL_MS;
+        }
+    }
+
     public MovieService(WebClient.Builder builder) {
         this.webClient = builder
                 .defaultHeader(HttpHeaders.USER_AGENT,
@@ -194,8 +215,14 @@ public class MovieService {
                 .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
     }
 
-    // Fix lỗi getDetail: nhận 2 tham số slug và source
+    // Fix lỗi getDetail: nhận 2 tham số slug và source (có cache TTL 5 phút)
     public Mono<MovieDetailResponse> getDetail(String slug, String source) {
+        String cacheKey = (source == null ? "ophim" : source.toLowerCase()) + "_" + slug;
+        CachedDetail cached = detailCache.get(cacheKey);
+        if (cached != null && !cached.isExpired()) {
+            return Mono.just(cached.data);
+        }
+
         String finalUrl;
 
         if ("kkphim".equalsIgnoreCase(source)) {
@@ -212,6 +239,7 @@ public class MovieService {
                 .retrieve()
                 .onStatus(status -> status.isError(), response -> Mono.empty())
                 .bodyToMono(MovieDetailResponse.class)
+                .doOnNext(data -> detailCache.put(cacheKey, new CachedDetail(data)))
                 .onErrorResume(e -> Mono.empty());
     }
 

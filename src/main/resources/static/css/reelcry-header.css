@@ -5,6 +5,10 @@
             --netflix-red: #e50914;
         }
 
+        html {
+            touch-action: manipulation;
+        }
+
         .page-loading-bar {
             position: fixed;
             top: 0;
@@ -352,6 +356,7 @@
         }
 
         .yt-mic-btn {
+            position: relative;
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -369,6 +374,113 @@
 
         .yt-mic-btn:hover {
             background: rgba(255, 255, 255, 0.14);
+        }
+
+        .yt-mic-btn.listening {
+            background: rgba(229, 9, 20, 0.9);
+            border-color: transparent;
+            animation: micPulse 1.6s ease-out infinite;
+        }
+
+        .yt-mic-btn.listening i {
+            animation: micIconBreathe 1.6s ease-in-out infinite;
+        }
+
+        @keyframes micPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(229, 9, 20, 0.5), 0 0 0 0 rgba(229, 9, 20, 0.3);
+            }
+            60% {
+                box-shadow: 0 0 0 9px rgba(229, 9, 20, 0.12), 0 0 0 20px rgba(229, 9, 20, 0.08);
+            }
+            100% {
+                box-shadow: 0 0 0 18px rgba(229, 9, 20, 0), 0 0 0 32px rgba(229, 9, 20, 0);
+            }
+        }
+
+        @keyframes micIconBreathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        .voice-status-label {
+            position: absolute;
+            top: calc(100% + 12px);
+            right: 0;
+            background: rgba(22, 22, 24, 0.7);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px) scale(0.96);
+            transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            z-index: 10;
+        }
+
+        .voice-status-label.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+
+        .voice-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #7fd99a;
+            flex-shrink: 0;
+        }
+
+        .voice-status-label.recording .voice-status-dot {
+            display: none;
+        }
+
+        .voice-status-label.stopped .voice-status-dot {
+            background: #7fd99a;
+        }
+
+        .voice-wave {
+            display: none;
+            align-items: center;
+            gap: 3px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .voice-status-label.recording .voice-wave {
+            display: flex;
+        }
+
+        .voice-wave span {
+            width: 3px;
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(180deg, #ff8a8f, #e50914);
+            animation: waveBar 0.9s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        .voice-wave span:nth-child(1) { animation-delay: 0s; }
+        .voice-wave span:nth-child(2) { animation-delay: 0.15s; }
+        .voice-wave span:nth-child(3) { animation-delay: 0.3s; }
+        .voice-wave span:nth-child(4) { animation-delay: 0.45s; }
+
+        @keyframes waveBar {
+            0%, 100% { transform: scaleY(0.3); }
+            50% { transform: scaleY(1); }
         }
 
         .yt-right {
@@ -450,7 +562,6 @@
 
         @media (max-width: 576px) {
 
-            .yt-mic-btn,
             .search-kbd {
                 display: none;
             }

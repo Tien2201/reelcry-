@@ -9,7 +9,7 @@
         gtag('config', 'G-6G8P923RSQ');
     </script>
 
-    <link rel="stylesheet" th:href="@{/css/reelcry-header.css}">
+    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=4)}">
 
     <div class="page-loading-bar" id="pageLoadingBar"></div>
 
@@ -34,8 +34,14 @@
                     
                     <button class="search-btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i></button>
                 </form>
-                <button type="button" class="yt-mic-btn" title="Tìm bằng giọng nói (chưa hỗ trợ)">
+                <button type="button" class="yt-mic-btn" id="voiceSearchBtn" title="Giữ để nói"
+                    style="display:none; touch-action: none;">
                     <i class="fa-solid fa-microphone"></i>
+                    <span class="voice-status-label" id="voiceStatusLabel">
+                        <span class="voice-wave"><span></span><span></span><span></span><span></span></span>
+                        <span class="voice-status-dot"></span>
+                        <span id="voiceStatusText"></span>
+                    </span>
                 </button>
             </div>
 
@@ -234,6 +240,159 @@
                 });
             });
         }
+
+        // Tìm kiếm bằng giọng nói (Web Speech API) - chỉ hiện nút mic nếu
+        // trình duyệt hỗ trợ (Chrome/Edge trên Android & desktop; Safari/iOS
+        // và Firefox hiện chưa hỗ trợ đầy đủ nên nút sẽ tự ẩn ở đó)
+        (function () {
+            var micBtn = document.getElementById('voiceSearchBtn');
+            var searchInput = document.querySelector('.search-input');
+            var searchForm = searchInput ? searchInput.closest('form') : null;
+            var statusLabel = document.getElementById('voiceStatusLabel');
+            var statusText = document.getElementById('voiceStatusText');
+            if (!micBtn || !searchInput || !searchForm) return;
+
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            micBtn.style.display = '';
+            micBtn.title = 'Giữ để nói';
+
+            var recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            var isListening = false;
+            var pressActive = false; // đang giữ nút (chuột hoặc chạm)
+            var touchActive = false; // vừa xử lý touch, bỏ qua mouse "ma" theo sau
+            var hideLabelTimeout = null;
+
+            function showLabel(text, state) {
+                if (hideLabelTimeout) {
+                    clearTimeout(hideLabelTimeout);
+                    hideLabelTimeout = null;
+                }
+                if (statusText) statusText.textContent = text;
+                if (statusLabel) {
+                    statusLabel.classList.remove('recording', 'stopped');
+                    statusLabel.classList.add('show', state);
+                }
+            }
+
+            function hideLabelAfter(ms) {
+                if (hideLabelTimeout) clearTimeout(hideLabelTimeout);
+                hideLabelTimeout = setTimeout(function () {
+                    if (statusLabel) statusLabel.classList.remove('show');
+                }, ms);
+            }
+
+            // Phát tiếng "bíp" ngắn bằng Web Audio API - không cần file âm thanh
+            function playBeep(freq, durationMs, volume) {
+                try {
+                    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return;
+                    var ctx = new AudioCtx();
+                    var oscillator = ctx.createOscillator();
+                    var gainNode = ctx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(ctx.destination);
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = freq;
+                    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationMs / 1000);
+                    oscillator.start();
+                    oscillator.stop(ctx.currentTime + durationMs / 1000);
+                    oscillator.onended = function () { ctx.close(); };
+                } catch (e) {
+                    console.error('Reelcry beep error', e);
+                }
+            }
+
+            function beepStart() { playBeep(880, 110, 0.18); }
+            function beepStop() { playBeep(440, 130, 0.16); }
+
+            // ---- Cơ chế "giữ để nói" (push-to-talk): nhấn giữ nút mic để thu,
+            // thả tay ra để dừng - giống bộ đàm ----
+            function pressStart(e) {
+                if (e.type === 'touchstart') {
+                    touchActive = true;
+                } else if (e.type === 'mousedown' && touchActive) {
+                    return; // bỏ qua sự kiện chuột "ma" phát sinh sau touch trên mobile
+                }
+                if (e.cancelable) e.preventDefault();
+
+                if (pressActive || isListening) return;
+                pressActive = true;
+                try {
+                    recognition.start();
+                } catch (err) {
+                    console.error('Reelcry voice search start error', err);
+                    pressActive = false;
+                }
+            }
+
+            function pressEnd(e) {
+                if (e && e.type === 'mouseup' && touchActive) {
+                    touchActive = false;
+                    return;
+                }
+                if (!pressActive) return;
+                pressActive = false;
+                if (isListening) recognition.stop();
+            }
+
+            micBtn.addEventListener('touchstart', pressStart, { passive: false });
+            micBtn.addEventListener('touchend', pressEnd);
+            micBtn.addEventListener('touchcancel', pressEnd);
+            micBtn.addEventListener('mousedown', pressStart);
+            micBtn.addEventListener('mouseup', pressEnd);
+            micBtn.addEventListener('mouseleave', function (e) {
+                if (pressActive) pressEnd(e);
+            });
+
+            recognition.addEventListener('start', function () {
+                isListening = true;
+                micBtn.classList.add('listening');
+                showLabel('Đang nghe...', 'recording');
+                beepStart();
+            });
+
+            recognition.addEventListener('end', function () {
+                isListening = false;
+                pressActive = false;
+                micBtn.classList.remove('listening');
+                showLabel('Đã dừng', 'stopped');
+                hideLabelAfter(1200);
+                beepStop();
+            });
+
+            recognition.addEventListener('result', function (event) {
+                var transcript = event.results[0][0].transcript;
+                if (transcript && transcript.trim()) {
+                    searchInput.value = transcript.trim();
+                    searchForm.submit();
+                }
+            });
+
+            recognition.addEventListener('error', function (event) {
+                console.error('Reelcry voice search error', event.error);
+                isListening = false;
+                pressActive = false;
+                micBtn.classList.remove('listening');
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    showLabel('Không có quyền micro', 'stopped');
+                    hideLabelAfter(2000);
+                    alert('Vui lòng cho phép quyền truy cập micro để dùng tìm kiếm bằng giọng nói.');
+                } else if (event.error === 'no-speech') {
+                    showLabel('Không nghe thấy gì', 'stopped');
+                    hideLabelAfter(1500);
+                } else if (event.error !== 'aborted') {
+                    showLabel('Có lỗi xảy ra', 'stopped');
+                    hideLabelAfter(1500);
+                }
+            });
+        })();
     </script>
 </div>
 

@@ -1,4 +1,5 @@
         :root { --primary-red: #e50914; }
+        html { touch-action: manipulation; }
         * { box-sizing: border-box; }
         body {
             margin: 0;

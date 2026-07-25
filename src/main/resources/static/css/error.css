@@ -2,6 +2,10 @@
     --primary-red: #e50914;
 }
 
+html {
+    touch-action: manipulation;
+}
+
 * {
     box-sizing: border-box;
 }

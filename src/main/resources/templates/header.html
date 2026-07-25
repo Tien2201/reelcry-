@@ -9,7 +9,7 @@
         gtag('config', 'G-6G8P923RSQ');
     </script>
 
-    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=5)}">
+    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=6)}">
 
     <div class="page-loading-bar" id="pageLoadingBar"></div>
 
@@ -241,12 +241,30 @@
             var bar = document.getElementById('pageLoadingBar');
             if (!bar) return;
 
+            var safetyTimeout = null;
+
+            function resetBar() {
+                if (safetyTimeout) {
+                    clearTimeout(safetyTimeout);
+                    safetyTimeout = null;
+                }
+                bar.classList.remove('active');
+                bar.classList.remove('done');
+                bar.style.width = '0%';
+            }
+
             function startBar() {
                 bar.classList.remove('done');
                 bar.style.width = '0%';
                 void bar.offsetWidth;
                 bar.classList.add('active');
                 bar.style.width = '85%';
+
+                // Lưới an toàn: nếu vì lý do gì đó trang không chuyển (VD: 1 nút
+                // vô tình chặn sự kiện click), thanh loading sẽ tự ẩn sau vài
+                // giây thay vì kẹt lại mãi trên màn hình trông rất xấu.
+                if (safetyTimeout) clearTimeout(safetyTimeout);
+                safetyTimeout = setTimeout(resetBar, 4000);
             }
 
             document.addEventListener('click', function (e) {
@@ -275,8 +293,7 @@
 
             window.addEventListener('pageshow', function (event) {
                 // event.persisted = true khi tải lại từ bfcache (bấm Back/Forward)
-                bar.classList.remove('active');
-                bar.style.width = '0%';
+                resetBar();
             });
         })();
 

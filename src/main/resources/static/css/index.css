@@ -593,6 +593,38 @@
             }
         }
 
+        /* Thẻ phim trong hàng cuộn ngang đang cố định 220px/260px - trên màn
+           hình điện thoại (~360-400px) chỉ vừa 1-1.5 thẻ, nhìn to và lệch tỉ
+           lệ. Thu nhỏ lại để vừa khoảng 2.2-2.5 thẻ mỗi hàng, giống Netflix. */
+        @media (max-width: 576px) {
+            .vn-card-wrap {
+                flex-basis: 132px;
+            }
+
+            .watched-card-wrap {
+                flex-basis: 140px;
+            }
+
+            .vn-scroll-row {
+                gap: 10px;
+            }
+
+            .movie-info {
+                padding: 8px 4px;
+            }
+
+            .movie-title {
+                font-size: 0.78rem;
+                height: 2.1rem;
+            }
+
+            .badge-status,
+            .badge-year {
+                font-size: 0.58rem;
+                padding: 2px 6px;
+            }
+        }
+
         /* Trên điện thoại/máy tính bảng, người dùng vuốt trực tiếp bằng tay nên
            không cần thanh cuộn tuỳ chỉnh này nữa - ẩn đi cho gọn giao diện.
            Dùng cả 2 điều kiện (hover/pointer VÀ độ rộng màn hình) để chắc chắn

@@ -13,10 +13,10 @@
             position: fixed;
             top: 0;
             left: 0;
-            height: 3px;
+            height: 2.5px;
             width: 0%;
             background: linear-gradient(90deg, #ff5b62, var(--netflix-red));
-            box-shadow: 0 0 10px rgba(229, 9, 20, 0.7);
+            box-shadow: 0 0 6px rgba(229, 9, 20, 0.45);
             z-index: 2000;
             opacity: 0;
             transition: width 0.4s ease, opacity 0.2s ease;

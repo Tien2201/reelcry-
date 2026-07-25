@@ -145,6 +145,35 @@
             transform: translateY(-3px);
         }
 
+        .btn-favorite {
+            background: transparent;
+            color: white;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            padding: 13px 28px;
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.3s;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin-left: 12px;
+            cursor: pointer;
+        }
+
+        .btn-favorite:hover {
+            border-color: var(--primary-red);
+            color: var(--primary-red);
+        }
+
+        .btn-favorite.active {
+            background: rgba(229, 9, 20, 0.15);
+            border-color: var(--primary-red);
+            color: var(--primary-red);
+        }
+
         .hero-socials a {
             width: 34px;
             height: 34px;
@@ -325,4 +354,68 @@
             color: white;
             box-shadow: 0 12px 25px rgba(229, 9, 20, 0.4);
             border-color: var(--primary-red);
+        }
+
+        .related-section {
+            background: var(--dark-bg);
+            padding: 20px 3% 70px;
+        }
+
+        .related-genre-label {
+            color: #888;
+            font-weight: 400;
+            font-size: 0.95rem;
+        }
+
+        .related-grid {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 18px;
+        }
+
+        .related-card {
+            text-decoration: none;
+            color: white;
+            display: block;
+            transition: transform 0.3s;
+        }
+
+        .related-card:hover {
+            transform: translateY(-6px);
+            color: white;
+        }
+
+        .related-img-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 2 / 3;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1a1a1a;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .related-img-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .related-title {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        @media (max-width: 576px) {
+            .related-grid {
+                grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+                gap: 12px;
+            }
         }

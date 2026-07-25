@@ -1,0 +1,100 @@
+:root {
+    --primary-red: #e50914;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at top, #1a1a1a 0%, #000 70%);
+    font-family: 'Be Vietnam Pro', sans-serif;
+    color: white;
+    text-align: center;
+    padding: 24px;
+}
+
+.error-card {
+    width: 100%;
+    max-width: 460px;
+    padding: 48px 36px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+}
+
+.error-icon {
+    font-size: 3.2rem;
+    color: var(--primary-red);
+    margin-bottom: 18px;
+}
+
+.error-code {
+    font-size: 2.6rem;
+    font-weight: 900;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+}
+
+.error-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.error-desc {
+    color: #999;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.error-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-error {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary-red);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 13px 26px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: 0.3s;
+}
+
+.btn-error:hover {
+    background: #ff0a17;
+    box-shadow: 0 10px 25px rgba(229, 9, 20, 0.4);
+    transform: translateY(-2px);
+    color: white;
+}
+
+.btn-error.secondary {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.btn-error.secondary:hover {
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+    color: white;
+}

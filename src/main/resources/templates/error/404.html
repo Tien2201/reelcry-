@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Không tìm thấy trang - Reelcry</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/error.css}">
+</head>
+<body>
+
+    <div class="error-card">
+        <div class="error-icon"><i class="fas fa-film"></i></div>
+        <div class="error-code">404</div>
+        <div class="error-title">Không tìm thấy trang này</div>
+        <div class="error-desc">
+            Trang bạn tìm không tồn tại, đã bị xoá, hoặc đường link không đúng.<br>
+            Thử quay về trang chủ để tìm phim khác nhé.
+        </div>
+        <div class="error-actions">
+            <a href="/" class="btn-error"><i class="fas fa-house"></i> Về trang chủ</a>
+        </div>
+    </div>
+
+</body>
+</html>

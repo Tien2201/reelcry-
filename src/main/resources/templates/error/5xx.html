@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Có lỗi xảy ra - Reelcry</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" th:href="@{/css/error.css}">
+</head>
+<body>
+
+    <div class="error-card">
+        <div class="error-icon"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="error-code">500</div>
+        <div class="error-title">Có lỗi xảy ra ở máy chủ</div>
+        <div class="error-desc">
+            Có thể do nguồn phim đang gặp sự cố tạm thời, hoặc máy chủ đang khởi động lại.<br>
+            Thử tải lại trang sau ít phút nhé.
+        </div>
+        <div class="error-actions">
+            <a href="javascript:location.reload()" class="btn-error secondary"><i class="fas fa-rotate-right"></i> Tải lại</a>
+            <a href="/" class="btn-error"><i class="fas fa-house"></i> Về trang chủ</a>
+        </div>
+    </div>
+
+</body>
+</html>

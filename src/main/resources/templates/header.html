@@ -11,6 +11,8 @@
 
     <link rel="stylesheet" th:href="@{/css/reelcry-header.css}">
 
+    <div class="page-loading-bar" id="pageLoadingBar"></div>
+
     <nav class="navbar navbar-dark sticky-top navbar-custom" id="reelcryNavbar">
         <div class="container-fluid px-lg-4">
             <div class="yt-left">
@@ -176,6 +178,62 @@
                 });
             });
         })();
+
+        // Thanh loading kiểu YouTube: chạy khi bấm link/submit form chuyển
+        // trang (điều hướng full page reload), giúp bớt cảm giác "web treo"
+        // lúc server phản hồi chậm (cold start, API ngoài chậm...)
+        (function () {
+            var bar = document.getElementById('pageLoadingBar');
+            if (!bar) return;
+
+            function startBar() {
+                bar.classList.remove('done');
+                bar.style.width = '0%';
+                void bar.offsetWidth;
+                bar.classList.add('active');
+                bar.style.width = '85%';
+            }
+
+            document.addEventListener('click', function (e) {
+                var link = e.target.closest('a[href]');
+                if (!link) return;
+                if (link.target && link.target !== '' && link.target !== '_self') return;
+                if (link.hasAttribute('download')) return;
+                if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+
+                var href = link.getAttribute('href');
+                if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+                try {
+                    var url = new URL(href, window.location.href);
+                    if (url.origin !== window.location.origin) return;
+                } catch (err) {
+                    return;
+                }
+
+                startBar();
+            });
+
+            document.addEventListener('submit', function (e) {
+                if (e.target && e.target.tagName === 'FORM') startBar();
+            });
+
+            window.addEventListener('pageshow', function (event) {
+                // event.persisted = true khi tải lại từ bfcache (bấm Back/Forward)
+                bar.classList.remove('active');
+                bar.style.width = '0%';
+            });
+        })();
+
+        // Đăng ký Service Worker để hỗ trợ PWA (thêm ra màn hình chính, cache
+        // CSS/ảnh tĩnh khi mất mạng tạm thời). Không cache HTML động.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').catch(function (e) {
+                    console.error('Reelcry SW register error', e);
+                });
+            });
+        }
     </script>
 </div>
 

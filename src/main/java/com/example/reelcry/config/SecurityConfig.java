@@ -116,7 +116,8 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/login", "/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
+                .requestMatchers("/login", "/error", "/css/**", "/js/**", "/images/**", "/webjars/**",
+                        "/manifest.json", "/sw.js", "/offline.html").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form

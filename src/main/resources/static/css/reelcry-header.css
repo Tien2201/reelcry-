@@ -5,6 +5,29 @@
             --netflix-red: #e50914;
         }
 
+        .page-loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #ff5b62, var(--netflix-red));
+            box-shadow: 0 0 10px rgba(229, 9, 20, 0.7);
+            z-index: 2000;
+            opacity: 0;
+            transition: width 0.4s ease, opacity 0.2s ease;
+        }
+
+        .page-loading-bar.active {
+            opacity: 1;
+        }
+
+        .page-loading-bar.done {
+            width: 100% !important;
+            transition: width 0.2s ease, opacity 0.3s ease 0.15s;
+            opacity: 0;
+        }
+
         .navbar-custom {
             background: rgba(15, 15, 15, 0.55) !important;
             backdrop-filter: blur(18px) saturate(140%);

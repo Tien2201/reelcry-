@@ -142,7 +142,8 @@ public class MovieService {
     }
 
     // Gộp danh sách từ OPhim + KKPhim: gắn nguồn, loại trùng theo slug, sắp xếp theo thời gian cập nhật mới nhất
-    private List<MovieResponse.MovieItem> mergeAndSort(List<MovieResponse.MovieItem> ophimItems,
+    // Lưu ý: để package-private (không phải private) để unit test gọi trực tiếp được
+    List<MovieResponse.MovieItem> mergeAndSort(List<MovieResponse.MovieItem> ophimItems,
             List<MovieResponse.MovieItem> kkphimItems) {
         List<MovieResponse.MovieItem> merged = new ArrayList<>();
         Set<String> seenSlugs = new HashSet<>();
@@ -275,12 +276,35 @@ public class MovieService {
                 .onErrorReturn(new MoviePeoplesResponse());
     }
 
+    // Danh sách thể loại/quốc gia gần như không bao giờ đổi, nhưng bị gọi TRƯỚC
+    // MỌI request (qua GlobalControllerAdvice) -> cache dài hạn (12 giờ) để
+    // không tốn thêm 2 lệnh gọi API ngoài mỗi lần vào bất kỳ trang nào
+    private static final long CATEGORY_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 giờ
+    private volatile CategoryResponse cachedGenres;
+    private volatile long cachedGenresTime;
+    private volatile CategoryResponse cachedCountries;
+    private volatile long cachedCountriesTime;
+
     public Mono<CategoryResponse> getGenres() {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/the-loai").retrieve().bodyToMono(CategoryResponse.class);
+        if (cachedGenres != null && System.currentTimeMillis() - cachedGenresTime < CATEGORY_CACHE_TTL_MS) {
+            return Mono.just(cachedGenres);
+        }
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/the-loai").retrieve().bodyToMono(CategoryResponse.class)
+                .doOnNext(data -> {
+                    cachedGenres = data;
+                    cachedGenresTime = System.currentTimeMillis();
+                });
     }
 
     public Mono<CategoryResponse> getCountries() {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia").retrieve().bodyToMono(CategoryResponse.class);
+        if (cachedCountries != null && System.currentTimeMillis() - cachedCountriesTime < CATEGORY_CACHE_TTL_MS) {
+            return Mono.just(cachedCountries);
+        }
+        return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia").retrieve().bodyToMono(CategoryResponse.class)
+                .doOnNext(data -> {
+                    cachedCountries = data;
+                    cachedCountriesTime = System.currentTimeMillis();
+                });
     }
 
     public Mono<MovieResponse> searchMovies(String keyword) {

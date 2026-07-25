@@ -1,6 +1,8 @@
 package com.example.reelcry.controller;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import com.example.reelcry.dto.*;
 import com.example.reelcry.service.*;
 import org.springframework.stereotype.Controller;
@@ -9,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import com.example.reelcry.repository.WatchHistoryRepository;
+import com.example.reelcry.repository.FavoriteRepository;
 import org.springframework.security.core.Authentication;
 import reactor.core.publisher.Mono;
 
@@ -17,10 +20,13 @@ public class MovieController {
 
     private final MovieService movieService;
     private final WatchHistoryRepository watchHistoryRepository;
+    private final FavoriteRepository favoriteRepository;
 
-    public MovieController(MovieService movieService, WatchHistoryRepository watchHistoryRepository) {
+    public MovieController(MovieService movieService, WatchHistoryRepository watchHistoryRepository,
+            FavoriteRepository favoriteRepository) {
         this.movieService = movieService;
         this.watchHistoryRepository = watchHistoryRepository;
+        this.favoriteRepository = favoriteRepository;
     }
 
     @GetMapping("/")
@@ -41,6 +47,8 @@ public class MovieController {
         if (authentication != null) {
             model.addAttribute("watchHistory",
                     watchHistoryRepository.findByUsernameOrderByWatchedAtDesc(authentication.getName()));
+            model.addAttribute("favorites",
+                    favoriteRepository.findByUsernameOrderByAddedAtDesc(authentication.getName()));
         }
         return "index";
     }
@@ -58,7 +66,7 @@ public class MovieController {
     public String showDetail(@PathVariable String slug,
             @RequestParam(defaultValue = "ophim") String src,
             @RequestParam(required = false) String notice,
-            Model model) {
+            Model model, Authentication authentication) {
         MovieDetailResponse detail = movieService.getDetail(slug, src).block();
 
         // SỬA: Dùng hàm isSuccess() mới để check an toàn cho cả 2 API
@@ -70,6 +78,35 @@ public class MovieController {
             // KKPhim trả "episodes" ở ngoài cùng JSON (không nằm trong "movie"), nên phải lấy
             // qua getActualEpisodes() thay vì movie.episodes để dùng được cho cả 2 nguồn
             model.addAttribute("episodes", detail.getActualEpisodes());
+
+            boolean isFavorite = authentication != null
+                    && favoriteRepository.existsByUsernameAndMovieSlug(authentication.getName(), slug);
+            model.addAttribute("isFavorite", isFavorite);
+
+            // Phim liên quan: lấy theo thể loại đầu tiên của phim đang xem, loại
+            // trừ chính nó. Không gộp OPhim+KKPhim ở đây (chỉ cần đủ dùng, tránh
+            // tốn thêm 1 lệnh gọi API song song không cần thiết cho 1 khu vực phụ)
+            List<MovieResponse.MovieItem> relatedMovies = Collections.emptyList();
+            String relatedGenreName = null;
+            if (movie.getCategory() != null && !movie.getCategory().isEmpty()) {
+                var genre = movie.getCategory().get(0);
+                relatedGenreName = genre.getName();
+                try {
+                    MovieResponse relatedResp = movieService.getMoviesByFilter("the-loai", genre.getSlug(), 1, src)
+                            .block();
+                    if (relatedResp != null && relatedResp.getActualItems() != null) {
+                        relatedMovies = relatedResp.getActualItems().stream()
+                                .filter(item -> item.getSlug() != null && !item.getSlug().equals(slug))
+                                .peek(item -> item.setSource(src))
+                                .limit(12)
+                                .collect(Collectors.toList());
+                    }
+                } catch (Exception e) {
+                    // giữ relatedMovies rỗng nếu API lỗi, không làm hỏng cả trang
+                }
+            }
+            model.addAttribute("relatedMovies", relatedMovies);
+            model.addAttribute("relatedGenreName", relatedGenreName);
 
             try {
                 MoviePeoplesResponse peoples = movieService.getPeoples(slug).block();

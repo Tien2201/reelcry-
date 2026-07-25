@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${title != null ? title + ' - Reelcry' : 'Reelcry - Xem Phim Online'}"></title>
 
+    <link rel="manifest" th:href="@{/manifest.json}">
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="apple-touch-icon" th:href="@{/images/icon-192.png}">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
@@ -114,7 +118,8 @@
             </div>
         </div>
 
-        <div id="favorites-section" style="display:none;" th:if="${searchTerm == null and currentCategory == null}">
+        <div id="favorites-section"
+            th:if="${searchTerm == null and currentCategory == null and favorites != null and !favorites.isEmpty()}">
             <div class="section-title-row">
                 <h2 class="section-title">Phim Yêu Thích</h2>
                 <button class="section-viewall" id="clear-favorites-btn">Xoá yêu thích <i
@@ -124,7 +129,22 @@
                 <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
-                    <div class="vn-scroll-row" id="favorites-row"></div>
+                    <div class="vn-scroll-row" id="favorites-row">
+                        <div class="vn-card-wrap" th:each="f : ${favorites}">
+                            <a th:href="@{/phim/{slug}(slug=${f.movieSlug}, src=${f.source})}" class="text-decoration-none">
+                                <div class="movie-card">
+                                    <div class="movie-img-container">
+                                        <img th:src="${f.movieImage}" th:alt="${f.movieName}" loading="lazy">
+                                        <div class="movie-card-gradient"></div>
+                                        <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="movie-info">
+                                        <div class="movie-title" th:text="${f.movieName}"></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
                     <div class="vn-custom-scrollbar">
                         <div class="vn-custom-scrollbar-thumb"></div>
                     </div>
@@ -273,41 +293,13 @@
     </script>
     <script>
         (function () {
-            try {
-                var row = document.getElementById('favorites-row');
-                var section = document.getElementById('favorites-section');
-                if (!row || !section) return; // đang ở trang tìm kiếm/lọc, không hiện mục này
-
-                var favorites = JSON.parse(localStorage.getItem('reelcry_favorites') || '[]');
-                if (!favorites.length) return;
-
-                favorites.forEach(function (item) {
-                    var wrap = document.createElement('div');
-                    wrap.className = 'vn-card-wrap';
-                    wrap.innerHTML =
-                        '<a href="/phim/' + item.slug + '" class="text-decoration-none">' +
-                        '<div class="movie-card">' +
-                        '<div class="movie-img-container">' +
-                        '<img src="' + item.image + '" alt="' + item.name + '" onerror="this.onerror=null;this.src=\'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg==\'" loading="lazy">' +
-                        '<div class="movie-card-gradient"></div>' +
-                        '<div class="play-icon"><i class="fas fa-play-circle"></i></div>' +
-                        '</div>' +
-                        '<div class="movie-info"><div class="movie-title">' + item.name + '</div></div>' +
-                        '</div>' +
-                        '</a>';
-                    row.appendChild(wrap);
-                });
-
-                section.style.display = 'block';
-
-                document.getElementById('clear-favorites-btn').addEventListener('click', function () {
-                    localStorage.removeItem('reelcry_favorites');
-                    section.style.display = 'none';
-                    row.innerHTML = '';
-                });
-            } catch (e) {
-                console.error('Reelcry favorites render error', e);
-            }
+            var btn = document.getElementById('clear-favorites-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                fetch('/api/favorites', { method: 'DELETE' })
+                    .then(function () { window.location.reload(); })
+                    .catch(function (e) { console.error('Xoá yêu thích lỗi', e); });
+            });
         })();
     </script>
     <script>
@@ -591,7 +583,7 @@
                 scrollbars.forEach(updateThumb);
             });
 
-            // watched-row / favorites-row được đổ nội dung qua JS sau khi trang tải,
+            // Một số hàng (VD: mục yêu thích) có thể đổi nội dung động sau khi trang tải,
             // observe để gắn listener lại và cập nhật thanh cuộn khi nội dung đổi sau đó.
             var mo = new MutationObserver(function () {
                 document.querySelectorAll('.vn-scroll-row').forEach(wireRow);

@@ -155,10 +155,12 @@
       // đọc trực tiếp được nội dung iframe (khác domain) nên đây là suy đoán tốt nhất có thể.
       var playerFrame = document.querySelector('#main-player iframe');
       var iframeInteracted = false;
+      var startCounting = null; // gán hàm thật bên dưới, sau khi elapsedSeconds được khởi tạo
 
       window.addEventListener('blur', function () {
         if (document.activeElement === playerFrame) {
           iframeInteracted = true;
+          if (startCounting) startCounting();
         }
       });
 
@@ -167,6 +169,12 @@
         var toast = document.getElementById('server-fallback-toast');
         if (toast) toast.classList.add('show');
       }, 9000);
+
+      // Phòng trường hợp player tự chạy (autoplay) không cần bấm vào khung
+      // video - vẫn bắt đầu đếm sau vài giây dù không phát hiện tương tác.
+      setTimeout(function () {
+        if (startCounting) startCounting();
+      }, 5000);
 
       const movieSlug = [[${ movie.slug }]];
       const movieName = [[${ movie.name }]];
@@ -219,10 +227,16 @@
 
     // Đếm thời gian đã xem tập này (ước lượng theo thời gian mở trang, chỉ
     // tính khi tab đang hiển thị) rồi định kỳ lưu lên server để lần sau nhắc lại.
+    // Chỉ bắt đầu đếm khi người dùng đã bấm vào video (hoặc sau 5s coi như
+    // player tự chạy) - tránh tính oan lúc mở tab nhưng chưa xem.
     let elapsedSeconds = resumeElapsedSeconds;
-    let tickTimer = setInterval(function () {
-      if (document.visibilityState === 'visible') elapsedSeconds += 1;
-    }, 1000);
+    let tickTimer = null;
+    startCounting = function () {
+      if (tickTimer) return; // đã bắt đầu rồi, không chạy lại
+      tickTimer = setInterval(function () {
+        if (document.visibilityState === 'visible') elapsedSeconds += 1;
+      }, 1000);
+    };
 
     function saveHistory(useBeacon) {
       var payload = JSON.stringify({

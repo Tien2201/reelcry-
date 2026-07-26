@@ -29,4 +29,5 @@ public class WatchHistory {
     private String epSlug;
     private Integer serverIndex;
     private String source;
+    private Integer elapsedSeconds; // thời gian đã xem (ước lượng, tính theo thời gian mở trang) của tập hiện tại
 }

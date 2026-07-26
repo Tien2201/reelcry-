@@ -129,7 +129,7 @@ public class MovieController {
             @RequestParam(defaultValue = "tap-01") String ep,
             @RequestParam(defaultValue = "0") int sv,
             @RequestParam(defaultValue = "ophim") String src,
-            Model model) {
+            Model model, Authentication authentication) {
         try {
             MovieDetailResponse response = movieService.getDetail(slug, src).block();
 
@@ -155,6 +155,20 @@ public class MovieController {
                     model.addAttribute("currentEpSlug", episodeData.getSlug());
                     model.addAttribute("selectedSv", serverIndex);
                     model.addAttribute("currentSource", src);
+
+                    // Nếu tài khoản này đã có lịch sử xem đúng tập đang mở (kể cả từ thiết bị
+                    // khác, vì lưu theo username trên MongoDB), nhắc lại đã xem tới khoảng
+                    // phút nào - không thể tua video tới đó vì trình phát là iframe của bên
+                    // thứ 3, chỉ hiển thị để người dùng tự canh.
+                    if (authentication != null) {
+                        watchHistoryRepository.findByUsernameAndMovieSlug(authentication.getName(), slug)
+                                .ifPresent(h -> {
+                                    if (episodeData.getSlug().equals(h.getEpSlug())
+                                            && h.getElapsedSeconds() != null && h.getElapsedSeconds() > 15) {
+                                        model.addAttribute("resumeElapsedSeconds", h.getElapsedSeconds());
+                                    }
+                                });
+                    }
 
                     return "watch";
                 }

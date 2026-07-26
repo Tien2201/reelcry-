@@ -53,6 +53,11 @@ public class HistoryController {
             entry.setProgressPercent(null);
         }
 
+        Object elapsedObj = body.get("elapsedSeconds");
+        if (elapsedObj instanceof Number) {
+            entry.setElapsedSeconds(((Number) elapsedObj).intValue());
+        }
+
         entry.setWatchedAt(Instant.now());
         repo.save(entry);
 

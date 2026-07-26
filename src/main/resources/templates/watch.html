@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <link rel="stylesheet" th:href="@{/css/watch.css(v=2)}">
+  <link rel="stylesheet" th:href="@{/css/watch.css(v=3)}">
 </head>
 
 <body th:attr="data-movie-image=@{/img-proxy(url=${movie?.getPosterFull()})}">
@@ -44,6 +44,11 @@
     <div class="video-container" id="main-player">
       <div class="player-ratio">
         <iframe th:src="${currentLink}" allowfullscreen></iframe>
+        <div class="resume-toast" id="resume-toast" th:if="${resumeElapsedSeconds != null}">
+          <i class="fas fa-clock-rotate-left toast-icon"></i>
+          <span>Lần trước bạn xem đến khoảng <b id="resume-toast-time"></b></span>
+          <button type="button" class="btn-close-toast" onclick="dismissResumeToast()">&times;</button>
+        </div>
         <div class="server-fallback-toast" id="server-fallback-toast">
           <i class="fas fa-triangle-exclamation toast-icon"></i>
           <span>Video không phát được?</span>
@@ -170,6 +175,7 @@
     const allEpSlugs = [[${ currentServer.server_data.![slug] }]];
     const selectedSv = [[${ selectedSv }]];
     const currentSource = [[${ currentSource }]] || 'ophim';
+    const resumeElapsedSeconds = [[${ resumeElapsedSeconds }]] || 0;
     let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
 
     if (!watched.includes(currentEp)) {
@@ -188,26 +194,80 @@
     const isSeries = total > 1;
     const progress = (isSeries && idx >= 0) ? Math.round(((idx + 1) / total) * 100) : null;
     const episodeLabel = (isSeries && idx >= 0) ? ('Tập ' + (idx + 1) + '/' + total) : '';
-    fetch('/api/history', {
+
+    function formatElapsed(totalSeconds) {
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = Math.floor(totalSeconds % 60);
+      const mm = (h > 0 ? String(m).padStart(2, '0') : String(m));
+      const ss = String(s).padStart(2, '0');
+      return h > 0 ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
+    }
+
+    // Nhắc lại lần trước đã xem đến khoảng phút nào (tính bằng thời gian mở
+    // trang, không phải mốc thật trong video vì trình phát là iframe bên thứ
+    // 3 không đọc được) - dữ liệu lưu theo tài khoản trên MongoDB nên đồng bộ
+    // được giữa các thiết bị.
+    if (resumeElapsedSeconds > 0) {
+      var resumeToast = document.getElementById('resume-toast');
+      var resumeTimeEl = document.getElementById('resume-toast-time');
+      if (resumeToast && resumeTimeEl) {
+        resumeTimeEl.textContent = formatElapsed(resumeElapsedSeconds);
+        setTimeout(function () { resumeToast.classList.add('show'); }, 600);
+      }
+    }
+
+    // Đếm thời gian đã xem tập này (ước lượng theo thời gian mở trang, chỉ
+    // tính khi tab đang hiển thị) rồi định kỳ lưu lên server để lần sau nhắc lại.
+    let elapsedSeconds = resumeElapsedSeconds;
+    let tickTimer = setInterval(function () {
+      if (document.visibilityState === 'visible') elapsedSeconds += 1;
+    }, 1000);
+
+    function saveHistory(useBeacon) {
+      var payload = JSON.stringify({
+        slug: movieSlug,
+        name: movieName,
+        image: movieImage,
+        episodeLabel: episodeLabel,
+        progress: progress,
+        epSlug: currentEp,
+        sv: selectedSv,
+        source: currentSource,
+        elapsedSeconds: Math.round(elapsedSeconds)
+      });
+
+      if (useBeacon && navigator.sendBeacon) {
+        navigator.sendBeacon('/api/history', new Blob([payload], { type: 'application/json' }));
+        return;
+      }
+
+      fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: movieSlug,
-          name: movieName,
-          image: movieImage,
-          episodeLabel: episodeLabel,
-          progress: progress,
-          epSlug: currentEp,
-          sv: selectedSv,
-          source: currentSource
-        })
+        body: payload,
+        keepalive: true
       }).catch(function (e) {
-      console.error('Reelcry history save error', e);
+        console.error('Reelcry history save error', e);
+      });
+    }
+
+    saveHistory(false);
+    setInterval(function () { saveHistory(false); }, 20000);
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') saveHistory(true);
     });
+    window.addEventListener('pagehide', function () { saveHistory(true); });
     });
 
     function dismissServerToast() {
       var toast = document.getElementById('server-fallback-toast');
+      if (toast) toast.classList.remove('show');
+    }
+
+    function dismissResumeToast() {
+      var toast = document.getElementById('resume-toast');
       if (toast) toast.classList.remove('show');
     }
 

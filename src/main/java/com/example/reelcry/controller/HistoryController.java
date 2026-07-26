@@ -53,11 +53,6 @@ public class HistoryController {
             entry.setProgressPercent(null);
         }
 
-        Object resumeObj = body.get("resumeSeconds");
-        if (resumeObj instanceof Number) {
-            entry.setResumeSeconds(((Number) resumeObj).intValue());
-        }
-
         entry.setWatchedAt(Instant.now());
         repo.save(entry);
 

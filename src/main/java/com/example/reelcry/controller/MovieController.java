@@ -129,7 +129,7 @@ public class MovieController {
             @RequestParam(defaultValue = "tap-01") String ep,
             @RequestParam(defaultValue = "0") int sv,
             @RequestParam(defaultValue = "ophim") String src,
-            Model model, Authentication authentication) {
+            Model model) {
         try {
             MovieDetailResponse response = movieService.getDetail(slug, src).block();
 
@@ -152,23 +152,9 @@ public class MovieController {
                     model.addAttribute("episodes", allServers);
                     model.addAttribute("currentServer", currentServer);
                     model.addAttribute("currentLink", episodeData.getLink_embed());
-                    model.addAttribute("currentM3u8", episodeData.getLink_m3u8());
                     model.addAttribute("currentEpSlug", episodeData.getSlug());
                     model.addAttribute("selectedSv", serverIndex);
                     model.addAttribute("currentSource", src);
-
-                    // Nếu trình phát HTML5 tự dựng (proxy m3u8) từng lưu được vị trí xem
-                    // thật (currentTime) đúng tập này, cho phép tự tua tới lại - chính xác
-                    // vì lấy trực tiếp từ video, không phải ước lượng.
-                    if (authentication != null) {
-                        watchHistoryRepository.findByUsernameAndMovieSlug(authentication.getName(), slug)
-                                .ifPresent(h -> {
-                                    if (episodeData.getSlug().equals(h.getEpSlug())
-                                            && h.getResumeSeconds() != null && h.getResumeSeconds() > 5) {
-                                        model.addAttribute("resumeSeconds", h.getResumeSeconds());
-                                    }
-                                });
-                    }
 
                     return "watch";
                 }

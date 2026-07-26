@@ -29,5 +29,4 @@ public class WatchHistory {
     private String epSlug;
     private Integer serverIndex;
     private String source;
-    private Integer resumeSeconds; // vị trí phát thật (currentTime) - chỉ có khi phát qua trình phát HLS tự dựng
 }

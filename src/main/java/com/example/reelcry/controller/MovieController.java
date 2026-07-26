@@ -152,20 +152,20 @@ public class MovieController {
                     model.addAttribute("episodes", allServers);
                     model.addAttribute("currentServer", currentServer);
                     model.addAttribute("currentLink", episodeData.getLink_embed());
+                    model.addAttribute("currentM3u8", episodeData.getLink_m3u8());
                     model.addAttribute("currentEpSlug", episodeData.getSlug());
                     model.addAttribute("selectedSv", serverIndex);
                     model.addAttribute("currentSource", src);
 
-                    // Nếu tài khoản này đã có lịch sử xem đúng tập đang mở (kể cả từ thiết bị
-                    // khác, vì lưu theo username trên MongoDB), nhắc lại đã xem tới khoảng
-                    // phút nào - không thể tua video tới đó vì trình phát là iframe của bên
-                    // thứ 3, chỉ hiển thị để người dùng tự canh.
+                    // Nếu trình phát HTML5 tự dựng (proxy m3u8) từng lưu được vị trí xem
+                    // thật (currentTime) đúng tập này, cho phép tự tua tới lại - chính xác
+                    // vì lấy trực tiếp từ video, không phải ước lượng.
                     if (authentication != null) {
                         watchHistoryRepository.findByUsernameAndMovieSlug(authentication.getName(), slug)
                                 .ifPresent(h -> {
                                     if (episodeData.getSlug().equals(h.getEpSlug())
-                                            && h.getElapsedSeconds() != null && h.getElapsedSeconds() > 15) {
-                                        model.addAttribute("resumeElapsedSeconds", h.getElapsedSeconds());
+                                            && h.getResumeSeconds() != null && h.getResumeSeconds() > 5) {
+                                        model.addAttribute("resumeSeconds", h.getResumeSeconds());
                                     }
                                 });
                     }

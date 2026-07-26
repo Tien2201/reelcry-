@@ -96,5 +96,6 @@ public class MovieDetailResponse implements Serializable {
         private String name;
         private String slug;
         private String link_embed;
+        private String link_m3u8;
     }
 }

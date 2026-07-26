@@ -14,7 +14,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <link rel="stylesheet" th:href="@{/css/watch.css(v=3)}">
+  <link rel="stylesheet" th:href="@{/css/watch.css(v=5)}">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 </head>
 
 <body th:attr="data-movie-image=@{/img-proxy(url=${movie?.getPosterFull()})}">
@@ -43,12 +44,8 @@
 
     <div class="video-container" id="main-player">
       <div class="player-ratio">
-        <iframe th:src="${currentLink}" allowfullscreen></iframe>
-        <div class="resume-toast" id="resume-toast" th:if="${resumeElapsedSeconds != null}">
-          <i class="fas fa-clock-rotate-left toast-icon"></i>
-          <span>Lần trước bạn xem đến khoảng <b id="resume-toast-time"></b></span>
-          <button type="button" class="btn-close-toast" onclick="dismissResumeToast()">&times;</button>
-        </div>
+        <video id="main-video" controls playsinline style="display:none;"></video>
+        <iframe id="main-iframe" th:src="${currentLink}" allowfullscreen></iframe>
         <div class="server-fallback-toast" id="server-fallback-toast">
           <i class="fas fa-triangle-exclamation toast-icon"></i>
           <span>Video không phát được?</span>
@@ -150,31 +147,38 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      var mainVideo = document.getElementById('main-video');
+      var mainIframe = document.getElementById('main-iframe');
+      var usingHls = false;
+      var hlsInstance = null;
+
+      function showIframeFallback() {
+        if (mainVideo) mainVideo.style.display = 'none';
+        if (mainIframe) mainIframe.style.display = '';
+      }
+
+      function showVideoPlayer() {
+        if (mainVideo) mainVideo.style.display = '';
+        if (mainIframe) mainIframe.style.display = 'none';
+      }
+
       // Gợi ý đổi server: nếu người dùng bấm vào khung video (focus chuyển vào iframe)
       // thì coi như video đã load được, không hiện thông báo nữa. Không có cách nào
       // đọc trực tiếp được nội dung iframe (khác domain) nên đây là suy đoán tốt nhất có thể.
-      var playerFrame = document.querySelector('#main-player iframe');
+      // Chỉ áp dụng khi đang ở chế độ iframe (video HLS tự dựng không cần suy đoán này).
       var iframeInteracted = false;
-      var startCounting = null; // gán hàm thật bên dưới, sau khi elapsedSeconds được khởi tạo
 
       window.addEventListener('blur', function () {
-        if (document.activeElement === playerFrame) {
+        if (document.activeElement === mainIframe) {
           iframeInteracted = true;
-          if (startCounting) startCounting();
         }
       });
 
       setTimeout(function () {
-        if (iframeInteracted) return;
+        if (usingHls || iframeInteracted) return;
         var toast = document.getElementById('server-fallback-toast');
         if (toast) toast.classList.add('show');
       }, 9000);
-
-      // Phòng trường hợp player tự chạy (autoplay) không cần bấm vào khung
-      // video - vẫn bắt đầu đếm sau vài giây dù không phát hiện tương tác.
-      setTimeout(function () {
-        if (startCounting) startCounting();
-      }, 5000);
 
       const movieSlug = [[${ movie.slug }]];
       const movieName = [[${ movie.name }]];
@@ -183,7 +187,9 @@
     const allEpSlugs = [[${ currentServer.server_data.![slug] }]];
     const selectedSv = [[${ selectedSv }]];
     const currentSource = [[${ currentSource }]] || 'ophim';
-    const resumeElapsedSeconds = [[${ resumeElapsedSeconds }]] || 0;
+    const currentM3u8 = [[${ currentM3u8 }]];
+    const currentEmbedLink = [[${ currentLink }]];
+    const resumeSeconds = [[${ resumeSeconds }]] || 0;
     let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
 
     if (!watched.includes(currentEp)) {
@@ -202,86 +208,127 @@
     const isSeries = total > 1;
     const progress = (isSeries && idx >= 0) ? Math.round(((idx + 1) / total) * 100) : null;
     const episodeLabel = (isSeries && idx >= 0) ? ('Tập ' + (idx + 1) + '/' + total) : '';
-
-    function formatElapsed(totalSeconds) {
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = Math.floor(totalSeconds % 60);
-      const mm = (h > 0 ? String(m).padStart(2, '0') : String(m));
-      const ss = String(s).padStart(2, '0');
-      return h > 0 ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
-    }
-
-    // Nhắc lại lần trước đã xem đến khoảng phút nào (tính bằng thời gian mở
-    // trang, không phải mốc thật trong video vì trình phát là iframe bên thứ
-    // 3 không đọc được) - dữ liệu lưu theo tài khoản trên MongoDB nên đồng bộ
-    // được giữa các thiết bị.
-    if (resumeElapsedSeconds > 0) {
-      var resumeToast = document.getElementById('resume-toast');
-      var resumeTimeEl = document.getElementById('resume-toast-time');
-      if (resumeToast && resumeTimeEl) {
-        resumeTimeEl.textContent = formatElapsed(resumeElapsedSeconds);
-        setTimeout(function () { resumeToast.classList.add('show'); }, 600);
-      }
-    }
-
-    // Đếm thời gian đã xem tập này (ước lượng theo thời gian mở trang, chỉ
-    // tính khi tab đang hiển thị) rồi định kỳ lưu lên server để lần sau nhắc lại.
-    // Chỉ bắt đầu đếm khi người dùng đã bấm vào video (hoặc sau 5s coi như
-    // player tự chạy) - tránh tính oan lúc mở tab nhưng chưa xem.
-    let elapsedSeconds = resumeElapsedSeconds;
-    let tickTimer = null;
-    startCounting = function () {
-      if (tickTimer) return; // đã bắt đầu rồi, không chạy lại
-      tickTimer = setInterval(function () {
-        if (document.visibilityState === 'visible') elapsedSeconds += 1;
-      }, 1000);
-    };
-
-    function saveHistory(useBeacon) {
-      var payload = JSON.stringify({
-        slug: movieSlug,
-        name: movieName,
-        image: movieImage,
-        episodeLabel: episodeLabel,
-        progress: progress,
-        epSlug: currentEp,
-        sv: selectedSv,
-        source: currentSource,
-        elapsedSeconds: Math.round(elapsedSeconds)
-      });
-
-      if (useBeacon && navigator.sendBeacon) {
-        navigator.sendBeacon('/api/history', new Blob([payload], { type: 'application/json' }));
-        return;
-      }
-
-      fetch('/api/history', {
+    fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true
+        body: JSON.stringify({
+          slug: movieSlug,
+          name: movieName,
+          image: movieImage,
+          episodeLabel: episodeLabel,
+          progress: progress,
+          epSlug: currentEp,
+          sv: selectedSv,
+          source: currentSource
+        })
       }).catch(function (e) {
-        console.error('Reelcry history save error', e);
-      });
-    }
-
-    saveHistory(false);
-    setInterval(function () { saveHistory(false); }, 20000);
-
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'hidden') saveHistory(true);
+      console.error('Reelcry history save error', e);
     });
-    window.addEventListener('pagehide', function () { saveHistory(true); });
+
+    // ===== Thử phát bằng trình phát HTML5 tự dựng qua proxy m3u8 (thử nghiệm) =====
+    // Nếu thành công: đọc được currentTime thật -> tự tua tới đúng vị trí đã xem lần
+    // trước, và lưu chính xác vị trí hiện tại định kỳ. Nếu thất bại vì bất kỳ lý do
+    // gì (CDN chặn hotlink, mạng lỗi...): tự động rơi về iframe như cũ, không báo lỗi
+    // cho người dùng.
+    if (currentM3u8 && mainVideo) {
+      var manifestUrl = '/video-proxy/manifest?url=' + encodeURIComponent(currentM3u8) +
+          '&ref=' + encodeURIComponent(currentEmbedLink || '');
+
+      var failSafeTimer = setTimeout(function () {
+        if (!usingHls) showIframeFallback();
+      }, 8000);
+
+      function onHlsReady() {
+        usingHls = true;
+        clearTimeout(failSafeTimer);
+        showVideoPlayer();
+      }
+
+      function onHlsFail() {
+        clearTimeout(failSafeTimer);
+        try { if (hlsInstance) hlsInstance.destroy(); } catch (e) { /* ignore */ }
+        showIframeFallback();
+      }
+
+      if (window.Hls && Hls.isSupported()) {
+        hlsInstance = new Hls({ maxBufferLength: 30 });
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, onHlsReady);
+        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+          if (data && data.fatal) {
+            console.error('Reelcry HLS fatal error, fallback iframe', data);
+            onHlsFail();
+          }
+        });
+        hlsInstance.loadSource(manifestUrl);
+        hlsInstance.attachMedia(mainVideo);
+      } else if (mainVideo.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari hỗ trợ HLS gốc, không cần hls.js
+        mainVideo.src = manifestUrl;
+        mainVideo.addEventListener('loadedmetadata', onHlsReady, { once: true });
+        mainVideo.addEventListener('error', onHlsFail, { once: true });
+      } else {
+        onHlsFail();
+      }
+
+      mainVideo.addEventListener('loadedmetadata', function () {
+        if (resumeSeconds > 5 && (!mainVideo.duration || resumeSeconds < mainVideo.duration - 3)) {
+          try { mainVideo.currentTime = resumeSeconds; } catch (e) { /* ignore */ }
+        }
+      });
+
+      var lastSavedSecond = 0;
+      function saveResumePosition(seconds, useBeacon) {
+        var payload = JSON.stringify({
+          slug: movieSlug,
+          name: movieName,
+          image: movieImage,
+          episodeLabel: episodeLabel,
+          progress: progress,
+          epSlug: currentEp,
+          sv: selectedSv,
+          source: currentSource,
+          resumeSeconds: Math.round(seconds)
+        });
+
+        if (useBeacon && navigator.sendBeacon) {
+          navigator.sendBeacon('/api/history', new Blob([payload], { type: 'application/json' }));
+          return;
+        }
+
+        fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).catch(function (e) {
+          console.error('Reelcry resume save error', e);
+        });
+      }
+
+      mainVideo.addEventListener('timeupdate', function () {
+        if (!usingHls) return;
+        var now = Math.floor(mainVideo.currentTime);
+        if (now - lastSavedSecond >= 10) {
+          lastSavedSecond = now;
+          saveResumePosition(now, false);
+        }
+      });
+
+      window.addEventListener('pagehide', function () {
+        if (usingHls && mainVideo.currentTime > 0) saveResumePosition(mainVideo.currentTime, true);
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden' && usingHls && mainVideo.currentTime > 0) {
+          saveResumePosition(mainVideo.currentTime, true);
+        }
+      });
+    } else {
+      showIframeFallback();
+    }
     });
 
     function dismissServerToast() {
       var toast = document.getElementById('server-fallback-toast');
-      if (toast) toast.classList.remove('show');
-    }
-
-    function dismissResumeToast() {
-      var toast = document.getElementById('resume-toast');
       if (toast) toast.classList.remove('show');
     }
 

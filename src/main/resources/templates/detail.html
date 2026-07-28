@@ -52,8 +52,8 @@
                         <div class="hero-content" th:utext="${movie?.content}"></div>
 
                         <a class="btn-watch-now" th:if="${episodes != null and !episodes.isEmpty()}"
-                            th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
-                            <i class="fas fa-play"></i> Xem ngay
+                            th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${currentSource != null ? currentSource : 'ophim'})}">
+                            <i class="fas fa-play"></i> <span th:text="${resumeEpSlug != null} ? 'Xem tiếp' : 'Xem ngay'">Xem ngay</span>
                         </a>
 
                         <button type="button" class="btn-favorite" id="btn-favorite"
@@ -105,9 +105,9 @@
                                 </li>
                             </ul>
 
-                            <div class="panel-title">Xem ngay</div>
+                            <div class="panel-title" th:text="${resumeEpSlug != null} ? 'Xem tiếp' : 'Xem ngay'">Xem ngay</div>
                             <a class="trailer-thumb" th:if="${episodes != null and !episodes.isEmpty()}"
-                                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=0, src=${currentSource != null ? currentSource : 'ophim'})}">
+                                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${currentSource != null ? currentSource : 'ophim'})}">
                                 <img th:src="@{/img-proxy(url=${movie?.getPosterFull()})}" alt="thumbnail">
                                 <span class="trailer-play"><i class="fas fa-play"></i></span>
                             </a>

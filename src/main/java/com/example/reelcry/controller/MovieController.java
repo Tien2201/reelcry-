@@ -83,6 +83,20 @@ public class MovieController {
                     && favoriteRepository.existsByUsernameAndMovieSlug(authentication.getName(), slug);
             model.addAttribute("isFavorite", isFavorite);
 
+            // Nếu tài khoản này đã xem dở phim này (đúng nguồn đang xem), cho nút
+            // "Xem ngay" trỏ tới đúng tập/server đã xem dở thay vì luôn bắt đầu lại
+            // từ tập 1 - trước đây bị bỏ sót, luôn hardcode sv=0 không kèm ep.
+            if (authentication != null) {
+                watchHistoryRepository.findByUsernameAndMovieSlug(authentication.getName(), slug)
+                        .ifPresent(h -> {
+                            if (src.equalsIgnoreCase(h.getSource()) && h.getEpSlug() != null) {
+                                model.addAttribute("resumeEpSlug", h.getEpSlug());
+                                model.addAttribute("resumeServerIndex",
+                                        h.getServerIndex() != null ? h.getServerIndex() : 0);
+                            }
+                        });
+            }
+
             // Phim liên quan: lấy theo thể loại đầu tiên của phim đang xem, loại
             // trừ chính nó. Không gộp OPhim+KKPhim ở đây (chỉ cần đủ dùng, tránh
             // tốn thêm 1 lệnh gọi API song song không cần thiết cho 1 khu vực phụ)

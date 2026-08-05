@@ -7,11 +7,12 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 @Service
@@ -25,7 +26,14 @@ public class MovieService {
     // ngoài (OPhim/KKPhim) mỗi lượt truy cập, vì danh sách "mới cập nhật" ít
     // thay đổi trong vài phút
     private static final long LIST_CACHE_TTL_MS = 3 * 60 * 1000; // 3 phút
-    private final Map<String, CachedList> listCache = new ConcurrentHashMap<>();
+    // QUAN TRỌNG: phải giới hạn kích thước + tự evict entry cũ nhất (LRU), nếu
+    // không map này sẽ phình to vô hạn theo thời gian chạy (mỗi trang/mỗi
+    // category khác nhau từng được xem sẽ nằm mãi trong RAM) -> nguyên nhân
+    // chính gây OOM (Render báo "Ran out of memory (used over 512MB)") sau
+    // vài chục phút có traffic. Trước đây dùng ConcurrentHashMap thường,
+    // không bao giờ xoá bớt.
+    private static final int LIST_CACHE_MAX_SIZE = 60;
+    private final Map<String, CachedList> listCache = boundedCache(LIST_CACHE_MAX_SIZE);
 
     private static class CachedList {
         final List<MovieResponse.MovieItem> data;
@@ -58,7 +66,24 @@ public class MovieService {
     // thông tin phim không hề đổi trong vài phút -> gây chậm rõ rệt, nhất là
     // trên mobile (thêm 1 chặng gọi API ngoài mỗi lần bấm)
     private static final long DETAIL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
-    private final Map<String, CachedDetail> detailCache = new ConcurrentHashMap<>();
+    // Cùng lý do như listCache ở trên: mỗi phim khác nhau từng được mở trang
+    // chi tiết sẽ tạo 1 key mới, nếu không giới hạn thì cache này là nguyên
+    // nhân lớn nhất gây rò rỉ RAM (web phim có hàng nghìn phim, mỗi response
+    // chi tiết lại khá nặng do chứa toàn bộ danh sách tập/server).
+    private static final int DETAIL_CACHE_MAX_SIZE = 150;
+    private final Map<String, CachedDetail> detailCache = boundedCache(DETAIL_CACHE_MAX_SIZE);
+
+    // Cache LRU an toàn luồng: tự động xoá entry cũ nhất (ít dùng gần đây
+    // nhất) khi vượt quá kích thước tối đa, thay vì phình to mãi không kiểm
+    // soát như ConcurrentHashMap thường.
+    private static <K, V> Map<K, V> boundedCache(int maxSize) {
+        return Collections.synchronizedMap(new LinkedHashMap<K, V>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+                return size() > maxSize;
+            }
+        });
+    }
 
     private static class CachedDetail {
         final MovieDetailResponse data;

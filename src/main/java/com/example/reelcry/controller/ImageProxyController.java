@@ -74,8 +74,10 @@ import reactor.netty.http.client.HttpClient;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -84,9 +86,20 @@ public class ImageProxyController {
 
     private final WebClient imageWebClient;
 
-    // Cache ảnh trong RAM — dùng chung cho mọi người dùng, mất khi app restart
-    private final ConcurrentHashMap<String, byte[]> imageCache = new ConcurrentHashMap<>();
-    private static final int MAX_CACHE_SIZE = 500;
+    // Cache ảnh trong RAM — dùng chung cho mọi người dùng, mất khi app restart.
+    // QUAN TRỌNG: dùng LRU thật sự (tự xoá ảnh cũ nhất/ít dùng nhất khi đầy)
+    // thay vì map thường chỉ "ngừng cache khi đầy" - cách cũ vẫn giữ nguyên
+    // 500 ảnh đầu tiên mãi mãi trong RAM, cộng dồn với cache phim ở
+    // MovieService là nguyên nhân chính gây tràn RAM (Render OOM-kill mỗi
+    // 30-90 phút). Giảm cap xuống 150 ảnh vì mỗi ảnh có thể vài trăm KB.
+    private static final int MAX_CACHE_SIZE = 150;
+    private final Map<String, byte[]> imageCache = Collections.synchronizedMap(
+            new LinkedHashMap<String, byte[]>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, byte[]> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
 
     // Giới hạn tối đa 6 request tải ảnh chạy song song, tránh dội quá tải domain
     // nguồn
@@ -105,7 +118,7 @@ public class ImageProxyController {
 
     this.imageWebClient = WebClient.builder()
             .clientConnector(new ReactorClientHttpConnector(httpClient))
-            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 10MB thay vì 256KB mặc định
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(4 * 1024 * 1024)) // 4MB thay vì 256KB mặc định - đủ cho ảnh poster, tránh chiếm quá nhiều RAM khi có nhiều request đồng thời
             .build();
 }
 
@@ -133,7 +146,9 @@ public class ImageProxyController {
             return ResponseEntity.notFound().build();
         }
 
-        if (imageCache.size() < MAX_CACHE_SIZE) {
+        // Không cache ảnh quá lớn (backdrop/ảnh gốc độ phân giải cao) để tránh 1
+        // ảnh nặng chiếm quá nhiều RAM / đẩy văng nhiều ảnh nhỏ khác cùng lúc
+        if (bytes.length <= 1_500_000) {
             imageCache.put(url, bytes);
         }
 

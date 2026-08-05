@@ -1326,3 +1326,173 @@ input:checked+.check-visual {
         transition: none !important;
     }
 }
+
+/* ===== Nút "+" thêm nhanh vào yêu thích trên card phim ===== */
+.quick-fav-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 13;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    padding: 0;
+    opacity: 0;
+    transform: scale(0.7);
+    transition: opacity 0.25s ease, transform 0.25s ease, background 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.movie-card:hover .quick-fav-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.quick-fav-btn:hover {
+    background: var(--netflix-red);
+    border-color: var(--netflix-red);
+}
+
+.quick-fav-btn.active {
+    opacity: 1;
+    transform: scale(1);
+    background: var(--netflix-red);
+    border-color: var(--netflix-red);
+}
+
+.quick-fav-btn.pop {
+    animation: quickFavPop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes quickFavPop {
+    0% {
+        transform: scale(1);
+    }
+
+    45% {
+        transform: scale(1.35);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.quick-fav-btn.is-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Trên di động không có hover, luôn hiện sẵn (mờ hơn 1 chút) để bấm được */
+@media (hover: none) and (pointer: coarse) {
+    .quick-fav-btn {
+        opacity: 0.85;
+        transform: scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quick-fav-btn.pop {
+        animation: none;
+    }
+}
+
+/* ===== Bộ lọc thể loại dạng viên thuốc (pill), cuộn ngang ===== */
+.genre-pill-wrap {
+    margin-bottom: 28px;
+}
+
+.genre-pill-row {
+    gap: 10px;
+}
+
+.genre-pill {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ccc;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.genre-pill:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.genre-pill.active {
+    background: var(--netflix-red);
+    border-color: var(--netflix-red);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(229, 9, 20, 0.35);
+}
+
+/* ===== Continue watching kiểu mới: nút play tròn to + progress bar dưới ảnh ===== */
+.watched-card-v2 .watched-play-btn-v2 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.7);
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: rgba(229, 9, 20, 0.92);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    z-index: 12;
+    box-shadow: 0 8px 26px rgba(229, 9, 20, 0.55);
+    transition: transform 0.3s ease, opacity 0.3s ease, background 0.2s ease;
+}
+
+.watched-card-v2:hover .watched-play-btn-v2 {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.watched-play-btn-v2:hover {
+    background: #ff2028;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .watched-card-v2 .watched-play-btn-v2 {
+        opacity: 0.92;
+        transform: translate(-50%, -50%) scale(0.85);
+    }
+}
+
+.watch-progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+}
+
+.watch-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff5b62, var(--netflix-red));
+    box-shadow: 0 0 8px rgba(229, 9, 20, 0.7);
+}

@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" th:href="@{/css/index.css(v=9)}">
+    <link rel="stylesheet" th:href="@{/css/index.css(v=10)}">
 </head>
 
 <body>
@@ -90,17 +90,15 @@
                     <div class="vn-scroll-row">
                         <div class="vn-card-wrap watched-card-wrap" th:each="h : ${watchHistory}" th:attr="data-slug=${h.movieSlug}">
                             <a th:href="@{/xem-phim/{slug}(slug=${h.movieSlug}, ep=${h.epSlug}, sv=${h.serverIndex}, src=${h.source})}" class="text-decoration-none">
-                                <div class="movie-card watched-card">
+                                <div class="movie-card watched-card watched-card-v2">
                                     <div class="movie-img-container">
                                         <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
-                                        <span class="watched-continue-badge"><i class="fas fa-rotate-right"></i> Tiếp tục xem</span>
-                                        <div class="watched-play-btn"><i class="fas fa-play"></i></div>
-                                        <div class="watch-progress-track watch-progress-track-glow" th:if="${h.progressPercent != null}">
-                                            <div class="watch-progress-fill"
-                                                th:style="'width:' + ${h.progressPercent} + '%'"></div>
-                                            <span class="watch-progress-label" th:text="${h.progressPercent} + '%'"></span>
-                                        </div>
+                                        <div class="watched-play-btn watched-play-btn-v2"><i class="fas fa-play"></i></div>
+                                    </div>
+                                    <div class="watch-progress-bar" th:if="${h.progressPercent != null}"
+                                        th:title="|Đã xem ${h.progressPercent}%|">
+                                        <div class="watch-progress-bar-fill" th:style="'width:' + ${h.progressPercent} + '%'"></div>
                                     </div>
                                     <div class="movie-info">
                                         <div class="movie-title" th:text="${h.movieName}"></div>
@@ -173,6 +171,12 @@
                                     <div class="movie-img-container">
                                         <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
+                                        <button type="button" class="quick-fav-btn"
+                                            th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
+                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                            onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
+                                            <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
+                                        </button>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
                                     </div>
                                     <div class="movie-info">
@@ -213,6 +217,12 @@
                                     <div class="movie-img-container">
                                         <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
+                                        <button type="button" class="quick-fav-btn"
+                                            th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
+                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                            onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
+                                            <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
+                                        </button>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
                                     </div>
                                     <div class="movie-info">
@@ -234,6 +244,24 @@
         </div>
 
         <div class="section-title-row">
+            <h2 class="section-title">Thể loại</h2>
+        </div>
+        <div class="vn-row-wrap genre-pill-wrap">
+            <button class="vn-arrow vn-arrow-left" type="button" aria-label="Cuộn trái"><i
+                    class="fas fa-chevron-left"></i></button>
+            <div class="vn-row-inner">
+                <div class="vn-scroll-row genre-pill-row">
+                    <a class="genre-pill" th:each="g : ${allGenres}"
+                        th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}"
+                        th:classappend="${currentCategory == 'the-loai' and currentSlug == g.slug} ? ' active' : ''"
+                        th:text="${g.name}"></a>
+                </div>
+            </div>
+            <button class="vn-arrow vn-arrow-right" type="button" aria-label="Cuộn phải"><i
+                    class="fas fa-chevron-right"></i></button>
+        </div>
+
+        <div class="section-title-row">
             <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
         </div>
 
@@ -250,6 +278,12 @@
                                 onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
                                 loading="lazy">
                             <div class="movie-card-gradient"></div>
+                            <button type="button" class="quick-fav-btn"
+                                th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
+                                th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
+                                <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
+                            </button>
                             <div class="play-icon"><i class="fas fa-play-circle"></i></div>
                         </div>
 

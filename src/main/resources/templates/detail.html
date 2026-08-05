@@ -15,7 +15,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <link rel="stylesheet" th:href="@{/css/detail.css(v=4)}">
+    <link rel="stylesheet" th:href="@{/css/detail.css(v=5)}">
 </head>
 
 <body>
@@ -137,6 +137,22 @@
                 <i class="fas fa-play-circle fs-4"></i>
                 <span th:text="${server.server_name}"></span>
             </a>
+        </div>
+    </section>
+
+    <section class="cast-section" th:if="${actors != null and !actors.isEmpty()}">
+        <h3 class="section-heading">Diễn viên</h3>
+        <div class="cast-row">
+            <div class="cast-avatar-item" th:each="p : ${actors}" th:if="${p.name != null and !p.name.isBlank()}">
+                <div class="cast-avatar">
+                    <img th:if="${p.getProfilePhotoUrl() != null}" th:src="${p.getProfilePhotoUrl()}"
+                        th:alt="${p.name}" loading="lazy">
+                    <i th:unless="${p.getProfilePhotoUrl() != null}" class="fas fa-user"></i>
+                </div>
+                <span class="cast-name" th:text="${p.name}"></span>
+                <span class="cast-character" th:if="${p.character != null and !p.character.isBlank()}"
+                    th:text="${p.character}"></span>
+            </div>
         </div>
     </section>
 

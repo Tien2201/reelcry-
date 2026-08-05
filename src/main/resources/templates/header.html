@@ -172,6 +172,55 @@
             });
         })();
 
+        // Nút "+" thêm nhanh vào yêu thích ngay trên card phim (không cần vào
+        // trang chi tiết) - dùng chung cho mọi trang có card phim (trang chủ,
+        // trang lọc thể loại/quốc gia, kết quả tìm kiếm...). Gắn vào window để
+        // có thể gọi trực tiếp từ onclick trong HTML.
+        window.reelcryQuickFav = function (event, btn) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (btn.classList.contains('is-loading')) return;
+
+            var isActive = btn.classList.contains('active');
+            var slug = btn.dataset.slug;
+            if (!slug) return;
+
+            btn.classList.add('is-loading');
+
+            var request = isActive
+                ? fetch('/api/favorites/' + encodeURIComponent(slug), { method: 'DELETE' })
+                : fetch('/api/favorites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        slug: slug,
+                        name: btn.dataset.name,
+                        image: btn.dataset.image,
+                        source: btn.dataset.source
+                    })
+                });
+
+            request.then(function (res) {
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!res.ok) return;
+                btn.classList.toggle('active', !isActive);
+                var icon = btn.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-plus', isActive);
+                    icon.classList.toggle('fa-check', !isActive);
+                }
+                btn.classList.add('pop');
+                setTimeout(function () { btn.classList.remove('pop'); }, 320);
+            }).catch(function (e) {
+                console.error('Reelcry quick favorite error', e);
+            }).finally(function () {
+                btn.classList.remove('is-loading');
+            });
+        };
+
         // Thanh điều hướng dưới cùng (bottom nav) trên điện thoại
         (function () {
             var nav = document.getElementById('reelcryBottomNav');

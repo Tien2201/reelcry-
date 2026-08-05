@@ -187,11 +187,14 @@
             var searchBtn = document.getElementById('bnSearchBtn');
             if (searchBtn) {
                 searchBtn.addEventListener('click', function () {
+                    // Phải gọi focus() ngay lập tức, đồng bộ trong sự kiện click
+                    // (không qua setTimeout) thì bàn phím ảo trên di động (đặc
+                    // biệt Safari/iOS) mới tự bật lên - nếu trì hoãn, trình
+                    // duyệt không còn coi đó là hành động trực tiếp của người
+                    // dùng nên sẽ chỉ focus (viền đỏ) mà không hiện bàn phím.
+                    var input = document.querySelector('.search-input');
+                    if (input) input.focus({ preventScroll: true });
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                    setTimeout(function () {
-                        var input = document.querySelector('.search-input');
-                        if (input) input.focus();
-                    }, 350);
                 });
             }
         })();

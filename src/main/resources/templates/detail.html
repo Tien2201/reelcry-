@@ -15,7 +15,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <link rel="stylesheet" th:href="@{/css/detail.css(v=5)}">
+    <link rel="stylesheet" th:href="@{/css/detail.css(v=6)}">
 </head>
 
 <body>
@@ -48,11 +48,6 @@
                         <h1 class="hero-title" th:text="${movie?.name}"></h1>
                         <p class="hero-subtitle" th:text="${movie?.origin_name}"></p>
 
-                        <div class="mb-4">
-                            <span class="movie-meta-item" th:each="cat : ${movie?.category}"
-                                th:text="${cat.name}"></span>
-                        </div>
-
                         <div class="hero-about-label">Nội dung phim</div>
                         <div class="hero-content" th:utext="${movie?.content}"></div>
 
@@ -82,10 +77,6 @@
                             <a href="#" id="favoriteBtn" onclick="toggleFavorite(event)"><i class="fas fa-heart"
                                     id="favoriteIcon"></i></a>
                         </div>
-
-                        <p class="hero-credit" th:if="${movie?.director != null and !movie.director.isEmpty()}">
-                            Đạo diễn: <b th:text="${#strings.listJoin(movie.director, ', ')}"></b>
-                        </p>
                     </div>
 
                     <div class="col-lg-4 offset-lg-1 d-none d-lg-block">
@@ -128,6 +119,14 @@
         </div>
     </div>
 
+    <section class="genre-tags-section" th:if="${movie?.category != null and !movie.category.isEmpty()}">
+        <h3 class="section-heading">Thể loại</h3>
+        <div class="genre-tags-row">
+            <a class="genre-tag-pill" th:each="cat : ${movie.category}"
+                th:href="@{/filter/the-loai/{slug}(slug=${cat.slug})}" th:text="${cat.name}"></a>
+        </div>
+    </section>
+
     <section class="server-section-wrap">
         <h3 class="section-heading">Chọn server</h3>
         <div class="d-flex gap-3 flex-wrap server-list">
@@ -156,6 +155,22 @@
         </div>
     </section>
 
+    <section class="director-section" th:if="${movie?.director != null and !movie.director.isEmpty()}">
+        <h3 class="section-heading">Đạo diễn</h3>
+        <div class="cast-row">
+            <div class="cast-avatar-item" th:each="dName : ${movie.director}"
+                th:with="match=${actors != null ? actors.?[name == dName] : null}">
+                <div class="cast-avatar">
+                    <img th:if="${match != null and !match.isEmpty() and match[0].getProfilePhotoUrl() != null}"
+                        th:src="${match[0].getProfilePhotoUrl()}" th:alt="${dName}" loading="lazy">
+                    <i th:unless="${match != null and !match.isEmpty() and match[0].getProfilePhotoUrl() != null}"
+                        class="fas fa-user-tie"></i>
+                </div>
+                <span class="cast-name" th:text="${dName}"></span>
+            </div>
+        </div>
+    </section>
+
     <section class="related-section" th:if="${relatedMovies != null and !relatedMovies.isEmpty()}">
         <h3 class="section-heading">Có thể bạn thích
             <span class="related-genre-label" th:if="${relatedGenreName}" th:text="'· ' + ${relatedGenreName}"></span>
@@ -165,6 +180,12 @@
                 th:href="@{/phim/{slug}(slug=${item.slug}, src=${item.source})}">
                 <div class="related-img-wrap">
                     <img th:src="@{/img-proxy(url=${item.getImageUrl()})}" th:alt="${item.name}" loading="lazy">
+                    <button type="button" class="quick-fav-btn"
+                        th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(item.slug)} ? ' active' : ''"
+                        th:attr="data-slug=${item.slug}, data-name=${item.name}, data-source=${item.source}, data-image=@{/img-proxy(url=${item.getImageUrl()})}"
+                        onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
+                        <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(item.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
+                    </button>
                 </div>
                 <div class="related-title" th:text="${item.name}"></div>
             </a>

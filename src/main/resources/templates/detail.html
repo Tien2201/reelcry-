@@ -148,7 +148,7 @@
             <a class="related-card" th:each="item : ${relatedMovies}"
                 th:href="@{/phim/{slug}(slug=${item.slug}, src=${item.source})}">
                 <div class="related-img-wrap">
-                    <img th:src="${item.getImageUrl()}" th:alt="${item.name}" loading="lazy">
+                    <img th:src="@{/img-proxy(url=${item.getImageUrl()})}" th:alt="${item.name}" loading="lazy">
                 </div>
                 <div class="related-title" th:text="${item.name}"></div>
             </a>

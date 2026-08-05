@@ -10,4 +10,5 @@ public interface WatchHistoryRepository extends MongoRepository<WatchHistory, St
     List<WatchHistory> findByUsernameOrderByWatchedAtDesc(String username);
     Optional<WatchHistory> findByUsernameAndMovieSlug(String username, String movieSlug);
     void deleteByUsername(String username);
+    void deleteByUsernameAndMovieSlugIn(String username, List<String> movieSlugs);
 }

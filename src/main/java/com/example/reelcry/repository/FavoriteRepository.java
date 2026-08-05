@@ -11,5 +11,6 @@ public interface FavoriteRepository extends MongoRepository<Favorite, String> {
     Optional<Favorite> findByUsernameAndMovieSlug(String username, String movieSlug);
     boolean existsByUsernameAndMovieSlug(String username, String movieSlug);
     void deleteByUsernameAndMovieSlug(String username, String movieSlug);
+    void deleteByUsernameAndMovieSlugIn(String username, List<String> movieSlugs);
     void deleteByUsername(String username);
 }

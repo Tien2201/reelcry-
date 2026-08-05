@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -64,6 +65,28 @@ public class HistoryController {
         if (authentication == null)
             return ResponseEntity.status(401).build();
         repo.deleteByUsername(authentication.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    // Xoá theo danh sách phim đã chọn (checklist trên giao diện), thay vì xoá
+    // hết toàn bộ lịch sử một lượt.
+    @PostMapping("/delete-selected")
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<Void> deleteSelected(@RequestBody Map<String, Object> body, Authentication authentication) {
+        if (authentication == null)
+            return ResponseEntity.status(401).build();
+
+        Object slugsObj = body.get("slugs");
+        if (!(slugsObj instanceof List)) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<String> slugs = (List<String>) slugsObj;
+        if (slugs.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        repo.deleteByUsernameAndMovieSlugIn(authentication.getName(), slugs);
         return ResponseEntity.ok().build();
     }
 }

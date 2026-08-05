@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" th:href="@{/css/index.css(v=7)}">
+    <link rel="stylesheet" th:href="@{/css/index.css(v=8)}">
 </head>
 
 <body>
@@ -88,7 +88,7 @@
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row">
-                        <div class="vn-card-wrap watched-card-wrap" th:each="h : ${watchHistory}">
+                        <div class="vn-card-wrap watched-card-wrap" th:each="h : ${watchHistory}" th:attr="data-slug=${h.movieSlug}">
                             <a th:href="@{/xem-phim/{slug}(slug=${h.movieSlug}, ep=${h.epSlug}, sv=${h.serverIndex}, src=${h.source})}" class="text-decoration-none">
                                 <div class="movie-card watched-card">
                                     <div class="movie-img-container">
@@ -130,7 +130,7 @@
                         class="fas fa-chevron-left"></i></button>
                 <div class="vn-row-inner">
                     <div class="vn-scroll-row" id="favorites-row">
-                        <div class="vn-card-wrap" th:each="f : ${favorites}">
+                        <div class="vn-card-wrap favorite-card-wrap" th:each="f : ${favorites}" th:attr="data-slug=${f.movieSlug}">
                             <a th:href="@{/phim/{slug}(slug=${f.movieSlug}, src=${f.source})}" class="text-decoration-none">
                                 <div class="movie-card">
                                     <div class="movie-img-container">
@@ -286,26 +286,169 @@
         </nav>
     </div>
 
+    <div class="modal fade" id="deleteChecklistModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content delete-checklist-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteChecklistTitle">Chọn phim muốn xoá</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="delete-checklist-selectall">
+                        <input type="checkbox" id="deleteChecklistSelectAll">
+                        Chọn tất cả
+                    </label>
+                    <div id="deleteChecklistList" class="delete-checklist-list"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel-delete" data-bs-dismiss="modal">Huỷ</button>
+                    <button type="button" class="btn-confirm-delete" id="deleteChecklistConfirm" disabled>Xoá đã
+                        chọn</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function () {
-            var btn = document.getElementById('clear-history-btn');
-            if (!btn) return;
-            btn.addEventListener('click', function () {
-                fetch('/api/history', { method: 'DELETE' })
-                    .then(function () { window.location.reload(); })
-                    .catch(function (e) { console.error('Xoá lịch sử lỗi', e); });
+            var modalEl = document.getElementById('deleteChecklistModal');
+            if (!modalEl) return;
+
+            var modal = null;
+            function getModal() {
+                if (!modal && typeof bootstrap !== 'undefined') modal = new bootstrap.Modal(modalEl);
+                return modal;
+            }
+
+            var titleEl = document.getElementById('deleteChecklistTitle');
+            var listEl = document.getElementById('deleteChecklistList');
+            var selectAllEl = document.getElementById('deleteChecklistSelectAll');
+            var confirmBtn = document.getElementById('deleteChecklistConfirm');
+            var currentConfig = null;
+
+            function updateConfirmState() {
+                var boxes = listEl.querySelectorAll('.delete-checklist-checkbox');
+                var checked = listEl.querySelectorAll('.delete-checklist-checkbox:checked');
+                confirmBtn.disabled = checked.length === 0;
+                selectAllEl.checked = boxes.length > 0 && checked.length === boxes.length;
+            }
+
+            function openChecklist(config) {
+                var m = getModal();
+                if (!m) return;
+                currentConfig = config;
+                titleEl.textContent = config.title;
+                listEl.innerHTML = '';
+                selectAllEl.checked = false;
+                confirmBtn.disabled = true;
+
+                document.querySelectorAll(config.cardSelector).forEach(function (card) {
+                    var slug = card.dataset.slug;
+                    if (!slug) return;
+                    var img = card.querySelector('img');
+                    var name = card.querySelector('.movie-title');
+
+                    var item = document.createElement('label');
+                    item.className = 'delete-checklist-item';
+
+                    var checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'delete-checklist-checkbox';
+                    checkbox.value = slug;
+
+                    var thumb = document.createElement('img');
+                    thumb.src = img ? img.src : '';
+                    thumb.alt = '';
+
+                    var label = document.createElement('span');
+                    label.textContent = name ? name.textContent : slug;
+
+                    item.appendChild(checkbox);
+                    item.appendChild(thumb);
+                    item.appendChild(label);
+                    listEl.appendChild(item);
+                });
+
+                m.show();
+            }
+
+            listEl.addEventListener('change', function (e) {
+                if (e.target.classList.contains('delete-checklist-checkbox')) updateConfirmState();
             });
-        })();
-    </script>
-    <script>
-        (function () {
-            var btn = document.getElementById('clear-favorites-btn');
-            if (!btn) return;
-            btn.addEventListener('click', function () {
-                fetch('/api/favorites', { method: 'DELETE' })
-                    .then(function () { window.location.reload(); })
-                    .catch(function (e) { console.error('Xoá yêu thích lỗi', e); });
+
+            selectAllEl.addEventListener('change', function () {
+                listEl.querySelectorAll('.delete-checklist-checkbox').forEach(function (b) {
+                    b.checked = selectAllEl.checked;
+                });
+                updateConfirmState();
             });
+
+            confirmBtn.addEventListener('click', function () {
+                if (!currentConfig) return;
+                var checked = listEl.querySelectorAll('.delete-checklist-checkbox:checked');
+                var slugs = Array.prototype.map.call(checked, function (b) { return b.value; });
+                if (slugs.length === 0) return;
+
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Đang xoá...';
+
+                fetch(currentConfig.endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slugs: slugs })
+                }).then(function (res) {
+                    if (res.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!res.ok) throw new Error('Xoá thất bại');
+
+                    slugs.forEach(function (slug) {
+                        document.querySelectorAll(currentConfig.cardSelector).forEach(function (card) {
+                            if (card.dataset.slug === slug) card.remove();
+                        });
+                    });
+
+                    if (document.querySelectorAll(currentConfig.cardSelector).length === 0) {
+                        var sectionWrap = document.getElementById(currentConfig.sectionWrapId);
+                        if (sectionWrap) sectionWrap.remove();
+                    }
+
+                    var m = getModal();
+                    if (m) m.hide();
+                }).catch(function (e) {
+                    console.error('Xoá phim đã chọn lỗi', e);
+                    alert('Xoá thất bại, vui lòng thử lại.');
+                }).finally(function () {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Xoá đã chọn';
+                });
+            });
+
+            var historyBtn = document.getElementById('clear-history-btn');
+            if (historyBtn) {
+                historyBtn.addEventListener('click', function () {
+                    openChecklist({
+                        title: 'Chọn phim muốn xoá khỏi lịch sử',
+                        endpoint: '/api/history/delete-selected',
+                        cardSelector: '.watched-card-wrap',
+                        sectionWrapId: 'watched-section'
+                    });
+                });
+            }
+
+            var favoritesBtn = document.getElementById('clear-favorites-btn');
+            if (favoritesBtn) {
+                favoritesBtn.addEventListener('click', function () {
+                    openChecklist({
+                        title: 'Chọn phim muốn xoá khỏi yêu thích',
+                        endpoint: '/api/favorites/delete-selected',
+                        cardSelector: '.favorite-card-wrap',
+                        sectionWrapId: 'favorites-section'
+                    });
+                });
+            }
         })();
     </script>
     <script>

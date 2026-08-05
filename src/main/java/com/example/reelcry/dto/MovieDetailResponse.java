@@ -68,12 +68,42 @@ public class MovieDetailResponse implements Serializable {
         private List<String> actor;
         private List<String> director;
         private List<EpisodeServer> episodes;
+        private String trailer_url;
+        private TmdbInfo tmdb;
 
         public String getPosterFull() {
             if (thumb_url != null && thumb_url.startsWith("http")) return thumb_url;
             if (poster_url != null && poster_url.startsWith("http")) return poster_url;
             return "https://img.ophim.live/uploads/movies/" + thumb_url;
         }
+
+        // Lấy mã video YouTube từ trailer_url (dạng watch?v=XXXX hoặc youtu.be/XXXX)
+        // để nhúng vào iframe embed, không cần thư viện ngoài.
+        public String getTrailerEmbedId() {
+            if (trailer_url == null || trailer_url.isBlank()) return null;
+            try {
+                if (trailer_url.contains("watch?v=")) {
+                    String part = trailer_url.substring(trailer_url.indexOf("watch?v=") + 8);
+                    int amp = part.indexOf('&');
+                    return amp > -1 ? part.substring(0, amp) : part;
+                }
+                if (trailer_url.contains("youtu.be/")) {
+                    String part = trailer_url.substring(trailer_url.indexOf("youtu.be/") + 9);
+                    int q = part.indexOf('?');
+                    return q > -1 ? part.substring(0, q) : part;
+                }
+            } catch (Exception e) {
+                return null;
+            }
+            return null;
+        }
+    }
+
+    @Data
+    public static class TmdbInfo implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private Double vote_average;
+        private Integer vote_count;
     }
 
     @Data

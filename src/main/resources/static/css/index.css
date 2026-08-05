@@ -284,7 +284,27 @@
             position: relative;
             aspect-ratio: 2/3;
             overflow: hidden;
-            background: #1e1e1e;
+            background: linear-gradient(100deg, #1a1a1a 30%, #262626 50%, #1a1a1a 70%);
+            background-size: 200% 100%;
+            animation: imgShimmer 1.6s ease-in-out infinite;
+        }
+
+        /* Ảnh poster tải xong sẽ tự vẽ đè lên trên nền shimmer này, không cần
+           JS gỡ animation - khi <img> chưa có dữ liệu, nền chờ mờ mờ vẫn hiện
+           qua, tạo cảm giác đang tải thay vì màn hình trống trơn. */
+        @keyframes imgShimmer {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .movie-img-container {
+                animation: none;
+            }
         }
 
         .movie-card img {
@@ -350,6 +370,27 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
             color: #eee;
+        }
+
+        /* Hiện thêm chất lượng/ngôn ngữ khi rê chuột vào card (desktop) - ẩn
+           mặc định để card gọn, chỉ hiện khi cần xem thêm thông tin nhanh. */
+        .movie-hover-meta {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: var(--netflix-red, #e50914);
+            text-transform: uppercase;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+            margin-top: 0;
+        }
+
+        .movie-card:hover .movie-hover-meta {
+            max-height: 20px;
+            opacity: 1;
+            margin-top: 4px;
         }
 
         .play-icon {

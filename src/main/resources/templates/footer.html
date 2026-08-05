@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<div th:fragment="reelcry-footer">
+    <link rel="stylesheet" th:href="@{/css/footer.css(v=1)}">
+
+    <footer class="reelcry-footer">
+        <div class="footer-inner">
+            <div class="footer-col footer-brand-col">
+                <div class="footer-brand">REELCRY</div>
+                <p class="footer-desc">
+                    Xem phim online miễn phí, tổng hợp nội dung từ các nguồn công khai.
+                    Reelcry không lưu trữ file phim trên máy chủ của mình.
+                </p>
+            </div>
+
+            <div class="footer-col">
+                <div class="footer-heading">Khám phá</div>
+                <a class="footer-link" href="/">Trang chủ</a>
+                <a class="footer-link" href="/filter/danh-sach/phim-moi-cap-nhat">Phim mới</a>
+                <a class="footer-link" href="/filter/danh-sach/hoat-hinh">Hoạt hình</a>
+            </div>
+
+            <div class="footer-col">
+                <div class="footer-heading">Thông tin</div>
+                <span class="footer-link footer-link-static">Nguồn dữ liệu: OPhim, KKPhim</span>
+                <span class="footer-link footer-link-static">Chỉ dành cho mục đích xem thử</span>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <span>&copy; <span id="footer-year"></span> Reelcry. Made for movie lovers.</span>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            var y = document.getElementById('footer-year');
+            if (y) y.textContent = new Date().getFullYear();
+        })();
+    </script>
+</div>
+</html>

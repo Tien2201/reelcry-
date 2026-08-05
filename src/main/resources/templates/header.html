@@ -9,7 +9,7 @@
         gtag('config', 'G-6G8P923RSQ');
     </script>
 
-    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=6)}">
+    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=7)}">
 
     <div class="page-loading-bar" id="pageLoadingBar"></div>
 
@@ -79,49 +79,37 @@
             <div class="yt-side-divider"></div>
             <div class="yt-side-section-title">Thể loại</div>
 
-            <div th:each="g, iter : ${allGenres}" th:if="${iter.index < 8}">
-                <a class="yt-side-item" th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}">
-                    <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-tag"></i></span>
-                    <span th:text="${g.name}"></span>
-                </a>
+            <div class="yt-chip-wrap">
+                <a class="yt-chip" th:each="g, iter : ${allGenres}" th:if="${iter.index < 10}"
+                    th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}" th:text="${g.name}"></a>
             </div>
-            <button class="yt-side-item" type="button" data-bs-toggle="collapse" data-bs-target="#genresMore"
-                aria-expanded="false" aria-controls="genresMore" th:if="${allGenres != null and allGenres.size() > 8}">
-                <span class="yt-side-icon-wrap c-gray"><i class="fa-solid fa-ellipsis"></i></span>
-                Thêm
-                <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
+            <button class="yt-chip yt-chip-more" type="button" data-bs-toggle="collapse" data-bs-target="#genresMore"
+                aria-expanded="false" aria-controls="genresMore" th:if="${allGenres != null and allGenres.size() > 10}">
+                Thêm <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
             </button>
             <div class="collapse" id="genresMore">
-                <div th:each="g, iter : ${allGenres}" th:if="${iter.index >= 8}">
-                    <a class="yt-side-item yt-side-sub" th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}">
-                        <span class="yt-side-icon-wrap c-red"><i class="fa-solid fa-tag"></i></span>
-                        <span th:text="${g.name}"></span>
-                    </a>
+                <div class="yt-chip-wrap mt-2">
+                    <a class="yt-chip" th:each="g, iter : ${allGenres}" th:if="${iter.index >= 10}"
+                        th:href="@{/filter/the-loai/{slug}(slug=${g.slug})}" th:text="${g.name}"></a>
                 </div>
             </div>
 
             <div class="yt-side-divider"></div>
             <div class="yt-side-section-title">Quốc gia</div>
 
-            <div th:each="c, iter : ${allCountries}" th:if="${iter.index < 8}">
-                <a class="yt-side-item" th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}">
-                    <span class="yt-side-icon-wrap c-blue"><i class="fa-solid fa-earth-asia"></i></span>
-                    <span th:text="${c.name}"></span>
-                </a>
+            <div class="yt-chip-wrap">
+                <a class="yt-chip yt-chip-blue" th:each="c, iter : ${allCountries}" th:if="${iter.index < 10}"
+                    th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}" th:text="${c.name}"></a>
             </div>
-            <button class="yt-side-item" type="button" data-bs-toggle="collapse" data-bs-target="#countriesMore"
+            <button class="yt-chip yt-chip-more" type="button" data-bs-toggle="collapse" data-bs-target="#countriesMore"
                 aria-expanded="false" aria-controls="countriesMore"
-                th:if="${allCountries != null and allCountries.size() > 8}">
-                <span class="yt-side-icon-wrap c-gray"><i class="fa-solid fa-ellipsis"></i></span>
-                Thêm
-                <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
+                th:if="${allCountries != null and allCountries.size() > 10}">
+                Thêm <i class="fa-solid fa-chevron-down yt-side-chevron"></i>
             </button>
             <div class="collapse" id="countriesMore">
-                <div th:each="c, iter : ${allCountries}" th:if="${iter.index >= 8}">
-                    <a class="yt-side-item yt-side-sub" th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}">
-                        <span class="yt-side-icon-wrap c-blue"><i class="fa-solid fa-earth-asia"></i></span>
-                        <span th:text="${c.name}"></span>
-                    </a>
+                <div class="yt-chip-wrap mt-2">
+                    <a class="yt-chip yt-chip-blue" th:each="c, iter : ${allCountries}" th:if="${iter.index >= 10}"
+                        th:href="@{/filter/quoc-gia/{slug}(slug=${c.slug})}" th:text="${c.name}"></a>
                 </div>
             </div>
         </div>

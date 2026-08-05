@@ -9,6 +9,36 @@
             touch-action: manipulation;
         }
 
+        /* Thanh cuộn tuỳ chỉnh cho toàn site trên desktop - mảnh, màu đồng bộ
+           theme thay vì thanh cuộn mặc định to bản của trình duyệt. Chỉ áp
+           dụng khi có chuột thật (hover: hover) - trên di động thanh cuộn hệ
+           thống vốn đã tự ẩn/mỏng nên không cần can thiệp. */
+        @media (hover: hover) and (pointer: fine) {
+            html {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(229, 9, 20, 0.5) rgba(255, 255, 255, 0.05);
+            }
+
+            ::-webkit-scrollbar {
+                width: 10px;
+                height: 10px;
+            }
+
+            ::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.03);
+            }
+
+            ::-webkit-scrollbar-thumb {
+                background: rgba(229, 9, 20, 0.45);
+                border-radius: 10px;
+                border: 2px solid #0a0a0a;
+            }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: rgba(229, 9, 20, 0.75);
+            }
+        }
+
         .page-loading-bar {
             position: fixed;
             top: 0;
@@ -256,6 +286,61 @@
             font-weight: 400;
             font-size: 13.5px;
             color: #ccc;
+        }
+
+        /* Danh sách thể loại/quốc gia dạng chip - gọn hơn, quét mắt nhanh hơn
+           so với mỗi mục 1 dòng riêng như trước. */
+        .yt-chip-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 4px 12px 8px;
+        }
+
+        .yt-chip {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ddd;
+            font-size: 12.5px;
+            font-weight: 500;
+            padding: 7px 14px;
+            border-radius: 20px;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .yt-chip:hover {
+            background: rgba(229, 9, 20, 0.16);
+            border-color: rgba(229, 9, 20, 0.5);
+            color: #ff8a8f;
+            transform: translateY(-1px);
+        }
+
+        .yt-chip.yt-chip-blue:hover {
+            background: rgba(28, 98, 185, 0.2);
+            border-color: rgba(28, 98, 185, 0.5);
+            color: #8fc0f2;
+        }
+
+        button.yt-chip.yt-chip-more {
+            color: #999;
+            cursor: pointer;
+            margin: 0 0 8px 12px;
+            background: transparent;
+            border-style: dashed;
+        }
+
+        button.yt-chip.yt-chip-more[aria-expanded="true"] .yt-side-chevron {
+            transform: rotate(180deg);
+        }
+
+        .yt-chip .yt-side-chevron {
+            margin-left: 6px;
+            font-size: 10px;
+            transition: transform 0.25s ease;
         }
 
         @keyframes ytSideIn {

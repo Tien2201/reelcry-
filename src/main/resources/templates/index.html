@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" th:href="@{/css/index.css(v=8)}">
+    <link rel="stylesheet" th:href="@{/css/index.css(v=9)}">
 </head>
 
 <body>
@@ -289,22 +289,34 @@
     <div class="modal fade" id="deleteChecklistModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content delete-checklist-modal">
+                <div class="delete-checklist-glow"></div>
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteChecklistTitle">Chọn phim muốn xoá</h5>
+                    <div class="delete-checklist-heading">
+                        <span class="delete-checklist-icon"><i class="fas fa-trash-can"></i></span>
+                        <div>
+                            <h5 class="modal-title" id="deleteChecklistTitle">Chọn phim muốn xoá</h5>
+                            <span class="delete-checklist-subtitle">Tích chọn phim rồi xác nhận xoá</span>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="delete-checklist-selectall">
-                        <input type="checkbox" id="deleteChecklistSelectAll">
-                        Chọn tất cả
-                    </label>
+                    <div class="delete-checklist-toolbar">
+                        <label class="delete-checklist-selectall">
+                            <input type="checkbox" id="deleteChecklistSelectAll">
+                            <span class="check-visual"><i class="fas fa-check"></i></span>
+                            Chọn tất cả
+                        </label>
+                        <span class="delete-checklist-count" id="deleteChecklistCount">0 đã chọn</span>
+                    </div>
                     <div id="deleteChecklistList" class="delete-checklist-list"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-cancel-delete" data-bs-dismiss="modal">Huỷ</button>
-                    <button type="button" class="btn-confirm-delete" id="deleteChecklistConfirm" disabled>Xoá đã
-                        chọn</button>
+                    <button type="button" class="btn-confirm-delete" id="deleteChecklistConfirm" disabled>
+                        <i class="fas fa-trash-can"></i> <span id="deleteChecklistConfirmLabel">Xoá đã chọn</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -325,6 +337,8 @@
             var listEl = document.getElementById('deleteChecklistList');
             var selectAllEl = document.getElementById('deleteChecklistSelectAll');
             var confirmBtn = document.getElementById('deleteChecklistConfirm');
+            var confirmLabel = document.getElementById('deleteChecklistConfirmLabel');
+            var countEl = document.getElementById('deleteChecklistCount');
             var currentConfig = null;
 
             function updateConfirmState() {
@@ -332,6 +346,8 @@
                 var checked = listEl.querySelectorAll('.delete-checklist-checkbox:checked');
                 confirmBtn.disabled = checked.length === 0;
                 selectAllEl.checked = boxes.length > 0 && checked.length === boxes.length;
+                countEl.textContent = checked.length + ' đã chọn';
+                countEl.classList.toggle('has-selection', checked.length > 0);
             }
 
             function openChecklist(config) {
@@ -341,9 +357,10 @@
                 titleEl.textContent = config.title;
                 listEl.innerHTML = '';
                 selectAllEl.checked = false;
-                confirmBtn.disabled = true;
 
-                document.querySelectorAll(config.cardSelector).forEach(function (card) {
+                var cards = document.querySelectorAll(config.cardSelector);
+
+                cards.forEach(function (card, index) {
                     var slug = card.dataset.slug;
                     if (!slug) return;
                     var img = card.querySelector('img');
@@ -351,35 +368,56 @@
 
                     var item = document.createElement('label');
                     item.className = 'delete-checklist-item';
+                    item.style.setProperty('--i', index);
 
                     var checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.className = 'delete-checklist-checkbox';
                     checkbox.value = slug;
 
+                    var checkVisual = document.createElement('span');
+                    checkVisual.className = 'check-visual';
+                    checkVisual.innerHTML = '<i class="fas fa-check"></i>';
+
                     var thumb = document.createElement('img');
+                    thumb.className = 'delete-checklist-thumb';
                     thumb.src = img ? img.src : '';
                     thumb.alt = '';
 
                     var label = document.createElement('span');
+                    label.className = 'delete-checklist-name';
                     label.textContent = name ? name.textContent : slug;
 
                     item.appendChild(checkbox);
+                    item.appendChild(checkVisual);
                     item.appendChild(thumb);
                     item.appendChild(label);
                     listEl.appendChild(item);
                 });
 
+                if (!cards.length) {
+                    var empty = document.createElement('div');
+                    empty.className = 'delete-checklist-empty';
+                    empty.textContent = 'Không có phim nào.';
+                    listEl.appendChild(empty);
+                }
+
+                updateConfirmState();
                 m.show();
             }
 
             listEl.addEventListener('change', function (e) {
-                if (e.target.classList.contains('delete-checklist-checkbox')) updateConfirmState();
+                if (!e.target.classList.contains('delete-checklist-checkbox')) return;
+                var item = e.target.closest('.delete-checklist-item');
+                if (item) item.classList.toggle('is-checked', e.target.checked);
+                updateConfirmState();
             });
 
             selectAllEl.addEventListener('change', function () {
                 listEl.querySelectorAll('.delete-checklist-checkbox').forEach(function (b) {
                     b.checked = selectAllEl.checked;
+                    var item = b.closest('.delete-checklist-item');
+                    if (item) item.classList.toggle('is-checked', selectAllEl.checked);
                 });
                 updateConfirmState();
             });
@@ -391,7 +429,8 @@
                 if (slugs.length === 0) return;
 
                 confirmBtn.disabled = true;
-                confirmBtn.textContent = 'Đang xoá...';
+                confirmBtn.classList.add('is-loading');
+                confirmLabel.textContent = 'Đang xoá...';
 
                 fetch(currentConfig.endpoint, {
                     method: 'POST',
@@ -406,14 +445,19 @@
 
                     slugs.forEach(function (slug) {
                         document.querySelectorAll(currentConfig.cardSelector).forEach(function (card) {
-                            if (card.dataset.slug === slug) card.remove();
+                            if (card.dataset.slug === slug) {
+                                card.classList.add('card-removing');
+                                setTimeout(function () { card.remove(); }, 260);
+                            }
                         });
                     });
 
-                    if (document.querySelectorAll(currentConfig.cardSelector).length === 0) {
-                        var sectionWrap = document.getElementById(currentConfig.sectionWrapId);
-                        if (sectionWrap) sectionWrap.remove();
-                    }
+                    setTimeout(function () {
+                        if (document.querySelectorAll(currentConfig.cardSelector).length === 0) {
+                            var sectionWrap = document.getElementById(currentConfig.sectionWrapId);
+                            if (sectionWrap) sectionWrap.remove();
+                        }
+                    }, 280);
 
                     var m = getModal();
                     if (m) m.hide();
@@ -422,7 +466,8 @@
                     alert('Xoá thất bại, vui lòng thử lại.');
                 }).finally(function () {
                     confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Xoá đã chọn';
+                    confirmBtn.classList.remove('is-loading');
+                    confirmLabel.textContent = 'Xoá đã chọn';
                 });
             });
 

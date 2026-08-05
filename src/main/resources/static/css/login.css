@@ -64,6 +64,50 @@
             background: rgba(255,255,255,0.09);
         }
 
+        .form-remember {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 0.85rem;
+            color: #ccc;
+            margin-bottom: 22px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .form-remember input {
+            position: absolute;
+            opacity: 0;
+            width: 1px;
+            height: 1px;
+            pointer-events: none;
+        }
+
+        .form-remember-check {
+            position: relative;
+            width: 19px;
+            height: 19px;
+            flex-shrink: 0;
+            border-radius: 5px;
+            border: 1.5px solid rgba(255, 255, 255, 0.28);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: transparent;
+            font-size: 0.62rem;
+            transition: background 0.18s, border-color 0.18s, transform 0.15s, color 0.18s;
+        }
+
+        .form-remember input:checked + .form-remember-check {
+            background: var(--primary-red);
+            border-color: var(--primary-red);
+            color: #fff;
+        }
+
+        .form-remember:active .form-remember-check {
+            transform: scale(0.88);
+        }
+
         .btn-login {
             width: 100%;
             background: var(--primary-red);

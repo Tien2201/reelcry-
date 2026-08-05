@@ -91,6 +91,16 @@ public class SecurityConfig {
     @Value("${app.auth.password2:123}")
     private String password2;
 
+    // Khoá bí mật để ký cookie "ghi nhớ đăng nhập" - nên đặt cố định qua biến
+    // môi trường (nếu đổi mỗi lần deploy thì các cookie remember-me cũ sẽ bị
+    // vô hiệu, buộc đăng nhập lại)
+    @Value("${app.security.remember-key:reelcry-remember-me-secret-key}")
+    private String rememberMeKey;
+
+    // Thời hạn cookie "ghi nhớ đăng nhập" - 30 ngày, khớp với thời hạn session
+    // (server.servlet.session.timeout) để trải nghiệm nhất quán
+    private static final int REMEMBER_ME_VALIDITY_SECONDS = 30 * 24 * 60 * 60;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -125,9 +135,20 @@ public class SecurityConfig {
                 .defaultSuccessUrl("/", true)
                 .permitAll()
             )
+            // "Ghi nhớ đăng nhập": phát hành 1 cookie riêng (persistent-remember-me
+            // cookie), sống độc lập với session - nên vẫn tự đăng nhập lại được kể
+            // cả khi người dùng đóng hẳn trình duyệt (cookie session JSESSIONID
+            // mặc định sẽ mất khi đóng trình duyệt, khác với cookie này)
+            .rememberMe(remember -> remember
+                .key(rememberMeKey)
+                .tokenValiditySeconds(REMEMBER_ME_VALIDITY_SECONDS)
+                .rememberMeParameter("remember-me")
+                .userDetailsService(userDetailsService(passwordEncoder()))
+            )
             .logout(logout -> logout
                 .logoutUrl("/logout")
                 .logoutSuccessUrl("/login?logout")
+                .deleteCookies("remember-me")
                 .permitAll()
             );
 

@@ -303,6 +303,9 @@
       flex-direction: column;
       padding: 16px;
       max-height: 640px;
+      /* Chiều cao thật sự được JS gán bằng đúng chiều cao khung video (giống
+         YouTube: panel danh sách phát cao bằng đúng khung player), giá trị
+         640px ở trên chỉ là dự phòng cho tới khi JS chạy xong. */
     }
 
     .episode-list-header {
@@ -331,6 +334,8 @@
       padding-right: 4px;
       scrollbar-width: thin;
       scrollbar-color: rgba(229, 9, 20, 0.4) transparent;
+      flex: 1;
+      min-height: 0;
     }
 
     .episode-list-scroll::-webkit-scrollbar {

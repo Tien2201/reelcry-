@@ -290,3 +290,193 @@
         opacity: 0;
       }
     }
+
+    /* ===== Sidebar danh sách tập kiểu YouTube - nằm ngay bên phim ===== */
+    .watch-sidebar {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .episode-list-box {
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      max-height: 640px;
+    }
+
+    .episode-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .episode-count-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #999;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .episode-list-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(229, 9, 20, 0.4) transparent;
+    }
+
+    .episode-list-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .episode-list-scroll::-webkit-scrollbar-thumb {
+      background: rgba(229, 9, 20, 0.4);
+      border-radius: 6px;
+    }
+
+    .ep-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #bbb;
+      border: 1px solid transparent;
+      border-left: 3px solid transparent;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+      animation: epRowIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+      animation-delay: calc(var(--i, 0) * 22ms);
+    }
+
+    @keyframes epRowIn {
+      from {
+        opacity: 0;
+        transform: translateX(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .ep-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      transform: translateX(2px);
+    }
+
+    .ep-num {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #ccc;
+    }
+
+    .ep-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.86rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ep-playing-icon {
+      display: none;
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-red);
+      color: #fff;
+      font-size: 0.75rem;
+    }
+
+    .ep-watched-icon {
+      display: none;
+      flex-shrink: 0;
+      color: #4ade80;
+      font-size: 0.78rem;
+    }
+
+    .ep-btn.active {
+      background: rgba(229, 9, 20, 0.12);
+      border-color: rgba(229, 9, 20, 0.3);
+      border-left-color: var(--primary-red);
+      color: #fff;
+    }
+
+    .ep-btn.active .ep-num {
+      display: none;
+    }
+
+    .ep-btn.active .ep-playing-icon {
+      display: flex;
+      animation: epPlayingPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes epPlayingPulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.2);
+      }
+    }
+
+    .ep-btn.watched:not(.active) {
+      color: #7a9;
+    }
+
+    .ep-btn.watched:not(.active) .ep-watched-icon {
+      display: flex;
+      align-items: center;
+    }
+
+    .server-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .server-chip {
+      padding: 7px 14px;
+      font-size: 0.82rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .ep-btn,
+      .ep-btn.active .ep-playing-icon i {
+        animation: none !important;
+      }
+    }
+
+    @media (max-width: 991px) {
+      .episode-list-box {
+        max-height: 420px;
+      }
+    }

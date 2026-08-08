@@ -1,6 +1,17 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <div th:fragment="reelcry-header">
+    <script>
+        // Áp dụng giao diện sáng/tối đã lưu NGAY LẬP TỨC (chạy đồng bộ, trước khi
+        // phần còn lại của trang vẽ ra) để tránh hiện tượng nháy sáng/tối lúc tải
+        // trang (đổi theme sau khi đã vẽ xong sẽ bị giật 1 nhịp rất khó chịu).
+        (function () {
+            try {
+                var saved = localStorage.getItem('reelcry-theme');
+                if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            } catch (e) { }
+        })();
+    </script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-6G8P923RSQ"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -9,7 +20,7 @@
         gtag('config', 'G-6G8P923RSQ');
     </script>
 
-    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=7)}">
+    <link rel="stylesheet" th:href="@{/css/reelcry-header.css(v=8)}">
 
     <div class="page-loading-bar" id="pageLoadingBar"></div>
 
@@ -46,7 +57,12 @@
             </div>
 
             <div class="yt-right">
-                
+                <button type="button" class="yt-theme-toggle" id="themeToggleBtn" aria-label="Đổi giao diện sáng/tối"
+                    title="Đổi giao diện sáng/tối">
+                    <i class="fa-solid fa-sun theme-icon-sun"></i>
+                    <i class="fa-solid fa-moon theme-icon-moon"></i>
+                </button>
+
                 <div class="dropdown">
                     <button type="button" class="yt-avatar-btn" data-bs-toggle="dropdown" aria-expanded="false"
                         title="Tài khoản">
@@ -151,6 +167,26 @@
                 window.location.href = '/';
             }
         });
+
+        // Chuyển đổi giao diện sáng/tối, lưu lựa chọn để lần sau vào lại vẫn giữ
+        // nguyên (mặc định là tối nếu chưa từng đổi bao giờ).
+        (function () {
+            var btn = document.getElementById('themeToggleBtn');
+            if (!btn) return;
+
+            btn.addEventListener('click', function () {
+                var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+                if (isLight) {
+                    document.documentElement.removeAttribute('data-theme');
+                    try { localStorage.setItem('reelcry-theme', 'dark'); } catch (e) { }
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    try { localStorage.setItem('reelcry-theme', 'light'); } catch (e) { }
+                }
+                btn.classList.add('theme-toggle-spin');
+                setTimeout(function () { btn.classList.remove('theme-toggle-spin'); }, 400);
+            });
+        })();
 
         (function () {
             var btn = document.getElementById('backToTopBtn');

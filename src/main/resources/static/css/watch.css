@@ -485,3 +485,93 @@
         max-height: 420px;
       }
     }
+
+    /* ===== Chế độ sáng ===== */
+    /* Khung video, overlay tắt đèn giữ nguyên nền đen vì đây là vùng phát
+       phim - luôn cần nền tối để xem thoải mái bất kể theme. */
+
+    [data-theme="light"] body {
+      background-color: #f4f4f4;
+      color: #141414;
+    }
+
+    [data-theme="light"] .source-switcher,
+    [data-theme="light"] .control-box {
+      background: rgba(0, 0, 0, 0.03);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    [data-theme="light"] .btn-custom {
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.12);
+      color: #555;
+    }
+
+    [data-theme="light"] .btn-custom:hover {
+      background: rgba(0, 0, 0, 0.08);
+      color: #141414;
+      border-color: rgba(0, 0, 0, 0.25);
+    }
+
+    [data-theme="light"] .btn-custom.active {
+      color: white;
+    }
+
+    [data-theme="light"] .section-label {
+      color: #777;
+    }
+
+    [data-theme="light"] .movie-title-watch {
+      color: #141414;
+    }
+
+    [data-theme="light"] .btn-light-toggle {
+      background: #eee;
+      color: #b8860b;
+      border-color: #ddd;
+    }
+
+    [data-theme="light"] .server-fallback-toast {
+      background: rgba(255, 255, 255, 0.96);
+      border-color: rgba(229, 9, 20, 0.35);
+      color: #141414;
+    }
+
+    [data-theme="light"] .btn-close-toast {
+      color: #888;
+    }
+
+    [data-theme="light"] .btn-close-toast:hover {
+      color: #141414;
+    }
+
+    [data-theme="light"] .episode-list-header {
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+    }
+
+    [data-theme="light"] .episode-count-badge {
+      color: #777;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    [data-theme="light"] .ep-btn {
+      color: #555;
+    }
+
+    [data-theme="light"] .ep-btn:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: #141414;
+    }
+
+    [data-theme="light"] .ep-num {
+      background: rgba(0, 0, 0, 0.06);
+      color: #444;
+    }
+
+    [data-theme="light"] .ep-btn.active {
+      color: #141414;
+    }
+
+    [data-theme="light"] .ep-btn.watched:not(.active) {
+      color: #2e8b57;
+    }

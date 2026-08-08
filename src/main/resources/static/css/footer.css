@@ -79,3 +79,23 @@ a.footer-link:hover {
         gap: 24px;
     }
 }
+
+[data-theme="light"] .reelcry-footer {
+    background: #f0f0f0;
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .footer-brand,
+[data-theme="light"] .footer-heading {
+    color: #141414;
+}
+
+[data-theme="light"] .footer-desc,
+[data-theme="light"] .footer-link {
+    color: #666;
+}
+
+[data-theme="light"] .footer-bottom {
+    color: #888;
+    border-top-color: rgba(0, 0, 0, 0.08);
+}

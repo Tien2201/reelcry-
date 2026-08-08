@@ -12,7 +12,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <link rel="stylesheet" th:href="@{/css/login.css(v=3)}">
+    <link rel="stylesheet" th:href="@{/css/login.css(v=4)}">
+    <script>
+        // Trang đăng nhập không có header (chưa đăng nhập) nên không có nút
+        // bấm đổi giao diện ở đây, nhưng vẫn tôn trọng lựa chọn sáng/tối đã
+        // lưu từ trước để nhất quán với phần còn lại của web.
+        (function () {
+            try {
+                if (localStorage.getItem('reelcry-theme') === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) { }
+        })();
+    </script>
 </head>
 <body>
 

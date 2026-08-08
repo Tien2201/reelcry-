@@ -713,3 +713,90 @@
                 gap: 12px;
             }
         }
+
+        /* ===== Chế độ sáng ===== */
+        /* Phần hero giữ nền tối vì luôn có ảnh nền phim + lớp phủ gradient
+           để chữ luôn đọc được, nên không đổi theo theme. Chỉ đổi các khối
+           nội dung phía dưới (server, diễn viên, thể loại, đạo diễn, đề xuất). */
+
+        [data-theme="light"] .side-panel .panel-title {
+            color: #141414;
+        }
+
+        [data-theme="light"] .info-list li {
+            border-bottom-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="light"] .info-list li .label {
+            color: #888;
+        }
+
+        [data-theme="light"] .info-list li .value {
+            color: #222;
+        }
+
+        [data-theme="light"] .server-section-wrap,
+        [data-theme="light"] .cast-section,
+        [data-theme="light"] .director-section {
+            background: #fafafa;
+        }
+
+        [data-theme="light"] .genre-tags-section,
+        [data-theme="light"] .related-section {
+            background: #f4f4f4;
+        }
+
+        [data-theme="light"] .section-heading {
+            color: #141414;
+        }
+
+        [data-theme="light"] .btn-server {
+            background: rgba(0, 0, 0, 0.04);
+            color: #141414;
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="light"] .btn-server:hover {
+            color: #fff;
+        }
+
+        [data-theme="light"] .cast-avatar {
+            background: rgba(0, 0, 0, 0.05);
+            border-color: rgba(0, 0, 0, 0.12);
+            color: rgba(0, 0, 0, 0.25);
+        }
+
+        [data-theme="light"] .cast-name {
+            color: #222;
+        }
+
+        [data-theme="light"] .cast-character {
+            color: #888;
+        }
+
+        [data-theme="light"] .genre-tag-pill {
+            background: rgba(0, 0, 0, 0.05);
+            border-color: rgba(0, 0, 0, 0.12);
+            color: #444;
+        }
+
+        [data-theme="light"] .genre-tag-pill:hover {
+            color: #fff;
+        }
+
+        [data-theme="light"] .related-genre-label {
+            color: #777;
+        }
+
+        [data-theme="light"] .related-card {
+            color: #141414;
+        }
+
+        [data-theme="light"] .related-card:hover {
+            color: #141414;
+        }
+
+        [data-theme="light"] .related-img-wrap {
+            background: linear-gradient(100deg, #e8e8e8 30%, #f4f4f4 50%, #e8e8e8 70%);
+            border-color: rgba(0, 0, 0, 0.08);
+        }

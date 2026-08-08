@@ -3,6 +3,236 @@
             --yt-elevated: #212121;
             --yt-border: #303030;
             --netflix-red: #e50914;
+
+            /* ===== Biến giao diện sáng/tối dùng chung cho toàn site =====
+               Mặc định (không có data-theme, hoặc data-theme="dark") là tối,
+               khối [data-theme="light"] bên dưới ghi đè khi người dùng chọn
+               giao diện sáng. Các trang khác (index.css, detail.css,
+               watch.css, login.css, footer.css) dùng var(--rc-*) thay vì màu
+               cứng để tự đổi theo giao diện đang chọn. */
+            --rc-bg: #0a0a0a;
+            --rc-bg-alt: #0d0d0d;
+            --rc-bg-alt2: #060606;
+            --rc-surface: rgba(255, 255, 255, 0.05);
+            --rc-surface-strong: rgba(255, 255, 255, 0.08);
+            --rc-surface-solid: #161616;
+            --rc-text: #ffffff;
+            --rc-text-secondary: #cccccc;
+            --rc-text-muted: #8a8a8a;
+            --rc-border: rgba(255, 255, 255, 0.1);
+            --rc-border-strong: rgba(255, 255, 255, 0.18);
+        }
+
+        [data-theme="light"] {
+            --yt-bg: #ffffff;
+            --yt-elevated: #f1f1f1;
+            --yt-border: #e2e2e2;
+
+            --rc-bg: #f4f4f4;
+            --rc-bg-alt: #ececec;
+            --rc-bg-alt2: #e9e9e9;
+            --rc-surface: rgba(0, 0, 0, 0.04);
+            --rc-surface-strong: rgba(0, 0, 0, 0.06);
+            --rc-surface-solid: #ffffff;
+            --rc-text: #141414;
+            --rc-text-secondary: #454545;
+            --rc-text-muted: #737373;
+            --rc-border: rgba(0, 0, 0, 0.1);
+            --rc-border-strong: rgba(0, 0, 0, 0.18);
+        }
+
+        [data-theme="light"] body {
+            background-color: var(--rc-bg);
+            color: var(--rc-text);
+        }
+
+        /* ===== Nút chuyển đổi sáng/tối ===== */
+        .yt-theme-toggle {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
+            color: #ffc93c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            margin-right: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .yt-theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .yt-theme-toggle .theme-icon-sun,
+        .yt-theme-toggle .theme-icon-moon {
+            position: absolute;
+            transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .yt-theme-toggle .theme-icon-sun {
+            opacity: 0;
+            transform: rotate(-90deg) scale(0.4);
+        }
+
+        .yt-theme-toggle .theme-icon-moon {
+            opacity: 1;
+            transform: rotate(0deg) scale(1);
+        }
+
+        [data-theme="light"] .yt-theme-toggle .theme-icon-sun {
+            opacity: 1;
+            transform: rotate(0deg) scale(1);
+        }
+
+        [data-theme="light"] .yt-theme-toggle .theme-icon-moon {
+            opacity: 0;
+            transform: rotate(90deg) scale(0.4);
+        }
+
+        .yt-theme-toggle.theme-toggle-spin {
+            animation: themeTogglePulse 0.4s ease;
+        }
+
+        @keyframes themeTogglePulse {
+            50% {
+                transform: scale(0.82);
+            }
+        }
+
+        [data-theme="light"] .yt-theme-toggle {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(0, 0, 0, 0.045);
+            color: #d68b00;
+        }
+
+        [data-theme="light"] .yt-theme-toggle:hover {
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .yt-theme-toggle .theme-icon-sun,
+            .yt-theme-toggle .theme-icon-moon,
+            .yt-theme-toggle.theme-toggle-spin {
+                transition: none;
+                animation: none;
+            }
+        }
+
+        /* ===== Giao diện sáng: header / sidebar / thanh tìm kiếm / bottom nav ===== */
+        [data-theme="light"] .navbar-custom {
+            background: rgba(255, 255, 255, 0.75) !important;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .yt-hamburger,
+        [data-theme="light"] .navbar-brand-custom,
+        [data-theme="light"] .yt-logo-icon i,
+        [data-theme="light"] .yt-sidebar,
+        [data-theme="light"] .yt-side-item,
+        [data-theme="light"] .yt-side-item:hover,
+        [data-theme="light"] .search-btn,
+        [data-theme="light"] .yt-mic-btn,
+        [data-theme="light"] .back-to-top-btn {
+            color: var(--rc-text);
+        }
+
+        [data-theme="light"] .yt-hamburger:hover,
+        [data-theme="light"] .yt-hamburger:focus {
+            background: rgba(0, 0, 0, 0.06);
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="light"] .yt-badge {
+            color: #666;
+            border-color: #ccc;
+        }
+
+        [data-theme="light"] .yt-sidebar {
+            background: rgba(255, 255, 255, 0.85);
+            border-right: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .yt-side-item:hover {
+            background: rgba(0, 0, 0, 0.05);
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .yt-side-icon-wrap {
+            background: rgba(0, 0, 0, 0.06);
+            color: #444;
+        }
+
+        [data-theme="light"] .yt-side-icon-wrap.c-gray {
+            background: rgba(0, 0, 0, 0.05);
+            color: #555;
+        }
+
+        [data-theme="light"] .yt-side-section-title,
+        [data-theme="light"] .yt-side-item .yt-side-chevron {
+            color: #777;
+        }
+
+        [data-theme="light"] .yt-side-item.yt-side-sub {
+            color: #444;
+        }
+
+        [data-theme="light"] .yt-chip {
+            background: rgba(0, 0, 0, 0.045);
+            border-color: rgba(0, 0, 0, 0.1);
+            color: #333;
+        }
+
+        [data-theme="light"] .search-input {
+            background: rgba(0, 0, 0, 0.045) !important;
+            border-color: rgba(0, 0, 0, 0.14) !important;
+            color: var(--rc-text) !important;
+        }
+
+        [data-theme="light"] .search-input::placeholder {
+            color: #888;
+        }
+
+        [data-theme="light"] .search-kbd,
+        [data-theme="light"] .search-btn,
+        [data-theme="light"] .yt-mic-btn {
+            background: rgba(0, 0, 0, 0.045);
+            border-color: rgba(0, 0, 0, 0.14);
+        }
+
+        [data-theme="light"] .yt-account-menu {
+            background: rgba(255, 255, 255, 0.92) !important;
+            border-color: rgba(0, 0, 0, 0.1) !important;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+        }
+
+        [data-theme="light"] .yt-account-menu button {
+            color: #222;
+        }
+
+        [data-theme="light"] .yt-account-menu button:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        [data-theme="light"] .back-to-top-btn {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="light"] .yt-bottom-nav {
+            background: rgba(255, 255, 255, 0.92) !important;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] .bn-item {
+            color: #777;
         }
 
         html {

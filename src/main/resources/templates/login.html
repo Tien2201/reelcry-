@@ -12,7 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <link rel="stylesheet" th:href="@{/css/login.css(v=4)}">
+    <link rel="stylesheet" th:href="@{/css/login.css(v=6)}">
     <script>
         // Trang đăng nhập không có header (chưa đăng nhập) nên không có nút
         // bấm đổi giao diện ở đây, nhưng vẫn tôn trọng lựa chọn sáng/tối đã
@@ -28,8 +28,14 @@
 </head>
 <body>
 
+<div class="login-glow login-glow-1"></div>
+<div class="login-glow login-glow-2"></div>
+<div class="login-grain"></div>
+
+<a href="/" class="login-back"><i class="fas fa-chevron-left"></i> Về trang chủ</a>
+
 <div class="login-card">
-    <div class="login-logo">REELCRY</div>
+    <div class="login-logo">REEL<span class="login-logo-accent">CRY</span></div>
     <div class="login-subtitle">Đăng nhập để tiếp tục xem phim</div>
 
     <div class="alert-box" th:if="${param.error}">
@@ -43,10 +49,19 @@
     <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
 
     <label class="form-label">Tên đăng nhập</label>
-    <input type="text" name="username" class="form-control-custom" placeholder="Nhập tên đăng nhập" required autofocus>
+    <div class="input-icon-group">
+        <i class="fas fa-user input-icon"></i>
+        <input type="text" name="username" class="form-control-custom" placeholder="Nhập tên đăng nhập" required autofocus>
+    </div>
 
     <label class="form-label">Mật khẩu</label>
-    <input type="password" name="password" class="form-control-custom" placeholder="Nhập mật khẩu" required>
+    <div class="input-icon-group">
+        <i class="fas fa-lock input-icon"></i>
+        <input type="password" name="password" id="loginPassword" class="form-control-custom" placeholder="Nhập mật khẩu" required>
+        <button type="button" class="input-icon-toggle" id="togglePasswordBtn" aria-label="Hiện/ẩn mật khẩu" tabindex="-1">
+            <i class="fas fa-eye"></i>
+        </button>
+    </div>
 
     <label class="form-remember">
         <input type="checkbox" name="remember-me" checked>
@@ -59,6 +74,20 @@
     </button>
 </form>
 </div>
+
+<script>
+    (function () {
+        var toggle = document.getElementById('togglePasswordBtn');
+        var pwd = document.getElementById('loginPassword');
+        if (!toggle || !pwd) return;
+        toggle.addEventListener('click', function () {
+            var isHidden = pwd.type === 'password';
+            pwd.type = isHidden ? 'text' : 'password';
+            toggle.querySelector('i').classList.toggle('fa-eye', !isHidden);
+            toggle.querySelector('i').classList.toggle('fa-eye-slash', isHidden);
+        });
+    })();
+</script>
 
 </body>
 </html>

@@ -99,6 +99,7 @@
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             border: 1px solid rgba(229, 9, 20, 0.4);
+            box-shadow: 0 0 22px rgba(229, 9, 20, 0.25);
             color: #ff5b62;
             font-size: 0.72rem;
             font-weight: 700;
@@ -264,7 +265,7 @@
             background: rgba(255, 255, 255, 0.06);
             backdrop-filter: blur(16px) saturate(150%);
             -webkit-backdrop-filter: blur(16px) saturate(150%);
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
             transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -273,11 +274,11 @@
         }
 
         .movie-card:hover {
-            transform: translateY(-6px) scale(1.03);
+            transform: translateY(-8px) scale(1.03);
             z-index: 5;
             background: rgba(255, 255, 255, 0.07);
-            box-shadow: 0 20px 44px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(229, 9, 20, 0.25);
-            border-color: rgba(229, 9, 20, 0.5);
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(229, 9, 20, 0.35), 0 0 32px rgba(229, 9, 20, 0.18);
+            border-color: rgba(229, 9, 20, 0.55);
         }
 
         .movie-img-container {
@@ -335,11 +336,11 @@
             -webkit-backdrop-filter: blur(6px);
             color: white;
             font-size: 0.65rem;
-            padding: 3px 8px;
-            border-radius: 5px;
+            padding: 3px 9px;
+            border-radius: 20px;
             font-weight: 700;
             z-index: 10;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 10px rgba(229, 9, 20, 0.4);
         }
 
         .badge-year {
@@ -349,8 +350,8 @@
             background: rgba(0, 0, 0, 0.75);
             color: #ffc107;
             font-size: 0.65rem;
-            padding: 3px 8px;
-            border-radius: 5px;
+            padding: 3px 9px;
+            border-radius: 20px;
             z-index: 10;
             backdrop-filter: blur(5px);
         }
@@ -391,6 +392,37 @@
             max-height: 20px;
             opacity: 1;
             margin-top: 4px;
+        }
+
+        /* Điểm đánh giá TMDB - hiện sẵn ở góc dưới-trái poster (giống badge
+           năm/chất lượng) để biết nhanh phim hay/dở ngay cả khi chưa rê
+           chuột vào; hover chỉ làm nó nổi bật hơn 1 chút. */
+        .movie-rating-badge {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            color: #ffc107;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 20px;
+            z-index: 10;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .movie-rating-badge i {
+            font-size: 0.66rem;
+        }
+
+        .movie-card:hover .movie-rating-badge {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
         }
 
         .play-icon {
@@ -985,6 +1017,7 @@
             background: var(--netflix-red);
             width: 26px;
             border-radius: 4px;
+            box-shadow: 0 0 12px rgba(229, 9, 20, 0.7);
         }
 
         .hero-arrow {
@@ -995,6 +1028,8 @@
             height: 44px;
             border-radius: 50%;
             background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: #fff;
             z-index: 5;
@@ -1010,6 +1045,8 @@
         .hero-arrow:hover {
             background: var(--netflix-red);
             border-color: var(--netflix-red);
+            box-shadow: 0 0 20px rgba(229, 9, 20, 0.5);
+            transform: translateY(-50%) scale(1.08);
         }
 
         .hero-arrow-left {
@@ -1445,6 +1482,67 @@ input:checked+.check-visual {
     box-shadow: 0 4px 14px rgba(229, 9, 20, 0.35);
 }
 
+/* Nút lọc "Chỉ phim có trailer" trên trang chủ - dùng chung phong cách với
+   genre-pill nhưng thêm icon + trạng thái loading khi đang gọi API kiểm tra. */
+.trailer-filter-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ccc;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.trailer-filter-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #fff;
+}
+
+.trailer-filter-btn.active {
+    background: var(--netflix-red);
+    border-color: var(--netflix-red);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(229, 9, 20, 0.35);
+}
+
+.trailer-filter-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+    transform: none;
+}
+
+.trailer-filter-btn .fa-spinner {
+    display: none;
+}
+
+.trailer-filter-btn.loading .fa-film {
+    display: none;
+}
+
+.trailer-filter-btn.loading .fa-spinner {
+    display: inline-block;
+    animation: trailerFilterSpin 0.7s linear infinite;
+}
+
+@keyframes trailerFilterSpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trailer-filter-btn.loading .fa-spinner {
+        animation: none;
+    }
+}
+
 /* ===== Continue watching kiểu mới: nút play tròn to + progress bar dưới ảnh ===== */
 .watched-card-v2 .watched-play-btn-v2 {
     position: absolute;
@@ -1536,6 +1634,21 @@ input:checked+.check-visual {
 [data-theme="light"] .badge-year {
     background: rgba(255, 255, 255, 0.85);
     color: #a06a00;
+}
+
+[data-theme="light"] .movie-rating-badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: #a06a00;
+}
+
+[data-theme="light"] .trailer-filter-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: #444;
+}
+
+[data-theme="light"] .trailer-filter-btn.active {
+    color: #fff;
 }
 
 [data-theme="light"] .vn-arrow {

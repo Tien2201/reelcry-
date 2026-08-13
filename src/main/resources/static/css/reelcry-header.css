@@ -133,7 +133,6 @@
         }
 
         [data-theme="light"] .yt-hamburger,
-        [data-theme="light"] .navbar-brand-custom,
         [data-theme="light"] .yt-logo-icon i,
         [data-theme="light"] .yt-sidebar,
         [data-theme="light"] .yt-side-item,
@@ -142,6 +141,12 @@
         [data-theme="light"] .yt-mic-btn,
         [data-theme="light"] .back-to-top-btn {
             color: var(--rc-text);
+        }
+
+        /* .navbar-brand-custom ở giao diện tối dùng color: #fff !important
+           nên phải chỉ định !important ở đây mới ghi đè được. */
+        [data-theme="light"] .navbar-brand-custom {
+            color: var(--rc-text) !important;
         }
 
         [data-theme="light"] .yt-hamburger:hover,
@@ -293,12 +298,26 @@
         }
 
         .navbar-custom {
-            background: rgba(15, 15, 15, 0.55) !important;
-            backdrop-filter: blur(18px) saturate(140%);
-            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            background: rgba(12, 12, 12, 0.6) !important;
+            backdrop-filter: blur(22px) saturate(160%);
+            -webkit-backdrop-filter: blur(22px) saturate(160%);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             padding: 0;
             z-index: 1050;
+            position: relative;
+        }
+
+        /* Vệt sáng đỏ rất mảnh dưới thanh nav - tạo cảm giác "đèn viền" tinh
+           tế thay vì đường kẻ phẳng, đồng bộ với glow đỏ ở hero. */
+        .navbar-custom::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -1px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(229, 9, 20, 0.55), transparent);
+            pointer-events: none;
         }
 
         .navbar-custom .container-fluid {
@@ -345,11 +364,15 @@
             align-items: center;
             gap: 6px;
             color: #fff !important;
-            font-weight: 700;
+            font-weight: 800;
             font-size: 1.3rem;
             letter-spacing: -0.5px;
             text-decoration: none;
             white-space: nowrap;
+        }
+
+        .navbar-brand-custom .brand-accent {
+            color: var(--netflix-red, #e50914);
         }
 
         .yt-logo-icon {

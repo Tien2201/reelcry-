@@ -269,6 +269,20 @@ public class MovieService {
                 .onErrorResume(e -> Mono.empty());
     }
 
+    // Kiểm tra phim có trailer hay không - dùng cho tính năng lọc "chỉ hiện
+    // phim có trailer" trên trang chủ. Tận dụng lại cache chi tiết phim sẵn có
+    // (getDetail) nên không tốn thêm bộ nhớ/cache riêng, và nếu người dùng sau
+    // đó mở trang chi tiết của phim này thì cũng không phải gọi lại API.
+    public Mono<Boolean> hasTrailer(String slug, String source) {
+        return getDetail(slug, source)
+                .map(detail -> {
+                    var item = detail.getActualItem();
+                    return item != null && item.getTrailer_url() != null && !item.getTrailer_url().isBlank();
+                })
+                .defaultIfEmpty(false)
+                .onErrorReturn(false);
+    }
+
     // Fix lỗi getMoviesByFilter: nhận thêm tham số source
     public Mono<MovieResponse> getMoviesByFilter(String category, String slug, int page, String source) {
         String path = "kkphim".equalsIgnoreCase(source) ? "/v1/api/danh-sach/" : "/v1/api/";

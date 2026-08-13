@@ -25,6 +25,10 @@
     margin-bottom: 12px;
 }
 
+.footer-brand-accent {
+    color: var(--primary-red, #e50914);
+}
+
 .footer-desc {
     color: #888;
     font-size: 0.82rem;

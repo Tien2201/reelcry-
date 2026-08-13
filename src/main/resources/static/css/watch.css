@@ -42,7 +42,7 @@
 
     .video-container {
       background: #000;
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -84,7 +84,7 @@
       background: rgba(255, 255, 255, 0.04);
       backdrop-filter: blur(16px) saturate(140%);
       -webkit-backdrop-filter: blur(16px) saturate(140%);
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 20px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       height: 100%;
@@ -429,6 +429,7 @@
       border-color: rgba(229, 9, 20, 0.3);
       border-left-color: var(--primary-red);
       color: #fff;
+      box-shadow: 0 0 18px rgba(229, 9, 20, 0.15) inset;
     }
 
     .ep-btn.active .ep-num {

@@ -64,6 +64,7 @@ public class MovieResponse implements Serializable {
         private String quality;
         private String lang;
         private ModifiedInfo modified;
+        private TmdbInfo tmdb;
 
         // Không lấy từ JSON - tự set trong code để biết phim này lấy từ nguồn nào (ophim/kkphim)
         private transient String source;
@@ -78,6 +79,21 @@ public class MovieResponse implements Serializable {
             }
             return "https://img.ophim.live/uploads/movies/" + path;
         }
+
+        // Điểm đánh giá TMDB dạng chuỗi 1 chữ số thập phân, null nếu chưa có
+        // dữ liệu đánh giá (vote_average = 0 hoặc không tồn tại) để template
+        // dễ dùng th:if mà không cần so sánh số.
+        public String getRatingDisplay() {
+            if (tmdb == null || tmdb.getVote_average() == null || tmdb.getVote_average() <= 0) return null;
+            return String.format("%.1f", tmdb.getVote_average());
+        }
+    }
+
+    @Data
+    public static class TmdbInfo implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private Double vote_average;
+        private Integer vote_count;
     }
 
     @Data

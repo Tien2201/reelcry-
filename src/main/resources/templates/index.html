@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" th:href="@{/css/index.css(v=11)}">
+    <link rel="stylesheet" th:href="@{/css/index.css(v=14)}">
 </head>
 
 <body>
@@ -178,6 +178,9 @@
                                             <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                                         </button>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                        <div class="movie-rating-badge" th:if="${movie.ratingDisplay != null}">
+                                            <i class="fas fa-star"></i><span th:text="${movie.ratingDisplay}"></span>
+                                        </div>
                                     </div>
                                     <div class="movie-info">
                                         <div class="movie-title" th:text="${movie.name}"></div>
@@ -224,6 +227,9 @@
                                             <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                                         </button>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                                        <div class="movie-rating-badge" th:if="${movie.ratingDisplay != null}">
+                                            <i class="fas fa-star"></i><span th:text="${movie.ratingDisplay}"></span>
+                                        </div>
                                     </div>
                                     <div class="movie-info">
                                         <div class="movie-title" th:text="${movie.name}"></div>
@@ -263,6 +269,11 @@
 
         <div class="section-title-row">
             <h2 class="section-title" th:text="${title != null ? title : 'Phim Mới Cập Nhật'}"></h2>
+            <button type="button" class="trailer-filter-btn" id="trailerFilterBtn">
+                <i class="fas fa-film"></i>
+                <i class="fas fa-spinner"></i>
+                <span>Chỉ phim có trailer</span>
+            </button>
         </div>
 
         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xl-6 g-3 g-md-4">
@@ -285,6 +296,9 @@
                                 <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                             </button>
                             <div class="play-icon"><i class="fas fa-play-circle"></i></div>
+                            <div class="movie-rating-badge" th:if="${movie.ratingDisplay != null}">
+                                <i class="fas fa-star"></i><span th:text="${movie.ratingDisplay}"></span>
+                            </div>
                         </div>
 
                         <div class="movie-info">
@@ -547,6 +561,82 @@
 
             document.querySelectorAll('.movie-card').forEach(function (el) {
                 observer.observe(el);
+            });
+        })();
+    </script>
+    <script>
+        // Nút lọc "Chỉ phim có trailer" - chỉ áp dụng cho các dải phim động
+        // (hoạt hình, chiếu rạp, danh sách chính) vì đây mới có nút "+" yêu
+        // thích với data-slug/data-source; danh sách "đã xem"/"yêu thích" của
+        // riêng người dùng không lọc vì mang tính cá nhân, không phải để duyệt.
+        (function () {
+            var btn = document.getElementById('trailerFilterBtn');
+            if (!btn) return;
+
+            var active = false;
+            var checked = {}; // cache "slug|source" -> true/false, để bật/tắt lại không phải gọi lại API
+
+            function collectCards() {
+                return Array.prototype.map.call(document.querySelectorAll('.quick-fav-btn[data-slug]'), function (b) {
+                    var card = b.closest('.movie-card');
+                    var wrap = card ? (card.closest('.vn-card-wrap') || card.closest('.col')) : null;
+                    return { slug: b.dataset.slug, source: b.dataset.source || 'ophim', wrap: wrap };
+                }).filter(function (c) { return c.wrap && c.slug; });
+            }
+
+            function applyFilter(cards) {
+                cards.forEach(function (c) {
+                    var has = checked[c.slug + '|' + c.source];
+                    c.wrap.style.display = has ? '' : 'none';
+                });
+            }
+
+            function showAll(cards) {
+                cards.forEach(function (c) { c.wrap.style.display = ''; });
+            }
+
+            function setLoading(isLoading) {
+                btn.classList.toggle('loading', isLoading);
+                btn.disabled = isLoading;
+            }
+
+            btn.addEventListener('click', function () {
+                active = !active;
+                btn.classList.toggle('active', active);
+                var cards = collectCards();
+
+                if (!active) {
+                    showAll(cards);
+                    return;
+                }
+
+                var toCheck = cards.filter(function (c) { return !((c.slug + '|' + c.source) in checked); });
+
+                if (toCheck.length === 0) {
+                    applyFilter(cards);
+                    return;
+                }
+
+                setLoading(true);
+                fetch('/api/movies/trailer-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: toCheck.map(function (c) { return { slug: c.slug, source: c.source }; })
+                    })
+                })
+                    .then(function (res) { return res.ok ? res.json() : {}; })
+                    .then(function (data) {
+                        Object.keys(data).forEach(function (k) { checked[k] = data[k]; });
+                        applyFilter(cards);
+                    })
+                    .catch(function (e) {
+                        console.error('Reelcry trailer-check error', e);
+                        // Lỗi mạng: không lọc được thì tắt trạng thái active để tránh gây hiểu nhầm
+                        active = false;
+                        btn.classList.remove('active');
+                    })
+                    .finally(function () { setLoading(false); });
             });
         })();
     </script>

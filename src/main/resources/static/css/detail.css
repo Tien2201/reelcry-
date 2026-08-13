@@ -443,7 +443,7 @@
             color: white;
             text-decoration: none;
             padding: 14px 28px;
-            border-radius: 15px;
+            border-radius: 20px;
             font-weight: 700;
             transition: 0.4s;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -511,6 +511,7 @@
         .cast-avatar-item:hover .cast-avatar {
             border-color: var(--primary-red);
             transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(229, 9, 20, 0.3);
         }
 
         .cast-avatar img {
@@ -672,12 +673,18 @@
             position: relative;
             width: 100%;
             aspect-ratio: 2 / 3;
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
             background: linear-gradient(100deg, #1a1a1a 30%, #262626 50%, #1a1a1a 70%);
             background-size: 200% 100%;
             animation: imgShimmer 1.6s ease-in-out infinite;
             border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .related-card:hover .related-img-wrap {
+            border-color: rgba(229, 9, 20, 0.55);
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.55), 0 0 24px rgba(229, 9, 20, 0.16);
         }
 
         @keyframes imgShimmer {

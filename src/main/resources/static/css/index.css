@@ -215,6 +215,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
             margin: 46px 0 18px;
         }
 
@@ -708,7 +710,8 @@
             }
 
             .badge-status,
-            .badge-year {
+            .badge-year,
+            .movie-rating-badge {
                 font-size: 0.58rem;
                 padding: 2px 6px;
             }
@@ -1540,6 +1543,14 @@ input:checked+.check-visual {
 @media (prefers-reduced-motion: reduce) {
     .trailer-filter-btn.loading .fa-spinner {
         animation: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .trailer-filter-btn {
+        font-size: 0.74rem;
+        padding: 8px 14px;
+        min-height: 40px;
     }
 }
 

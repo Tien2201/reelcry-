@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0; url=/">
+    <title>Reelcry</title>
+    <script>
+        // Lỗi 403 thường chỉ do phiên/token hết hạn (mở trang quá lâu, vừa
+        // đăng nhập nơi khác...) chứ không phải web bị sập, nên thay vì hiện
+        // trang lỗi gây hoang mang, chuyển thẳng về trang chủ luôn cho gọn.
+        // Dùng cả JS lẫn meta refresh ở trên để chắc chắn chuyển được kể cả
+        // khi JS bị tắt.
+        window.location.replace('/');
+    </script>
+</head>
+<body></body>
+</html>

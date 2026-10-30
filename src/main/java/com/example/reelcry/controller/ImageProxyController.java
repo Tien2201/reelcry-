@@ -124,7 +124,12 @@ public class ImageProxyController {
 
     @GetMapping("/img-proxy")
     public ResponseEntity<byte[]> proxyImage(@RequestParam String url) {
-        URI uri = URI.create(url);
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
         String host = uri.getHost();
 
         if (host == null || !ALLOWED_HOSTS.contains(host)) {
@@ -136,13 +141,16 @@ public class ImageProxyController {
             return buildResponse(url, cached);
         }
 
+        // Thử tối đa 2 lần: trước đây 5 lần x timeout 5 giây = 1 ảnh lỗi có thể
+        // giữ 1 trong 6 "suất" tải song song tới 25 giây, làm các ảnh khác xếp
+        // hàng chờ theo -> cả trang load ảnh rất chậm
         byte[] bytes = null;
-        for (int attempt = 1; attempt <= 5 && bytes == null; attempt++) {
+        for (int attempt = 1; attempt <= 2 && bytes == null; attempt++) {
             bytes = tryFetch(uri, url, attempt);
         }
 
         if (bytes == null) {
-            System.err.println("[img-proxy] Thất bại sau 3 lần thử: " + url);
+            System.err.println("[img-proxy] Thất bại sau 2 lần thử: " + url);
             return ResponseEntity.notFound().build();
         }
 
@@ -156,10 +164,12 @@ public class ImageProxyController {
     }
 
     private ResponseEntity<byte[]> buildResponse(String url, byte[] bytes) {
-        String contentType = url.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+        String lower = url.toLowerCase();
+        String contentType = lower.endsWith(".png") ? "image/png"
+                : lower.endsWith(".webp") ? "image/webp" : "image/jpeg";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, contentType)
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800")
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800, immutable")
                 .body(bytes);
     }
 

@@ -9,6 +9,9 @@
     <link rel="manifest" th:href="@{/manifest.json}">
     <meta name="theme-color" content="#0a0a0a">
     <link rel="apple-touch-icon" th:href="@{/images/icon-192.png}">
+    <link rel="icon" type="image/svg+xml" th:href="@{/images/logo-mark.svg}">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;600;700;800&display=swap"
@@ -24,7 +27,7 @@
     <div th:if="${notice == 'missing_source'}"
         style="background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.35); color: #ffc107; padding: 12px 20px; text-align: center; font-size: 0.9rem;">
         <i class="fas fa-triangle-exclamation"></i>
-        Phim này chưa có trên Server 2 (KKPhim) — đang hiển thị Server 1 (OPhim).
+        Phim này hiện chưa có tập nào xem được, bạn quay lại sau nhé.
     </div>
     <div class="hero-page-wrap">
         <div class="hero-card">
@@ -69,13 +72,9 @@
                         </button>
 
                         <div class="hero-socials mt-4">
-                            <a href="#"><i class="fab fa-facebook"></i></a>
-                            <a href="#"><i class="fab fa-twitter"></i></a>
-                            <a href="#"
-                                onclick="navigator.share ? navigator.share({title: document.title, url: location.href}) : alert('Đã sao chép link!')"><i
-                                    class="fas fa-share-alt"></i></a>
-                            <a href="#" id="favoriteBtn" onclick="toggleFavorite(event)"><i class="fas fa-heart"
-                                    id="favoriteIcon"></i></a>
+                            <a href="#" data-share="facebook" aria-label="Chia sẻ lên Facebook"><i class="fab fa-facebook"></i></a>
+                            <a href="#" data-share="x" aria-label="Chia sẻ lên X"><i class="fab fa-twitter"></i></a>
+                            <a href="#" data-share="native" aria-label="Chia sẻ / sao chép link"><i class="fas fa-share-alt"></i></a>
                         </div>
                     </div>
 
@@ -127,7 +126,7 @@
         </div>
     </section>
 
-    <section class="server-section-wrap">
+    <section class="server-section-wrap" th:if="${episodes != null and !episodes.isEmpty()}">
         <h3 class="section-heading">Chọn server</h3>
         <div class="d-flex gap-3 flex-wrap server-list">
             <a th:each="server, iter : ${episodes}"
@@ -159,12 +158,11 @@
         <h3 class="section-heading">Đạo diễn</h3>
         <div class="cast-row">
             <div class="cast-avatar-item" th:each="dName : ${movie.director}"
-                th:with="match=${actors != null ? actors.?[name == dName] : null}">
+                th:if="${dName != null and !#strings.isEmpty(dName)}"
+                th:with="photo=${directorPhotos != null ? directorPhotos[dName] : null}">
                 <div class="cast-avatar">
-                    <img th:if="${match != null and !match.isEmpty() and match[0].getProfilePhotoUrl() != null}"
-                        th:src="${match[0].getProfilePhotoUrl()}" th:alt="${dName}" loading="lazy">
-                    <i th:unless="${match != null and !match.isEmpty() and match[0].getProfilePhotoUrl() != null}"
-                        class="fas fa-user-tie"></i>
+                    <img th:if="${photo != null}" th:src="${photo}" th:alt="${dName}" loading="lazy">
+                    <i th:unless="${photo != null}" class="fas fa-user-tie"></i>
                 </div>
                 <span class="cast-name" th:text="${dName}"></span>
             </div>
@@ -218,6 +216,27 @@
                     trailerIframe.src = '';
                 });
             }
+        })();
+
+        // Nút chia sẻ: Facebook / X mở cửa sổ chia sẻ thật; nút còn lại dùng
+        // bảng chia sẻ của điện thoại, máy tính thì sao chép link vào clipboard
+        (function () {
+            document.querySelectorAll('[data-share]').forEach(function (a) {
+                a.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var url = location.origin + location.pathname;
+                    var type = a.dataset.share;
+                    if (type === 'facebook') {
+                        window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url), '_blank', 'noopener,width=620,height=560');
+                    } else if (type === 'x') {
+                        window.open('https://twitter.com/intent/tweet?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(document.title), '_blank', 'noopener,width=620,height=560');
+                    } else if (navigator.share) {
+                        navigator.share({ title: document.title, url: url }).catch(function () { });
+                    } else if (navigator.clipboard) {
+                        navigator.clipboard.writeText(url).then(function () { alert('Đã sao chép link phim!'); });
+                    }
+                });
+            });
         })();
 
         (function () {

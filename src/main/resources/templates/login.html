@@ -12,7 +12,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <link rel="icon" type="image/svg+xml" th:href="@{/images/logo-mark.svg}">
     <link rel="stylesheet" th:href="@{/css/login.css(v=6)}">
+    <link rel="stylesheet" th:href="@{/css/modern.css(v=1)}">
     <script>
         // Trang đăng nhập không có header (chưa đăng nhập) nên không có nút
         // bấm đổi giao diện ở đây, nhưng vẫn tôn trọng lựa chọn sáng/tối đã
@@ -35,6 +37,7 @@
 <a href="/" class="login-back"><i class="fas fa-chevron-left"></i> Về trang chủ</a>
 
 <div class="login-card">
+    <img class="login-logo-mark" th:src="@{/images/logo-mark.svg}" alt="" width="64" height="64">
     <div class="login-logo">REEL<span class="login-logo-accent">CRY</span></div>
     <div class="login-subtitle">Đăng nhập để tiếp tục xem phim</div>
 

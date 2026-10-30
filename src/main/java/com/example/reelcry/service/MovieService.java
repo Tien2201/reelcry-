@@ -1,11 +1,15 @@
 package com.example.reelcry.service;
 
 import com.example.reelcry.dto.*;
+import io.netty.channel.ChannelOption;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -15,23 +19,25 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
+// LƯU Ý (10/2026): API OPhim (ophim1.com) đã ngừng hoạt động hẳn (trang chủ
+// báo "website has been stopped", mọi endpoint trả 404) -> toàn bộ dữ liệu
+// giờ lấy từ KKPhim (phimapi.com). Tham số "source" vẫn được giữ ở các hàm
+// public để tương thích link/lịch sử xem cũ (src=ophim), nhưng bị bỏ qua.
 @Service
 public class MovieService {
     private final WebClient webClient;
-    private final String OPHIM_BASE = "https://ophim1.com";
-    private final String KKPHIM_BASE = "https://kkphim.vip";
-    private final String KKPHIM_API_BASE = "https://phimapi.com";
+    private static final String API_BASE = "https://phimapi.com";
+
+    // Giới hạn thời gian chờ API ngoài: trước đây MovieService dùng
+    // WebClient.Builder mặc định (KHÔNG có timeout) nên khi API ngoài treo,
+    // cả trang web treo theo, người dùng chỉ thấy màn hình trắng rất lâu
+    private static final Duration API_TIMEOUT = Duration.ofSeconds(10);
 
     // Cache thủ công (TTL) cho các danh sách phim trang chủ - tránh gọi lại API
-    // ngoài (OPhim/KKPhim) mỗi lượt truy cập, vì danh sách "mới cập nhật" ít
-    // thay đổi trong vài phút
+    // ngoài mỗi lượt truy cập, vì danh sách "mới cập nhật" ít thay đổi trong vài phút
     private static final long LIST_CACHE_TTL_MS = 3 * 60 * 1000; // 3 phút
     // QUAN TRỌNG: phải giới hạn kích thước + tự evict entry cũ nhất (LRU), nếu
-    // không map này sẽ phình to vô hạn theo thời gian chạy (mỗi trang/mỗi
-    // category khác nhau từng được xem sẽ nằm mãi trong RAM) -> nguyên nhân
-    // chính gây OOM (Render báo "Ran out of memory (used over 512MB)") sau
-    // vài chục phút có traffic. Trước đây dùng ConcurrentHashMap thường,
-    // không bao giờ xoá bớt.
+    // không map này sẽ phình to vô hạn theo thời gian chạy -> Render OOM (512MB)
     private static final int LIST_CACHE_MAX_SIZE = 60;
     private final Map<String, CachedList> listCache = boundedCache(LIST_CACHE_MAX_SIZE);
 
@@ -50,32 +56,25 @@ public class MovieService {
     }
 
     // Trả về bản cache còn hạn nếu có, nếu không thì gọi loader rồi lưu lại kết
-    // quả. Lưu ý: không cache Mono trực tiếp (Mono nguội sẽ gọi lại API mỗi lần
-    // subscribe), mà cache giá trị List đã resolve.
+    // quả. Không cache danh sách rỗng (API lỗi tạm thời) để lần sau thử lại.
     private Mono<List<MovieResponse.MovieItem>> getCachedList(String key,
             Supplier<Mono<List<MovieResponse.MovieItem>>> loader) {
         CachedList cached = listCache.get(key);
         if (cached != null && !cached.isExpired()) {
             return Mono.just(cached.data);
         }
-        return loader.get().doOnNext(data -> listCache.put(key, new CachedList(data)));
+        return loader.get().doOnNext(data -> {
+            if (!data.isEmpty()) listCache.put(key, new CachedList(data));
+        });
     }
 
-    // Cache riêng cho chi tiết phim (kèm episodes) - vì mỗi lần bấm "Xem ngay",
-    // đổi tập, đổi server đều gọi lại getDetail() với CÙNG slug+source, dù
-    // thông tin phim không hề đổi trong vài phút -> gây chậm rõ rệt, nhất là
-    // trên mobile (thêm 1 chặng gọi API ngoài mỗi lần bấm)
+    // Cache riêng cho chi tiết phim (kèm episodes) - mỗi lần bấm "Xem ngay",
+    // đổi tập, đổi server đều gọi lại getDetail() với CÙNG slug
     private static final long DETAIL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
-    // Cùng lý do như listCache ở trên: mỗi phim khác nhau từng được mở trang
-    // chi tiết sẽ tạo 1 key mới, nếu không giới hạn thì cache này là nguyên
-    // nhân lớn nhất gây rò rỉ RAM (web phim có hàng nghìn phim, mỗi response
-    // chi tiết lại khá nặng do chứa toàn bộ danh sách tập/server).
     private static final int DETAIL_CACHE_MAX_SIZE = 150;
     private final Map<String, CachedDetail> detailCache = boundedCache(DETAIL_CACHE_MAX_SIZE);
 
-    // Cache LRU an toàn luồng: tự động xoá entry cũ nhất (ít dùng gần đây
-    // nhất) khi vượt quá kích thước tối đa, thay vì phình to mãi không kiểm
-    // soát như ConcurrentHashMap thường.
+    // Cache LRU an toàn luồng: tự động xoá entry cũ nhất khi vượt quá kích thước tối đa
     private static <K, V> Map<K, V> boundedCache(int maxSize) {
         return Collections.synchronizedMap(new LinkedHashMap<K, V>(16, 0.75f, true) {
             @Override
@@ -100,73 +99,38 @@ public class MovieService {
     }
 
     public MovieService(WebClient.Builder builder) {
+        HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .responseTimeout(Duration.ofSeconds(8));
+
         this.webClient = builder
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                // Mặc định chỉ 256KB: JSON chi tiết của phim bộ dài (vài trăm/
+                // nghìn tập) vượt mức này -> lỗi -> trang chi tiết bị đá về trang chủ
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(8 * 1024 * 1024))
                 .defaultHeader(HttpHeaders.USER_AGENT,
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-                .defaultHeader(HttpHeaders.REFERER, "https://ophim1.com/")
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
                 .build();
     }
 
-    private String getBaseUrl(String source) {
-        return "kkphim".equalsIgnoreCase(source) ? KKPHIM_BASE : OPHIM_BASE;
-    }
-
-    public Mono<MovieResponse> getHomeData(int page) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve()
-                .bodyToMono(MovieResponse.class);
-    }
-
-    // ===== KKPhim (phimapi.com) - dùng để gộp chung vào danh sách trang chủ =====
-    public Mono<MovieResponse> getHomeDataKK(int page) {
-        return webClient.get().uri(KKPHIM_API_BASE + "/danh-sach/phim-moi-cap-nhat?page=" + page).retrieve()
-                .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
-    }
-
-    public Mono<MovieResponse> getMoviesByCountryKK(String countrySlug, int page) {
-        return webClient.get()
-                .uri(KKPHIM_API_BASE + "/v1/api/quoc-gia/" + countrySlug + "?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
+    // Gọi 1 endpoint danh sách của KKPhim; lỗi/timeout trả về danh sách rỗng
+    // thay vì làm hỏng cả trang. uriVars được encode đúng chuẩn (từ khoá tìm
+    // kiếm có dấu cách, "&", "#"... không còn làm vỡ URL như trước)
+    private Mono<MovieResponse> fetchList(String uriTemplate, Object... uriVars) {
+        return webClient.get().uri(API_BASE + uriTemplate, uriVars)
                 .retrieve()
                 .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
+                .timeout(API_TIMEOUT)
+                .onErrorReturn(new MovieResponse())
+                .defaultIfEmpty(new MovieResponse());
     }
 
-    // Phim hoạt hình / anime
-    public Mono<MovieResponse> getAnimeMovies(int page) {
-        return webClient.get()
-                .uri(OPHIM_BASE + "/v1/api/danh-sach/hoat-hinh?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
-                .retrieve()
-                .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
+    private Mono<List<MovieResponse.MovieItem>> fetchItems(String uriTemplate, Object... uriVars) {
+        return fetchList(uriTemplate, uriVars).map(r -> mergeAndSort(null, r.getActualItems()));
     }
 
-    public Mono<MovieResponse> getAnimeMoviesKK(int page) {
-        return webClient.get()
-                .uri(KKPHIM_API_BASE + "/v1/api/danh-sach/hoat-hinh?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
-                .retrieve()
-                .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
-    }
-
-    public Mono<MovieResponse> getCinemaMoviesKK(int page) {
-        return webClient.get()
-                .uri(KKPHIM_API_BASE + "/v1/api/danh-sach/phim-chieu-rap?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
-                .retrieve()
-                .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
-    }
-
-    public Mono<MovieResponse> searchMoviesKK(String keyword) {
-        return webClient.get().uri(KKPHIM_API_BASE + "/v1/api/tim-kiem?keyword=" + keyword).retrieve()
-                .bodyToMono(MovieResponse.class)
-                .onErrorReturn(new MovieResponse());
-    }
-
-    // Gộp danh sách từ OPhim + KKPhim: gắn nguồn, loại trùng theo slug, sắp xếp theo thời gian cập nhật mới nhất
+    // Gắn nguồn, loại trùng theo slug, sắp xếp theo thời gian cập nhật mới nhất.
+    // Giữ lại 2 tham số (từ thời còn gộp OPhim + KKPhim) để không phải sửa test.
     // Lưu ý: để package-private (không phải private) để unit test gọi trực tiếp được
     List<MovieResponse.MovieItem> mergeAndSort(List<MovieResponse.MovieItem> ophimItems,
             List<MovieResponse.MovieItem> kkphimItems) {
@@ -205,74 +169,46 @@ public class MovieService {
         return merged;
     }
 
-    // Gọi song song OPhim + KKPhim rồi gộp lại, dùng cho trang chủ (có cache TTL)
+    // Trang chủ (có cache TTL)
     public Mono<List<MovieResponse.MovieItem>> getHomeDataMerged(int page) {
-        return getCachedList("home_" + page, () -> Mono.zip(
-                getHomeData(page).onErrorReturn(new MovieResponse()),
-                getHomeDataKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
-    }
-
-    public Mono<List<MovieResponse.MovieItem>> getMoviesByCountryMerged(String countrySlug, int page) {
-        return Mono.zip(
-                getMoviesByCountry(countrySlug, page).onErrorReturn(new MovieResponse()),
-                getMoviesByCountryKK(countrySlug, page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+        return getCachedList("home_" + page,
+                () -> fetchItems("/danh-sach/phim-moi-cap-nhat-v3?page={page}", page));
     }
 
     public Mono<List<MovieResponse.MovieItem>> getCinemaMoviesMerged(int page) {
-        return getCachedList("cinema_" + page, () -> Mono.zip(
-                getCinemaMovies(page).onErrorReturn(new MovieResponse()),
-                getCinemaMoviesKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
+        return getCachedList("cinema_" + page, () -> fetchItems(
+                "/v1/api/danh-sach/phim-chieu-rap?page={page}&sort_field=modified.time&sort_type=desc", page));
     }
 
     public Mono<List<MovieResponse.MovieItem>> getAnimeMoviesMerged(int page) {
-        return getCachedList("anime_" + page, () -> Mono.zip(
-                getAnimeMovies(page).onErrorReturn(new MovieResponse()),
-                getAnimeMoviesKK(page))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems())));
+        return getCachedList("anime_" + page, () -> fetchItems(
+                "/v1/api/danh-sach/hoat-hinh?page={page}&sort_field=modified.time&sort_type=desc", page));
     }
 
     public Mono<List<MovieResponse.MovieItem>> searchMoviesMerged(String keyword) {
-        return Mono.zip(
-                searchMovies(keyword).onErrorReturn(new MovieResponse()),
-                searchMoviesKK(keyword))
-                .map(t -> mergeAndSort(t.getT1().getActualItems(), t.getT2().getActualItems()));
+        return fetchItems("/v1/api/tim-kiem?keyword={keyword}&limit=48", keyword);
     }
 
-    // Fix lỗi getDetail: nhận 2 tham số slug và source (có cache TTL 5 phút)
+    // Chi tiết phim (có cache TTL 5 phút). "source" bị bỏ qua - xem ghi chú đầu class
     public Mono<MovieDetailResponse> getDetail(String slug, String source) {
-        String cacheKey = (source == null ? "ophim" : source.toLowerCase()) + "_" + slug;
-        CachedDetail cached = detailCache.get(cacheKey);
+        CachedDetail cached = detailCache.get(slug);
         if (cached != null && !cached.isExpired()) {
             return Mono.just(cached.data);
         }
 
-        String finalUrl;
-
-        if ("kkphim".equalsIgnoreCase(source)) {
-            // Theo ảnh: https://phimapi.com/phim/{slug}
-            finalUrl = "https://phimapi.com/phim/" + slug;
-        } else {
-            // Theo OPhim: https://ophim1.com/v1/api/phim/{slug}
-            finalUrl = "https://ophim1.com/v1/api/phim/" + slug;
-        }
-
         return this.webClient.get()
-                .uri(finalUrl)
-                .header(HttpHeaders.USER_AGENT, "Mozilla/5.0 ...")
+                .uri(API_BASE + "/phim/{slug}", slug)
                 .retrieve()
-                .onStatus(status -> status.isError(), response -> Mono.empty())
                 .bodyToMono(MovieDetailResponse.class)
-                .doOnNext(data -> detailCache.put(cacheKey, new CachedDetail(data)))
+                .timeout(API_TIMEOUT)
+                .doOnNext(data -> {
+                    if (data.isSuccess()) detailCache.put(slug, new CachedDetail(data));
+                })
                 .onErrorResume(e -> Mono.empty());
     }
 
     // Kiểm tra phim có trailer hay không - dùng cho tính năng lọc "chỉ hiện
     // phim có trailer" trên trang chủ. Tận dụng lại cache chi tiết phim sẵn có
-    // (getDetail) nên không tốn thêm bộ nhớ/cache riêng, và nếu người dùng sau
-    // đó mở trang chi tiết của phim này thì cũng không phải gọi lại API.
     public Mono<Boolean> hasTrailer(String slug, String source) {
         return getDetail(slug, source)
                 .map(detail -> {
@@ -283,41 +219,23 @@ public class MovieService {
                 .onErrorReturn(false);
     }
 
-    // Fix lỗi getMoviesByFilter: nhận thêm tham số source
+    // Lọc theo thể loại / quốc gia / danh sách (category = the-loai | quoc-gia | danh-sach)
     public Mono<MovieResponse> getMoviesByFilter(String category, String slug, int page, String source) {
-        String path = "kkphim".equalsIgnoreCase(source) ? "/v1/api/danh-sach/" : "/v1/api/";
-        return webClient.get().uri(getBaseUrl(source) + path + category + "/" + slug + "?page=" + page).retrieve()
-                .bodyToMono(MovieResponse.class);
+        return fetchList("/v1/api/{category}/{slug}?page={page}&sort_field=modified.time&sort_type=desc",
+                category, slug, page)
+                .doOnNext(r -> mergeAndSort(null, r.getActualItems()));
     }
 
-    // Fix lỗi getMoviesByCountry: Thêm hàm này vào Service
-    public Mono<MovieResponse> getMoviesByCountry(String countrySlug, int page) {
-        return webClient.get()
-                .uri(OPHIM_BASE + "/v1/api/quoc-gia/" + countrySlug + "?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
-                .retrieve()
-                .bodyToMono(MovieResponse.class);
-    }
-
-    // Phim chiếu rạp, sắp xếp theo mới cập nhật nhất
-    public Mono<MovieResponse> getCinemaMovies(int page) {
-        return webClient.get()
-                .uri(OPHIM_BASE + "/v1/api/danh-sach/phim-chieu-rap?page=" + page
-                        + "&sort_field=modified.time&sort_type=desc")
-                .retrieve()
-                .bodyToMono(MovieResponse.class);
-    }
-
-    // Fix lỗi getPeoples: Thêm hàm này vào Service
     public Mono<MoviePeoplesResponse> getPeoples(String slug) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/phim/" + slug + "/peoples").retrieve()
+        return webClient.get().uri(API_BASE + "/v1/api/phim/{slug}/peoples", slug).retrieve()
                 .bodyToMono(MoviePeoplesResponse.class)
-                .onErrorReturn(new MoviePeoplesResponse());
+                .timeout(Duration.ofSeconds(5))
+                .onErrorReturn(new MoviePeoplesResponse())
+                .defaultIfEmpty(new MoviePeoplesResponse());
     }
 
-    // Danh sách thể loại/quốc gia gần như không bao giờ đổi, nhưng bị gọi TRƯỚC
-    // MỌI request (qua GlobalControllerAdvice) -> cache dài hạn (12 giờ) để
-    // không tốn thêm 2 lệnh gọi API ngoài mỗi lần vào bất kỳ trang nào
+    // Danh sách thể loại/quốc gia gần như không bao giờ đổi, nhưng hiện trên
+    // MỌI trang (menu bên trái) -> cache dài hạn (12 giờ)
     private static final long CATEGORY_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 giờ
     private volatile CategoryResponse cachedGenres;
     private volatile long cachedGenresTime;
@@ -328,7 +246,8 @@ public class MovieService {
         if (cachedGenres != null && System.currentTimeMillis() - cachedGenresTime < CATEGORY_CACHE_TTL_MS) {
             return Mono.just(cachedGenres);
         }
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/the-loai").retrieve().bodyToMono(CategoryResponse.class)
+        return webClient.get().uri(API_BASE + "/the-loai").retrieve().bodyToMono(CategoryResponse.class)
+                .timeout(API_TIMEOUT)
                 .doOnNext(data -> {
                     cachedGenres = data;
                     cachedGenresTime = System.currentTimeMillis();
@@ -339,15 +258,11 @@ public class MovieService {
         if (cachedCountries != null && System.currentTimeMillis() - cachedCountriesTime < CATEGORY_CACHE_TTL_MS) {
             return Mono.just(cachedCountries);
         }
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/quoc-gia").retrieve().bodyToMono(CategoryResponse.class)
+        return webClient.get().uri(API_BASE + "/quoc-gia").retrieve().bodyToMono(CategoryResponse.class)
+                .timeout(API_TIMEOUT)
                 .doOnNext(data -> {
                     cachedCountries = data;
                     cachedCountriesTime = System.currentTimeMillis();
                 });
-    }
-
-    public Mono<MovieResponse> searchMovies(String keyword) {
-        return webClient.get().uri(OPHIM_BASE + "/v1/api/tim-kiem?keyword=" + keyword).retrieve()
-                .bodyToMono(MovieResponse.class);
     }
 }

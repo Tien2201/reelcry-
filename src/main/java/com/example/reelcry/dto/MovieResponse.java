@@ -32,6 +32,8 @@ public class MovieResponse implements Serializable {
         private static final long serialVersionUID = 1L;
         private List<MovieItem> items;
         private MovieParams params;
+        // KKPhim trả tên trang (VD: "Hành Động") ở đây thay vì params.title như OPhim
+        private String titlePage;
     }
 
     @Data

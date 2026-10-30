@@ -1,0 +1,439 @@
+/* =====================================================================
+   REELCRY - lớp giao diện hiện đại + hiệu ứng 3D (nạp SAU các file CSS
+   riêng của từng trang, nên ghi đè được). Gồm 3 phần:
+     1. Sửa hiệu năng (giảm lag cuộn trên điện thoại)
+     2. Logo, thanh điều hướng, nền, tiêu đề, nút
+     3. Hiệu ứng 3D: card nghiêng theo chuột + vệt sáng, hero parallax
+   Mọi hiệu ứng chuyển động đều tắt khi người dùng bật "giảm chuyển động".
+   ===================================================================== */
+
+:root {
+    --rc-accent: #e50914;
+    --rc-accent-2: #ff4d6d;
+    --rc-accent-3: #ff8a3d;
+    --rc-grad: linear-gradient(135deg, #ff4d6d 0%, #e50914 48%, #ff8a3d 100%);
+    --rc-grad-soft: linear-gradient(135deg, rgba(255, 77, 109, 0.18), rgba(255, 138, 61, 0.12));
+    --rc-radius: 14px;
+    --rc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- 1. HIỆU NĂNG ---------- */
+
+/* backdrop-filter trên TỪNG card (60+ card/trang) bắt GPU làm mờ lại liên tục
+   khi cuộn -> nguyên nhân chính gây giật/lag trên điện thoại. Dùng nền bán
+   trong suốt thường trông gần như giống hệt mà nhẹ hơn rất nhiều. */
+.movie-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+    border-radius: var(--rc-radius);
+}
+
+/* Shimmer chờ ảnh chạy vô hạn kể cả khi ảnh đã hiện -> trình duyệt vẽ lại
+   liên tục sau lưng ảnh. modern.js gắn .is-loaded khi ảnh tải xong để dừng. */
+.movie-img-container.is-loaded,
+.related-img-wrap.is-loaded {
+    animation: none !important;
+    background: #141414;
+}
+
+/* 3 quầng sáng mờ blur(120px) cũ rất nặng -> thay bằng 1 lớp gradient tĩnh */
+.ambient-glow {
+    display: none !important;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(60vw 50vh at 85% -10%, rgba(229, 9, 20, 0.22), transparent 70%),
+        radial-gradient(50vw 45vh at -10% 30%, rgba(255, 77, 109, 0.10), transparent 70%),
+        radial-gradient(60vw 50vh at 50% 120%, rgba(255, 138, 61, 0.08), transparent 70%);
+}
+
+[data-theme="light"] body::before {
+    opacity: 0.45;
+}
+
+/* ---------- 2. LOGO ---------- */
+
+.rc-brand {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 10px !important;
+    text-decoration: none;
+    perspective: 400px;
+}
+
+.rc-logo-mark {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: block;
+    transform-style: preserve-3d;
+    transform: rotateY(-14deg) rotateX(6deg);
+    filter: drop-shadow(0 6px 12px rgba(229, 9, 20, 0.45));
+    transition: transform 0.7s var(--rc-ease), filter 0.3s ease;
+}
+
+.rc-brand:hover .rc-logo-mark {
+    transform: rotateY(346deg) rotateX(0deg) scale(1.06);
+    filter: drop-shadow(0 8px 18px rgba(229, 9, 20, 0.65));
+}
+
+.rc-logo-word {
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+.rc-logo-word .brand-accent,
+.login-logo-accent,
+.footer-brand-accent {
+    background: var(--rc-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+}
+
+@media (max-width: 576px) {
+    .rc-logo-mark {
+        width: 28px;
+        height: 28px;
+    }
+
+    .rc-logo-word {
+        font-size: 1.08rem;
+    }
+}
+
+/* ---------- 2b. THANH ĐIỀU HƯỚNG ---------- */
+
+.navbar-custom {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+
+.navbar-custom.is-scrolled {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.navbar-custom::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(229, 9, 20, 0.6), rgba(255, 138, 61, 0.5), transparent);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.search-input:focus {
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.25) !important;
+}
+
+/* ---------- 2c. TIÊU ĐỀ MỤC ---------- */
+
+.section-title,
+.section-heading {
+    position: relative;
+    border-left: none !important;
+    padding-left: 16px !important;
+    letter-spacing: 0.01em;
+}
+
+.section-title::before,
+.section-heading::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 5px;
+    height: 1.05em;
+    transform: translateY(-50%);
+    border-radius: 4px;
+    background: var(--rc-grad);
+    box-shadow: 0 0 14px rgba(229, 9, 20, 0.6);
+}
+
+/* ---------- 2d. NÚT ---------- */
+
+.btn-hero-play,
+.btn-watch-now,
+.btn-login {
+    background: var(--rc-grad) !important;
+    background-size: 160% 160% !important;
+    border: none !important;
+    box-shadow: 0 10px 24px rgba(229, 9, 20, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.18) !important;
+    transition: transform 0.25s var(--rc-ease), box-shadow 0.25s ease, background-position 0.5s ease !important;
+}
+
+.btn-hero-play:hover,
+.btn-watch-now:hover,
+.btn-login:hover {
+    background-position: 100% 0 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(229, 9, 20, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.18) !important;
+}
+
+.btn-hero-play:active,
+.btn-watch-now:active,
+.btn-login:active {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 4px 12px rgba(229, 9, 20, 0.35), inset 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+}
+
+.genre-pill,
+.genre-tag-pill,
+.yt-chip {
+    transition: transform 0.2s var(--rc-ease), background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.genre-pill:hover,
+.genre-tag-pill:hover,
+.yt-chip:hover {
+    transform: translateY(-2px);
+}
+
+.genre-pill.active {
+    background: var(--rc-grad) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+}
+
+/* ---------- 2e. HUY HIỆU TRÊN CARD ---------- */
+
+.badge-status,
+.badge-year {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.badge-status {
+    background: var(--rc-grad) !important;
+    box-shadow: 0 4px 12px rgba(229, 9, 20, 0.35);
+}
+
+/* ---------- 3. HIỆU ỨNG 3D ---------- */
+
+/* Card phim nghiêng theo vị trí chuột (modern.js đặt --rx/--ry/--mx/--my).
+   Chỉ bật trên thiết bị có chuột thật; trên cảm ứng giữ hiệu ứng nhấc nhẹ. */
+.movie-card,
+.related-card {
+    --rx: 0deg;
+    --ry: 0deg;
+    --mx: 50%;
+    --my: 50%;
+    will-change: auto;
+}
+
+.movie-card {
+    transition: opacity 0.6s ease, transform 0.55s var(--rc-ease), box-shadow 0.35s ease, border-color 0.35s ease !important;
+}
+
+.movie-card.reveal {
+    transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateZ(0);
+}
+
+.movie-card.reveal:hover {
+    transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-8px) scale(1.035);
+    box-shadow: 0 28px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 77, 109, 0.45), 0 0 34px rgba(229, 9, 20, 0.22);
+}
+
+/* Khi chuột đang di trên card: transform bám theo nhanh, không trễ */
+.movie-card.is-tilting,
+.related-card.is-tilting {
+    transition: opacity 0.6s ease, transform 0.12s ease-out, box-shadow 0.35s ease, border-color 0.35s ease !important;
+}
+
+/* Vệt sáng phản chiếu chạy theo chuột */
+.movie-card::after,
+.related-img-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 55%);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    mix-blend-mode: soft-light;
+}
+
+.movie-card.is-tilting::after,
+.related-card.is-tilting .related-img-wrap::after {
+    opacity: 1;
+}
+
+.related-img-wrap {
+    position: relative;
+}
+
+.related-card {
+    transition: transform 0.55s var(--rc-ease) !important;
+}
+
+.related-card:hover {
+    transform: perspective(800px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-6px) !important;
+}
+
+/* Hero trang chủ & trang chi tiết: lớp nền và nội dung trôi lệch nhau theo
+   chuột (parallax) tạo chiều sâu 3D. --px/--py từ -1 đến 1 do modern.js đặt. */
+.home-hero,
+.hero-card {
+    --px: 0;
+    --py: 0;
+}
+
+.hero-slide-item.active .home-hero-bg {
+    transform: scale(1.12) translate3d(calc(var(--px) * -14px), calc(var(--py) * -10px), 0);
+    transition: transform 1.2s var(--rc-ease);
+}
+
+.home-hero-content {
+    transform: translate3d(calc(var(--px) * 10px), calc(var(--py) * 6px), 0);
+    transition: transform 0.9s var(--rc-ease);
+}
+
+.home-hero-title {
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.6);
+    letter-spacing: -0.01em;
+}
+
+.home-hero-badge {
+    background: var(--rc-grad) !important;
+    border: none !important;
+    color: #fff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: 0 8px 20px rgba(229, 9, 20, 0.4);
+}
+
+.hero-card .hero-inner {
+    transform: translate3d(calc(var(--px) * 8px), calc(var(--py) * 5px), 0);
+    transition: transform 0.9s var(--rc-ease);
+}
+
+.hero-card .trailer-thumb {
+    transform: perspective(800px) rotateY(calc(var(--px) * -8deg)) rotateX(calc(var(--py) * 6deg));
+    transition: transform 0.9s var(--rc-ease), box-shadow 0.3s ease;
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
+}
+
+/* Khung video trang xem phim: viền gradient phát sáng nhẹ */
+.video-container {
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+/* Khung "Chọn server ngôn ngữ" kế thừa height:100% của .control-box nên bị
+   kéo dài tràn đè lên footer; chỉ danh sách tập bên phải mới cần cao 100% */
+.control-box:not(.episode-list-box) {
+    height: auto;
+}
+
+.btn-custom.server-chip.active {
+    background: var(--rc-grad) !important;
+    border-color: transparent !important;
+    box-shadow: 0 8px 18px rgba(229, 9, 20, 0.35);
+}
+
+/* Nút tập đang xem */
+.ep-btn.active {
+    background: var(--rc-grad-soft) !important;
+    border-color: rgba(255, 77, 109, 0.6) !important;
+}
+
+/* Phân trang */
+.pagination .page-item.active .page-link {
+    background: var(--rc-grad) !important;
+    border-color: transparent !important;
+    box-shadow: 0 8px 18px rgba(229, 9, 20, 0.35);
+}
+
+.pagination .page-item.disabled .page-link {
+    opacity: 0.4;
+}
+
+/* Thông báo trống (không có kết quả tìm kiếm) */
+.rc-empty-state {
+    text-align: center;
+    padding: 64px 16px;
+    color: var(--rc-text-muted, #8a8a8a);
+}
+
+.rc-empty-state i {
+    font-size: 2.6rem;
+    margin-bottom: 14px;
+    background: var(--rc-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.rc-empty-state h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--rc-text, #fff);
+    margin-bottom: 6px;
+}
+
+/* ---------- TRANG ĐĂNG NHẬP ---------- */
+.login-logo-mark {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 14px;
+    filter: drop-shadow(0 14px 24px rgba(229, 9, 20, 0.5));
+    animation: rcLogoFloat 5s ease-in-out infinite;
+}
+
+@keyframes rcLogoFloat {
+
+    0%,
+    100% {
+        transform: perspective(400px) rotateY(-16deg) rotateX(8deg) translateY(0);
+    }
+
+    50% {
+        transform: perspective(400px) rotateY(16deg) rotateX(-4deg) translateY(-6px);
+    }
+}
+
+.login-card {
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- TẮT CHUYỂN ĐỘNG khi người dùng yêu cầu ---------- */
+@media (prefers-reduced-motion: reduce) {
+
+    .movie-card,
+    .movie-card.reveal,
+    .movie-card.reveal:hover,
+    .related-card:hover,
+    .home-hero-content,
+    .hero-card .hero-inner,
+    .hero-card .trailer-thumb,
+    .rc-logo-mark,
+    .rc-brand:hover .rc-logo-mark {
+        transform: none !important;
+        transition: none !important;
+    }
+
+    .movie-card::after,
+    .related-img-wrap::after {
+        display: none;
+    }
+
+    .login-logo-mark {
+        animation: none;
+    }
+}

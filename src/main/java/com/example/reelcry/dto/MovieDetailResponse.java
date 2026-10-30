@@ -74,7 +74,9 @@ public class MovieDetailResponse implements Serializable {
         public String getPosterFull() {
             if (thumb_url != null && thumb_url.startsWith("http")) return thumb_url;
             if (poster_url != null && poster_url.startsWith("http")) return poster_url;
-            return "https://img.ophim.live/uploads/movies/" + thumb_url;
+            if (thumb_url == null || thumb_url.isBlank()) return null;
+            // OPhim đã ngừng hoạt động, ảnh đường dẫn tương đối giờ nằm trên CDN của KKPhim
+            return "https://phimimg.com/" + thumb_url;
         }
 
         // Lấy mã video YouTube từ trailer_url (dạng watch?v=XXXX hoặc youtu.be/XXXX)

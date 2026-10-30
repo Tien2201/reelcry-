@@ -16,7 +16,11 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@ControllerAdvice
+// CHỈ áp dụng cho MovieController (các trang HTML có header/menu). Trước đây
+// @ControllerAdvice không giới hạn nên hàm @ModelAttribute bên dưới chạy cả
+// trước MỌI request API/ảnh - mỗi ảnh poster qua /img-proxy (vài chục ảnh/
+// trang) đều tốn thêm 1 truy vấn MongoDB lấy danh sách yêu thích -> rất lag.
+@ControllerAdvice(assignableTypes = MovieController.class)
 public class GlobalControllerAdvice {
 
     private final MovieService movieService;

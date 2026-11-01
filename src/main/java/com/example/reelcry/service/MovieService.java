@@ -19,14 +19,25 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-// LƯU Ý (10/2026): API OPhim (ophim1.com) đã ngừng hoạt động hẳn (trang chủ
-// báo "website has been stopped", mọi endpoint trả 404) -> toàn bộ dữ liệu
-// giờ lấy từ KKPhim (phimapi.com). Tham số "source" vẫn được giữ ở các hàm
-// public để tương thích link/lịch sử xem cũ (src=ophim), nhưng bị bỏ qua.
+// Nguồn dữ liệu (11/2026):
+//   - KKPhim (phimapi.com)        - nguồn chính, có điểm TMDB, trailer, diễn viên
+//   - NguonC (phim.nguonc.com)    - nguồn phụ, gộp chung vào danh sách + làm
+//                                   nguồn phát dự phòng ở trang xem phim
+// OPhim (ophim1.com) đã ngừng hoạt động hẳn: link/lịch sử cũ có src=ophim
+// được coi như KKPhim (2 nguồn này dùng chung slug phim).
 @Service
 public class MovieService {
     private final WebClient webClient;
     private static final String API_BASE = "https://phimapi.com";
+    private static final String NGUONC_BASE = "https://phim.nguonc.com/api";
+
+    public static final String SRC_KKPHIM = "kkphim";
+    public static final String SRC_NGUONC = NguoncResponse.SOURCE;
+
+    // Chuẩn hoá tên nguồn từ URL (?src=...): chỉ còn "kkphim" hoặc "nguonc"
+    public static String normalizeSource(String source) {
+        return SRC_NGUONC.equalsIgnoreCase(source) ? SRC_NGUONC : SRC_KKPHIM;
+    }
 
     // Giới hạn thời gian chờ API ngoài: trước đây MovieService dùng
     // WebClient.Builder mặc định (KHÔNG có timeout) nên khi API ngoài treo,
@@ -129,6 +140,52 @@ public class MovieService {
         return fetchList(uriTemplate, uriVars).map(r -> mergeAndSort(null, r.getActualItems()));
     }
 
+    // Gọi 1 endpoint danh sách của NguonC, đổi sang MovieItem; lỗi -> rỗng
+    private Mono<List<MovieResponse.MovieItem>> fetchNguonc(String uriTemplate, Object... uriVars) {
+        return webClient.get().uri(NGUONC_BASE + uriTemplate, uriVars)
+                .retrieve()
+                .bodyToMono(NguoncResponse.class)
+                .timeout(API_TIMEOUT)
+                .map(NguoncResponse::toMovieItems)
+                .onErrorReturn(List.of())
+                .defaultIfEmpty(List.of());
+    }
+
+    // Gộp nhiều danh sách (mỗi item đã gắn sẵn source của mình), loại phim
+    // trùng slug - danh sách đứng trước được ưu tiên giữ lại (KKPhim trước vì
+    // có điểm TMDB/trailer) - rồi sắp xếp theo thời gian cập nhật mới nhất
+    @SafeVarargs
+    static List<MovieResponse.MovieItem> mergeSources(List<MovieResponse.MovieItem>... lists) {
+        List<MovieResponse.MovieItem> merged = new ArrayList<>();
+        Set<String> seenSlugs = new HashSet<>();
+        for (List<MovieResponse.MovieItem> list : lists) {
+            if (list == null) continue;
+            for (MovieResponse.MovieItem item : list) {
+                if (item.getSlug() != null && seenSlugs.add(item.getSlug())) {
+                    merged.add(item);
+                }
+            }
+        }
+        merged.sort(MovieService::compareByModifiedDesc);
+        return merged;
+    }
+
+    private static int compareByModifiedDesc(MovieResponse.MovieItem a, MovieResponse.MovieItem b) {
+        // Chỉ so tới hết phần giây ("2026-10-31T17:43:31") vì 2 nguồn ghi phần
+        // lẻ của giây khác độ dài (.000Z vs .000000Z)
+        String ta = (a.getModified() != null && a.getModified().getTime() != null)
+                ? a.getModified().getTime() : null;
+        String tb = (b.getModified() != null && b.getModified().getTime() != null)
+                ? b.getModified().getTime() : null;
+        if (ta == null && tb == null)
+            return 0;
+        if (ta == null)
+            return 1;
+        if (tb == null)
+            return -1;
+        return tb.substring(0, Math.min(19, tb.length())).compareTo(ta.substring(0, Math.min(19, ta.length())));
+    }
+
     // Gắn nguồn, loại trùng theo slug, sắp xếp theo thời gian cập nhật mới nhất.
     // Giữ lại 2 tham số (từ thời còn gộp OPhim + KKPhim) để không phải sửa test.
     // Lưu ý: để package-private (không phải private) để unit test gọi trực tiếp được
@@ -169,48 +226,79 @@ public class MovieService {
         return merged;
     }
 
-    // Trang chủ (có cache TTL)
+    // Trang chủ (có cache TTL): KKPhim + NguonC gọi song song rồi gộp
     public Mono<List<MovieResponse.MovieItem>> getHomeDataMerged(int page) {
-        return getCachedList("home_" + page,
-                () -> fetchItems("/danh-sach/phim-moi-cap-nhat-v3?page={page}", page));
+        return getCachedList("home_" + page, () -> Mono.zip(
+                fetchItems("/danh-sach/phim-moi-cap-nhat-v3?page={page}", page),
+                fetchNguonc("/films/phim-moi-cap-nhat?page={page}", page))
+                .map(t -> mergeSources(t.getT1(), t.getT2())));
     }
 
+    // NguonC không có danh sách phim chiếu rạp -> chỉ KKPhim
     public Mono<List<MovieResponse.MovieItem>> getCinemaMoviesMerged(int page) {
         return getCachedList("cinema_" + page, () -> fetchItems(
                 "/v1/api/danh-sach/phim-chieu-rap?page={page}&sort_field=modified.time&sort_type=desc", page));
     }
 
     public Mono<List<MovieResponse.MovieItem>> getAnimeMoviesMerged(int page) {
-        return getCachedList("anime_" + page, () -> fetchItems(
-                "/v1/api/danh-sach/hoat-hinh?page={page}&sort_field=modified.time&sort_type=desc", page));
+        return getCachedList("anime_" + page, () -> Mono.zip(
+                fetchItems("/v1/api/danh-sach/hoat-hinh?page={page}&sort_field=modified.time&sort_type=desc", page),
+                fetchNguonc("/films/danh-sach/hoat-hinh?page={page}", page))
+                .map(t -> mergeSources(t.getT1(), t.getT2())));
     }
 
+    // Tìm kiếm: KKPhim 48 kết quả + NguonC 2 trang đầu (mỗi trang chỉ 10 phim)
     public Mono<List<MovieResponse.MovieItem>> searchMoviesMerged(String keyword) {
-        return fetchItems("/v1/api/tim-kiem?keyword={keyword}&limit=48", keyword);
+        return Mono.zip(
+                fetchItems("/v1/api/tim-kiem?keyword={keyword}&limit=48", keyword),
+                fetchNguonc("/films/search?keyword={keyword}&page=1", keyword),
+                fetchNguonc("/films/search?keyword={keyword}&page=2", keyword))
+                .map(t -> mergeSources(t.getT1(), t.getT2(), t.getT3()));
     }
 
-    // Chi tiết phim (có cache TTL 5 phút). "source" bị bỏ qua - xem ghi chú đầu class
+    // Chi tiết phim theo đúng nguồn (có cache TTL 5 phút)
     public Mono<MovieDetailResponse> getDetail(String slug, String source) {
-        CachedDetail cached = detailCache.get(slug);
+        String src = normalizeSource(source);
+        String cacheKey = src + ":" + slug;
+        CachedDetail cached = detailCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
             return Mono.just(cached.data);
         }
 
-        return this.webClient.get()
-                .uri(API_BASE + "/phim/{slug}", slug)
-                .retrieve()
-                .bodyToMono(MovieDetailResponse.class)
+        Mono<MovieDetailResponse> request = SRC_NGUONC.equals(src)
+                ? webClient.get().uri(NGUONC_BASE + "/film/{slug}", slug)
+                        .retrieve()
+                        .bodyToMono(NguoncResponse.class)
+                        .map(NguoncResponse::toDetailResponse)
+                : webClient.get().uri(API_BASE + "/phim/{slug}", slug)
+                        .retrieve()
+                        .bodyToMono(MovieDetailResponse.class);
+
+        return request
                 .timeout(API_TIMEOUT)
-                .doOnNext(data -> {
-                    if (data.isSuccess()) detailCache.put(slug, new CachedDetail(data));
-                })
+                .filter(data -> data.isSuccess() && data.getActualItem() != null)
+                .doOnNext(data -> detailCache.put(cacheKey, new CachedDetail(data)))
                 .onErrorResume(e -> Mono.empty());
+    }
+
+    // Kết quả chi tiết phim kèm tên nguồn thực sự lấy được dữ liệu
+    public record SourcedDetail(String source, MovieDetailResponse detail) {
+    }
+
+    // Lấy chi tiết từ nguồn được chọn; nếu nguồn đó không có phim này (hoặc
+    // lỗi) thì tự thử nguồn còn lại - phim chỉ có ở NguonC vẫn mở được
+    public Mono<SourcedDetail> getDetailAnySource(String slug, String preferredSource) {
+        String first = normalizeSource(preferredSource);
+        String second = SRC_NGUONC.equals(first) ? SRC_KKPHIM : SRC_NGUONC;
+        return getDetail(slug, first).map(d -> new SourcedDetail(first, d))
+                .switchIfEmpty(Mono.defer(() -> getDetail(slug, second).map(d -> new SourcedDetail(second, d))));
     }
 
     // Kiểm tra phim có trailer hay không - dùng cho tính năng lọc "chỉ hiện
     // phim có trailer" trên trang chủ. Tận dụng lại cache chi tiết phim sẵn có
     public Mono<Boolean> hasTrailer(String slug, String source) {
-        return getDetail(slug, source)
+        // Chỉ KKPhim có thông tin trailer (NguonC không có) -> luôn tra ở KKPhim
+        return getDetail(slug, SRC_KKPHIM)
                 .map(detail -> {
                     var item = detail.getActualItem();
                     return item != null && item.getTrailer_url() != null && !item.getTrailer_url().isBlank();
@@ -220,10 +308,25 @@ public class MovieService {
     }
 
     // Lọc theo thể loại / quốc gia / danh sách (category = the-loai | quoc-gia | danh-sach)
+    // KKPhim (24 phim/trang) + NguonC (10 phim/trang) cùng số trang, gộp lại;
+    // số trang/tiêu đề lấy theo KKPhim. NguonC chỉ có 1 số danh sách, danh
+    // sách nào không có thì NguonC trả 404 -> coi như rỗng.
     public Mono<MovieResponse> getMoviesByFilter(String category, String slug, int page, String source) {
-        return fetchList("/v1/api/{category}/{slug}?page={page}&sort_field=modified.time&sort_type=desc",
-                category, slug, page)
-                .doOnNext(r -> mergeAndSort(null, r.getActualItems()));
+        Mono<MovieResponse> kk = fetchList(
+                "/v1/api/{category}/{slug}?page={page}&sort_field=modified.time&sort_type=desc",
+                category, slug, page);
+        Mono<List<MovieResponse.MovieItem>> nc = "danh-sach".equals(category) && "phim-moi-cap-nhat".equals(slug)
+                ? fetchNguonc("/films/phim-moi-cap-nhat?page={page}", page)
+                : fetchNguonc("/films/{category}/{slug}?page={page}", category, slug, page);
+
+        return Mono.zip(kk, nc).map(t -> {
+            MovieResponse resp = t.getT1();
+            List<MovieResponse.MovieItem> kkItems = resp.getActualItems();
+            if (kkItems != null) kkItems.forEach(i -> i.setSource(SRC_KKPHIM));
+            if (resp.getData() == null) resp.setData(new MovieResponse.MovieData());
+            resp.getData().setItems(mergeSources(kkItems, t.getT2()));
+            return resp;
+        });
     }
 
     public Mono<MoviePeoplesResponse> getPeoples(String slug) {

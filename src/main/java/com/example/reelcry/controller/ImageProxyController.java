@@ -108,7 +108,8 @@ public class ImageProxyController {
     private static final Set<String> ALLOWED_HOSTS = Set.of(
             "img.ophim.live",
             "phimimg.com",
-            "img.phimapi.com");
+            "img.phimapi.com",
+            "img.nguonc.com");
 
     public ImageProxyController() {
     HttpClient httpClient = HttpClient.create()

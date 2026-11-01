@@ -74,16 +74,16 @@ public class MovieController {
             @RequestParam(defaultValue = "kkphim") String src,
             @RequestParam(required = false) String notice,
             Model model, Authentication authentication) {
-        MovieDetailResponse detail = movieService.getDetail(slug, src).block();
-
-        if (detail == null || !detail.isSuccess() || detail.getActualItem() == null) {
+        MovieService.SourcedDetail sourced = movieService.getDetailAnySource(slug, src).block();
+        if (sourced == null) {
             return "redirect:/";
         }
+        MovieDetailResponse detail = sourced.detail();
 
         var movie = detail.getActualItem();
         model.addAttribute("movie", movie);
         model.addAttribute("notice", notice);
-        model.addAttribute("currentSource", "kkphim");
+        model.addAttribute("currentSource", sourced.source());
         model.addAttribute("episodes", detail.getActualEpisodes());
 
         boolean isFavorite = authentication != null
@@ -99,6 +99,8 @@ public class MovieController {
                             model.addAttribute("resumeEpSlug", h.getEpSlug());
                             model.addAttribute("resumeServerIndex",
                                     h.getServerIndex() != null ? h.getServerIndex() : 0);
+                            // Xem tiếp đúng nguồn đã xem dở (số thứ tự server khác nhau giữa các nguồn)
+                            model.addAttribute("resumeSource", MovieService.normalizeSource(h.getSource()));
                         }
                     });
         }
@@ -151,7 +153,8 @@ public class MovieController {
             @RequestParam(defaultValue = "kkphim") String src,
             Model model, Authentication authentication) {
         try {
-            MovieDetailResponse response = movieService.getDetail(slug, src).block();
+            MovieService.SourcedDetail sourced = movieService.getDetailAnySource(slug, src).block();
+            MovieDetailResponse response = sourced != null ? sourced.detail() : null;
 
             if (response != null && response.isSuccess()) {
                 var movie = response.getActualItem();
@@ -162,10 +165,10 @@ public class MovieController {
                     var currentServer = allServers.get(serverIndex);
 
                     if (currentServer.getServer_data() != null && !currentServer.getServer_data().isEmpty()) {
-                        var episodeData = currentServer.getServer_data().stream()
-                                .filter(e -> ep.equals(e.getSlug()))
-                                .findFirst()
-                                .orElse(currentServer.getServer_data().get(0));
+                        var episodeData = findEpisode(currentServer.getServer_data(), ep);
+                        String source = sourced.source();
+                        String otherSource = MovieService.SRC_NGUONC.equals(source)
+                                ? MovieService.SRC_KKPHIM : MovieService.SRC_NGUONC;
 
                         model.addAttribute("movie", movie);
                         model.addAttribute("episodes", allServers);
@@ -174,7 +177,10 @@ public class MovieController {
                         model.addAttribute("currentEpSlug", episodeData.getSlug());
                         model.addAttribute("currentEpName", episodeData.getName());
                         model.addAttribute("selectedSv", serverIndex);
-                        model.addAttribute("currentSource", "kkphim");
+                        model.addAttribute("currentSource", source);
+                        model.addAttribute("otherSource", otherSource);
+                        // Đã yêu cầu nguồn này nhưng nguồn đó không có phim -> đang phát nguồn kia
+                        model.addAttribute("sourceFallback", !MovieService.normalizeSource(src).equals(source));
                         model.addAttribute("isFavorite", authentication != null
                                 && favoriteRepository.existsByUsernameAndMovieSlug(authentication.getName(), slug));
 
@@ -189,6 +195,27 @@ public class MovieController {
         return "redirect:/phim/" + slug + "?notice=missing_source";
     }
 
+    // Tìm tập theo slug; nếu không khớp (mỗi nguồn đặt slug khác nhau, VD
+    // KKPhim "tap-01" còn NguonC "tap-1") thì so theo số tập; không có thì tập đầu
+    private static MovieDetailResponse.ServerData findEpisode(List<MovieDetailResponse.ServerData> eps, String ep) {
+        for (var e : eps) {
+            if (ep.equals(e.getSlug())) return e;
+        }
+        Integer wanted = episodeNumber(ep);
+        if (wanted != null) {
+            for (var e : eps) {
+                if (wanted.equals(episodeNumber(e.getSlug()))) return e;
+            }
+        }
+        return eps.get(0);
+    }
+
+    private static Integer episodeNumber(String epSlug) {
+        if (epSlug == null) return null;
+        var m = java.util.regex.Pattern.compile("(\\d+)").matcher(epSlug);
+        return m.find() ? Integer.valueOf(m.group(1)) : null;
+    }
+
     @GetMapping("/filter/{category}/{slug}")
     public String filterMovies(@PathVariable String category,
             @PathVariable String slug,
@@ -196,7 +223,6 @@ public class MovieController {
             @RequestParam(defaultValue = "kkphim") String src, Model model) {
         model.addAttribute("currentCategory", category);
         model.addAttribute("currentSlug", slug);
-        model.addAttribute("currentSource", "kkphim");
         model.addAttribute("currentPage", page);
 
         MovieResponse response = movieService.getMoviesByFilter(category, slug, page, src).block();

@@ -21,6 +21,7 @@ public class ImageCdn {
 
     private static final String PHOTON = "https://i0.wp.com/";
     private static final String PROXY_PREFIX = "/img-proxy?url=";
+    private static final String NGUONC_IMG_HOST = "img.nguonc.com/";
 
     public String cdn(String url, int width) {
         if (url == null || url.isBlank()) return null;
@@ -32,6 +33,9 @@ public class ImageCdn {
         } else {
             return url;
         }
+        // Ảnh NguonC: máy chủ img.nguonc.com chặn Photon (403) nhưng tải thẳng
+        // về Việt Nam rất nhanh -> dùng nguyên link gốc
+        if (path.startsWith(NGUONC_IMG_HOST)) return url;
         // Photon không nhận URL có sẵn query string của ảnh gốc
         int q = path.indexOf('?');
         if (q > -1) path = path.substring(0, q);

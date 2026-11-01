@@ -55,13 +55,13 @@
                         <div class="hero-content" th:utext="${movie?.content}"></div>
 
                         <a class="btn-watch-now" th:if="${episodes != null and !episodes.isEmpty()}"
-                            th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${currentSource != null ? currentSource : 'ophim'})}">
+                            th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${resumeSource != null ? resumeSource : currentSource})}">
                             <i class="fas fa-play"></i> <span th:text="${resumeEpSlug != null} ? 'Xem tiếp' : 'Xem ngay'">Xem ngay</span>
                         </a>
 
                         <button type="button" class="btn-favorite" id="btn-favorite"
                             th:classappend="${isFavorite} ? 'active' : ''"
-                            th:attr="data-slug=${movie?.slug}, data-name=${movie?.name}, data-source=${currentSource != null ? currentSource : 'ophim'}, data-image=${@img.cdn(movie?.getPosterFull(), 480)}">
+                            th:attr="data-slug=${movie?.slug}, data-name=${movie?.name}, data-source=${currentSource}, data-image=${@img.cdn(movie?.getPosterFull(), 480)}">
                             <i class="fas fa-heart"></i>
                             <span th:text="${isFavorite} ? 'Đã yêu thích' : 'Yêu thích'">Yêu thích</span>
                         </button>
@@ -90,6 +90,10 @@
                                     <span class="label">Ngôn ngữ</span>
                                     <span class="value" th:text="${movie?.lang}"></span>
                                 </li>
+                                <li>
+                                    <span class="label">Nguồn phim</span>
+                                    <span class="value" th:text="${currentSource == 'nguonc'} ? 'NguonC' : 'KKPhim'"></span>
+                                </li>
                                 <li th:if="${movie?.episode_current}">
                                     <span class="label">Trạng thái</span>
                                     <span class="value" th:text="${movie?.episode_current}"></span>
@@ -107,7 +111,7 @@
 
                             <div class="panel-title" th:text="${resumeEpSlug != null} ? 'Xem tiếp' : 'Xem ngay'">Xem ngay</div>
                             <a class="trailer-thumb" th:if="${episodes != null and !episodes.isEmpty()}"
-                                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${currentSource != null ? currentSource : 'ophim'})}">
+                                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, ep=${resumeEpSlug}, sv=${resumeServerIndex != null ? resumeServerIndex : 0}, src=${resumeSource != null ? resumeSource : currentSource})}">
                                 <img th:src="${@img.cdn(movie?.getPosterFull(), 480)}" alt="thumbnail">
                                 <span class="trailer-play"><i class="fas fa-play"></i></span>
                             </a>
@@ -130,7 +134,7 @@
         <h3 class="section-heading">Chọn server</h3>
         <div class="d-flex gap-3 flex-wrap server-list">
             <a th:each="server, iter : ${episodes}"
-                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=${iter.index}, src=${currentSource != null ? currentSource : 'ophim'})}"
+                th:href="@{/xem-phim/{slug}(slug=${movie?.slug}, sv=${iter.index}, src=${currentSource})}"
                 class="btn-server">
                 <i class="fas fa-play-circle fs-4"></i>
                 <span th:text="${server.server_name}"></span>

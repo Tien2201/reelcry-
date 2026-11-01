@@ -33,6 +33,23 @@
       <div class="col-12"
         th:classappend="${currentServer.server_data.size() > 1} ? 'col-lg-8' : 'col-lg-10'">
 
+        <!-- Chọn nguồn phát: 1 nguồn bị lỗi/giật thì đổi sang nguồn kia, giữ nguyên tập đang xem -->
+        <div class="source-switcher d-flex align-items-center mb-3 flex-wrap gap-2">
+          <span class="section-label me-1"><i class="fas fa-server me-2"></i>Nguồn phát:</span>
+          <div class="btn-group">
+            <a th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, src='kkphim')}"
+              th:classappend="${currentSource == 'kkphim'} ? 'btn-danger' : 'btn-outline-secondary'"
+              class="btn btn-src px-3 shadow-none">KKPhim</a>
+            <a th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, src='nguonc')}"
+              th:classappend="${currentSource == 'nguonc'} ? 'btn-danger' : 'btn-outline-secondary'"
+              class="btn btn-src px-3 shadow-none">NguonC</a>
+          </div>
+          <small class="text-warning" th:if="${sourceFallback}">
+            <i class="fas fa-circle-info me-1"></i>Nguồn bạn chọn không có phim này, đang phát
+            <b th:text="${currentSource == 'nguonc'} ? 'NguonC' : 'KKPhim'"></b>.
+          </small>
+        </div>
+
         <div class="video-container" id="main-player">
           <div class="player-ratio">
             <iframe th:src="${currentLink}" allowfullscreen
@@ -40,13 +57,9 @@
             <div class="server-fallback-toast" id="server-fallback-toast">
               <i class="fas fa-triangle-exclamation toast-icon"></i>
               <span>Video không phát được?</span>
-              <!-- Có nhiều server (Vietsub/Thuyết minh...) thì gợi ý đổi sang server kế tiếp, không thì tải lại -->
-              <a class="btn-switch-server" th:if="${episodes.size() > 1}"
-                th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=${(selectedSv + 1) % episodes.size()})}">
-                Đổi sang <span th:text="${episodes[(selectedSv + 1) % episodes.size()].server_name}"></span>
-              </a>
-              <a class="btn-switch-server" th:unless="${episodes.size() > 1}" href="javascript:location.reload()">
-                Tải lại video
+              <a class="btn-switch-server"
+                th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, src=${otherSource})}">
+                Đổi sang nguồn <span th:text="${otherSource == 'nguonc'} ? 'NguonC' : 'KKPhim'"></span>
               </a>
               <button type="button" class="btn-close-toast" onclick="dismissServerToast()">&times;</button>
             </div>
@@ -83,7 +96,7 @@
           <p class="section-label mb-3"><i class="fas fa-language me-2"></i>Chọn Server Ngôn ngữ</p>
           <div class="server-chip-row">
             <a th:each="sv, iter : ${episodes}"
-              th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=${iter.index})}"
+              th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${currentEpSlug}, sv=${iter.index}, src=${currentSource})}"
               class="btn-custom server-chip" th:classappend="${selectedSv == iter.index} ? 'active' : ''">
               <i class="fas fa-headset me-2 small"></i>
               <span th:text="${sv.server_name}"></span>
@@ -101,7 +114,7 @@
             </div>
             <div class="episode-list-scroll" id="episodeListScroll">
               <a th:each="epItem, iter : ${currentServer.server_data}"
-                th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${epItem.slug}, sv=${selectedSv}, src=${currentSource != null ? currentSource : 'ophim'})}"
+                th:href="@{/xem-phim/{slug}(slug=${movie.slug}, ep=${epItem.slug}, sv=${selectedSv}, src=${currentSource})}"
                 class="ep-btn" th:data-slug="${epItem.slug}"
                 th:classappend="${currentEpSlug == epItem.slug} ? ' active' : ''" th:style="'--i:' + ${iter.index}">
                 <span class="ep-num" th:text="${iter.index + 1}"></span>
@@ -162,7 +175,7 @@
             slug: slug,
             name: /*[[${movie.name}]]*/ '',
             image: document.body.dataset.movieImage,
-            source: 'kkphim'
+            source: /*[[${currentSource}]]*/ 'kkphim'
           })
         });
       request.then(function (res) {
@@ -219,7 +232,7 @@
     const currentEp = [[${ currentEpSlug }]];
     const allEpSlugs = [[${ currentServer.server_data.![slug] }]];
     const selectedSv = [[${ selectedSv }]];
-    const currentSource = [[${ currentSource }]] || 'ophim';
+    const currentSource = [[${ currentSource }]] || 'kkphim';
     let watched = JSON.parse(localStorage.getItem('watched_' + movieSlug) || "[]");
 
     if (!watched.includes(currentEp)) {

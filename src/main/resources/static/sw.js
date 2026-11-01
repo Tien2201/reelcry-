@@ -1,4 +1,6 @@
-const CACHE_NAME = 'reelcry-static-v1';
+// Đổi tên cache (v1 -> v2) khi đổi icon/logo: bước "activate" bên dưới sẽ xoá
+// cache cũ, nếu không điện thoại cứ lấy icon cũ từ cache (cache-first) mãi
+const CACHE_NAME = 'reelcry-static-v2';
 const STATIC_ASSETS = [
   '/css/reelcry-header.css',
   '/css/index.css',
@@ -6,8 +8,10 @@ const STATIC_ASSETS = [
   '/css/watch.css',
   '/css/login.css',
   '/css/error.css',
-  '/images/icon-192.png',
-  '/images/icon-512.png',
+  '/images/icon-192.png?v=2',
+  '/images/icon-512.png?v=2',
+  '/images/apple-touch-icon.png?v=2',
+  '/images/logo-mark.svg',
   '/manifest.json',
   '/offline.html'
 ];

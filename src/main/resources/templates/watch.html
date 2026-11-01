@@ -20,7 +20,7 @@
   <link rel="stylesheet" th:href="@{/css/watch.css(v=11)}">
 </head>
 
-<body th:attr="data-movie-image=@{/img-proxy(url=${movie?.getPosterFull()})}">
+<body th:attr="data-movie-image=${@img.cdn(movie?.getPosterFull(), 360)}">
   <div class="ambient-glow ambient-glow-1"></div>
   <div class="ambient-glow ambient-glow-2"></div>
   <div id="light-overlay" onclick="toggleLights()"></div>

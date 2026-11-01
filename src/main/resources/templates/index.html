@@ -38,10 +38,10 @@
                 <!-- Chỉ slide đầu tải ảnh nền ngay; các slide sau dùng data-bg,
                      modern.js tải sau khi trang hiện xong (đỡ tranh băng thông) -->
                 <div class="home-hero-bg" th:if="${iter.index == 0}"
-                    th:style="'background-image: url(/img-proxy?url=' + ${#uris.escapeQueryParam(movie.getImageUrl())} + ')'">
+                    th:style="|background-image: url('${@img.cdn(movie.getImageUrl(), 1280)}')|">
                 </div>
                 <div class="home-hero-bg" th:unless="${iter.index == 0}"
-                    th:attr="data-bg=@{/img-proxy(url=${movie.getImageUrl()})}">
+                    th:attr="data-bg=${@img.cdn(movie.getImageUrl(), 1280)}">
                 </div>
                 <div class="home-hero-overlay"></div>
 
@@ -71,7 +71,7 @@
         <div class="hero-coverflow" id="heroCoverflow">
             <div class="cf-item" th:each="movie, iter : ${movies}" th:if="${iter.index < 6}"
                 th:attr="data-index=${iter.index}">
-                <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
+                <img th:src="${@img.cdn(movie.getImageUrl(), 360)}" th:alt="${movie.name}" loading="lazy">
             </div>
         </div>
 
@@ -101,7 +101,7 @@
                             <a th:href="@{/xem-phim/{slug}(slug=${h.movieSlug}, ep=${h.epSlug}, sv=${h.serverIndex}, src=${h.source})}" class="text-decoration-none">
                                 <div class="movie-card watched-card watched-card-v2">
                                     <div class="movie-img-container">
-                                        <img th:src="${h.movieImage}" th:alt="${h.movieName}" loading="lazy">
+                                        <img th:src="${@img.fromStored(h.movieImage, 360)}" th:alt="${h.movieName}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
                                         <div class="watched-play-btn watched-play-btn-v2"><i class="fas fa-play"></i></div>
                                     </div>
@@ -141,7 +141,7 @@
                             <a th:href="@{/phim/{slug}(slug=${f.movieSlug}, src=${f.source})}" class="text-decoration-none">
                                 <div class="movie-card">
                                     <div class="movie-img-container">
-                                        <img th:src="${f.movieImage}" th:alt="${f.movieName}" loading="lazy">
+                                        <img th:src="${@img.fromStored(f.movieImage, 360)}" th:alt="${f.movieName}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
                                         <div class="play-icon"><i class="fas fa-play-circle"></i></div>
                                     </div>
@@ -178,11 +178,11 @@
                                     <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
                                     <span class="badge-year" th:text="${movie?.year}"></span>
                                     <div class="movie-img-container">
-                                        <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
+                                        <img th:src="${@img.cdn(movie.getImageUrl(), 360)}" th:alt="${movie.name}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
                                         <button type="button" class="quick-fav-btn"
                                             th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
-                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=${@img.cdn(movie.getImageUrl(), 360)}"
                                             onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
                                             <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                                         </button>
@@ -227,11 +227,11 @@
                                     <span class="badge-status" th:text="${movie?.episode_current ?: 'HD'}"></span>
                                     <span class="badge-year" th:text="${movie?.year}"></span>
                                     <div class="movie-img-container">
-                                        <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}" loading="lazy">
+                                        <img th:src="${@img.cdn(movie.getImageUrl(), 360)}" th:alt="${movie.name}" loading="lazy">
                                         <div class="movie-card-gradient"></div>
                                         <button type="button" class="quick-fav-btn"
                                             th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
-                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                            th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=${@img.cdn(movie.getImageUrl(), 360)}"
                                             onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
                                             <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                                         </button>
@@ -300,13 +300,12 @@
                         <span class="badge-year" th:text="${movie?.year}"></span>
 
                         <div class="movie-img-container">
-                            <img th:src="@{/img-proxy(url=${movie.getImageUrl()})}" th:alt="${movie.name}"
-                                onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiMxZTFlMWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM3NzciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5LaMO0bmcgY8OzIOG6o25oPC90ZXh0Pjwvc3ZnPg=='"
-                                loading="lazy">
+                            <img th:src="${@img.cdn(movie.getImageUrl(), 360)}" th:alt="${movie.name}"
+                                loading="lazy" decoding="async">
                             <div class="movie-card-gradient"></div>
                             <button type="button" class="quick-fav-btn"
                                 th:classappend="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? ' active' : ''"
-                                th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=@{/img-proxy(url=${movie.getImageUrl()})}"
+                                th:attr="data-slug=${movie.slug}, data-name=${movie.name}, data-source=${movie.source}, data-image=${@img.cdn(movie.getImageUrl(), 360)}"
                                 onclick="reelcryQuickFav(event, this)" aria-label="Thêm vào yêu thích">
                                 <i th:class="${favoriteSlugs != null and favoriteSlugs.contains(movie.slug)} ? 'fas fa-check' : 'fas fa-plus'"></i>
                             </button>

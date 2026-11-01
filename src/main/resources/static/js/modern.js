@@ -27,11 +27,21 @@
         if (e.target && e.target.tagName === 'IMG') markLoaded(e.target);
     }, true);
 
+    // Ảnh lỗi: thử lần lượt CDN ảnh (i0.wp.com) -> /img-proxy của server -> ảnh chờ
+    var PHOTON = 'https://i0.wp.com/';
     document.addEventListener('error', function (e) {
         var img = e.target;
-        if (!img || img.tagName !== 'IMG' || img.dataset.rcFallback) return;
+        if (!img || img.tagName !== 'IMG' || img.dataset.rcFallback === 'done') return;
         if (!img.closest('.movie-img-container, .related-img-wrap, .cf-item, .trailer-thumb')) return;
-        img.dataset.rcFallback = '1';
+
+        var src = img.getAttribute('src') || '';
+        if (src.indexOf(PHOTON) === 0 && !img.dataset.rcFallback) {
+            img.dataset.rcFallback = 'proxy';
+            var original = 'https://' + src.substring(PHOTON.length).split('?')[0];
+            img.src = '/img-proxy?url=' + encodeURIComponent(original);
+            return;
+        }
+        img.dataset.rcFallback = 'done';
         img.src = PLACEHOLDER;
     }, true);
 

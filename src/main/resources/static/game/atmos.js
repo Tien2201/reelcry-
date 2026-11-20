@@ -4,14 +4,14 @@ import * as THREE from 'three';
 export const PRESETS = [
   {
     id: 'dusk',
-    skyTop: '#3a3a78', skyHor: '#f0a060', glow: '#ff9a50', stars: 0.1, moon: 0, moonCol: '#fff4d8', clouds: 0.8, cloudCol: '#e88a6a', kite: 1, name: 'Hoàng hôn',
-    sunColor: '#ffab66', sunI: 2.5, sunDir: [-0.5, 0.45, -0.72],
-    hemiSky: '#8c86c8', hemiGround: '#3a2c2a', hemiI: 1.25,
-    fog: '#b08878', fogNear: 30, fogFar: 120,
-    exposure: 1.02, bloom: 0.7, threshold: 1.15,
-    lamps: 0.4, windows: 0.6, fires: 0.75, flash: 0.35,
-    lift: [0.01, 0.0, 0.03], gain: [1.04, 0.99, 0.95], sat: 1.1, contrast: 1.05, vignette: 0.55,
-    rain: 0, wet: 0, fireflies: 0.3, leaves: 0.9, ash: 0, mist: 0.12, shafts: 1, lightning: 0, wind: 0.9,
+    skyTop: '#6aa0d8', skyHor: '#ffd49a', glow: '#ffb860', stars: 0, moon: 0, moonCol: '#fff4d8', clouds: 0.75, cloudCol: '#fff0dc', kite: 1, name: 'Chiều tà',
+    sunColor: '#ffd08a', sunI: 3.3, sunDir: [-0.62, 0.55, -0.56],
+    hemiSky: '#b8cce6', hemiGround: '#5a4a2e', hemiI: 1.55,
+    fog: '#d8b88c', fogNear: 34, fogFar: 150,
+    exposure: 1.0, bloom: 0.55, threshold: 1.35,
+    lamps: 0.25, windows: 0.45, fires: 0.6, flash: 0.15,
+    lift: [0.01, 0.01, 0.02], gain: [1.04, 1.0, 0.93], sat: 1.14, contrast: 1.04, vignette: 0.5,
+    rain: 0, wet: 0, fireflies: 0.1, leaves: 0.9, ash: 0, mist: 0.08, shafts: 1, lightning: 0, wind: 0.9,
   },
   {
     id: 'night',

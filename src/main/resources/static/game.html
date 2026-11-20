@@ -98,6 +98,14 @@
   .bi .n { color: var(--gold); }
   .bi button { margin-left: auto; font-family: inherit; font-size: 16px; color: #fff; background: #2c5a6a; border: 2px solid #9ad8e8; padding: 0 6px; cursor: pointer; }
   .bi.zero { opacity: .35; }
+  .bi.craft { grid-column: 1 / -1; border-color: #3a8a4a; background: #14201a; }
+  .bi button:disabled { opacity: .35; cursor: default; }
+  #inf-row { font-size: 17px; color: #c8ffb8; }
+  #inf-row.low #inf-time { color: #ff6a5a; animation: blink .4s infinite alternate; }
+  body.zmode #weapon-box, body.zmode #quick { opacity: .25; }
+  #zbanner { position: absolute; left: 50%; top: calc(98px + var(--st)); transform: translateX(-50%); font-size: 22px; color: #d8ffc8; text-align: center;
+    background: rgba(10,20,8,.78); border: 2px solid #6ab04a; padding: 4px 14px 5px; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+  #zbanner b { color: #ff6a7a; font-weight: 400; }
   #bag-quest { margin-top: 10px; font-size: 19px; line-height: 1.25; color: var(--ink); }
   #bag-quest .done { color: #7fe07f; text-decoration: line-through; }
   #bag-quest .cur { color: var(--gold); }
@@ -217,7 +225,9 @@
     <div class="row" style="margin-top:5px"><span class="lbl">SỨC</span><div class="bar st"><i id="st-fill"></i></div></div>
     <div class="row" style="margin-top:5px"><span class="lbl">ĐÓI</span><div class="bar fd" id="fd-bar"><i id="fd-fill"></i></div></div>
     <div class="row" style="margin-top:4px"><span class="lbl">KHÁT</span><div class="bar wt" id="wt-bar"><i id="wt-fill"></i></div></div>
+    <div class="row hidden" id="inf-row" style="margin-top:4px"><span class="lbl" style="color:#9aff7a">VIRUS</span><span id="inf-time"></span></div>
   </div>
+  <div id="zbanner" class="hidden">BẠN ĐANG LÀ ZOMBIE · chờ đồng đội cho ăn <b>hoa bỉ ngạn</b> · gầm để gọi họ</div>
   <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div></div>
   <div id="quest-box" class="win"><div id="q-title">NHIỆM VỤ</div><div id="q-text"></div><div id="q-sub"></div></div>
   <div id="quick" class="win"></div>
@@ -284,7 +294,7 @@
 </div>
 <div id="over" class="screen hidden">
   <div class="card win">
-    <h1 style="font-size:clamp(52px,10vw,84px)">BẠN ĐÃ CHẾT</h1>
+    <h1 id="ov-title" style="font-size:clamp(40px,8vw,72px)">BẠN ĐÃ CHẾT</h1>
     <div class="stats">Sống sót <b><span id="ov-night">1</span> ngày</b><br>Hạ gục <b id="ov-kills">0</b> zombie · Lục được <b id="ov-loot">0</b> món<br>Thời gian <b><span id="ov-time">0</span> phút</b> · Kỷ lục <b id="ov-best">0</b> ngày</div>
     <div class="btns"><button class="btn" id="again-btn">CHƠI LẠI</button><button class="btn ghost" id="menu-btn">Về menu</button></div>
   </div>

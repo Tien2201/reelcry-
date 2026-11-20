@@ -13,40 +13,46 @@ export const ITEMS = {
   key: { name: 'Chìa khoá kho súng', max: 1, icon: 8, quest: true },
   shotgun: { name: 'Shotgun', max: 1, icon: 9, weapon: 2 },
   smg: { name: 'Tiểu liên', max: 1, icon: 10, weapon: 3 },
+  antibio: { name: 'Kháng sinh', max: 6, icon: 11 },
+  syringe: { name: 'Ống tiêm', max: 6, icon: 12 },
+  antidote: { name: 'Thuốc giải', max: 4, icon: 13, use: 'cure', time: 1.4 },
+  flower: { name: 'Hoa bỉ ngạn', max: 3, icon: 14, hideZero: true },
 };
-export const ITEM_ORDER = ['bandage', 'medkit', 'food', 'water', 'ammo9', 'shells', 'fuel', 'part', 'key'];
+export const ITEM_ORDER = ['bandage', 'medkit', 'food', 'water', 'antidote', 'antibio', 'syringe', 'flower', 'ammo9', 'shells', 'fuel', 'part', 'key'];
+// công thức chế thuốc giải
+export const ANTIDOTE_RECIPE = { antibio: 1, syringe: 1 };
 
 // [xác suất, vật phẩm, số lượng min, max]
 const L = {
   fridge: [[0.7, 'water', 1, 2], [0.55, 'food', 1, 2]],
-  cabinet: [[0.65, 'food', 1, 2], [0.35, 'water', 1, 1], [0.3, 'bandage', 1, 1]],
-  wardrobe: [[0.6, 'bandage', 1, 2], [0.25, 'ammo9', 6, 12]],
+  cabinet: [[0.65, 'food', 1, 2], [0.35, 'water', 1, 1], [0.3, 'bandage', 1, 1], [0.15, 'antibio', 1, 1]],
+  wardrobe: [[0.6, 'bandage', 1, 2], [0.25, 'ammo9', 6, 12], [0.12, 'syringe', 1, 1]],
   sofa: [[0.45, 'ammo9', 4, 9], [0.25, 'food', 1, 1]],
-  desk: [[0.6, 'ammo9', 6, 14], [0.3, 'bandage', 1, 1]],
+  desk: [[0.6, 'ammo9', 6, 14], [0.3, 'bandage', 1, 1], [0.15, 'syringe', 1, 1]],
   shelf_food: [[0.85, 'food', 1, 3], [0.5, 'water', 1, 2]],
   drinks: [[0.95, 'water', 2, 3]],
   register: [[0.45, 'ammo9', 4, 10], [0.35, 'bandage', 1, 1]],
   storage: [[0.75, 'food', 2, 3], [0.65, 'water', 1, 3]],
-  med_shelf: [[0.9, 'bandage', 1, 3], [0.4, 'medkit', 1, 1]],
-  med_cabinet: [[0.95, 'medkit', 1, 1], [0.5, 'bandage', 1, 2]],
-  counter_med: [[0.75, 'bandage', 1, 2], [0.2, 'medkit', 1, 1]],
+  med_shelf: [[0.9, 'bandage', 1, 3], [0.4, 'medkit', 1, 1], [0.7, 'antibio', 1, 2], [0.5, 'syringe', 1, 1]],
+  med_cabinet: [[0.95, 'medkit', 1, 1], [0.5, 'bandage', 1, 2], [0.75, 'antibio', 1, 1], [0.7, 'syringe', 1, 1]],
+  counter_med: [[0.75, 'bandage', 1, 2], [0.2, 'medkit', 1, 1], [0.45, 'syringe', 1, 1], [0.35, 'antibio', 1, 1]],
   toolbox: [[0.55, 'ammo9', 6, 12], [0.4, 'bandage', 1, 1]],
-  parts_shelf: [[0.65, 'ammo9', 8, 14], [0.4, 'food', 1, 1]],
-  backpack: [[0.85, 'food', 1, 2], [0.75, 'water', 1, 2], [0.6, 'ammo9', 8, 16], [0.45, 'bandage', 1, 2]],
-  locker: [[0.95, 'ammo9', 12, 24], [0.55, 'shells', 4, 8], [0.3, 'bandage', 1, 1]],
+  parts_shelf: [[0.65, 'ammo9', 8, 14], [0.4, 'food', 1, 1], [0.15, 'syringe', 1, 1]],
+  backpack: [[0.85, 'food', 1, 2], [0.75, 'water', 1, 2], [0.6, 'ammo9', 8, 16], [0.45, 'bandage', 1, 2], [0.3, 'antibio', 1, 1]],
+  locker: [[0.95, 'ammo9', 12, 24], [0.55, 'shells', 4, 8], [0.3, 'bandage', 1, 1], [0.2, 'antibio', 1, 1]],
   chief_desk: [[0.7, 'ammo9', 10, 16]],
   trunk: [[0.5, 'water', 1, 2], [0.45, 'food', 1, 2], [0.4, 'ammo9', 6, 12], [0.25, 'bandage', 1, 1]],
   truck: [[1, 'ammo9', 20, 30], [0.8, 'shells', 6, 10], [0.6, 'medkit', 1, 1]],
-  ambulance: [[1, 'bandage', 2, 3], [0.85, 'medkit', 1, 1]],
+  ambulance: [[1, 'bandage', 2, 3], [0.85, 'medkit', 1, 1], [0.9, 'antibio', 1, 2], [0.9, 'syringe', 1, 2], [0.35, 'antidote', 1, 1]],
   ammo_crate: [[1, 'ammo9', 24, 36], [0.85, 'shells', 8, 12]],
-  body: [[0.65, 'ammo9', 6, 12], [0.45, 'bandage', 1, 1], [0.35, 'food', 1, 1], [0.3, 'water', 1, 1]],
+  body: [[0.65, 'ammo9', 6, 12], [0.45, 'bandage', 1, 1], [0.35, 'food', 1, 1], [0.3, 'water', 1, 1], [0.25, 'syringe', 1, 1]],
   armory: [[1, 'shells', 16, 20], [1, 'ammo9', 60, 80], [1, 'medkit', 1, 1]],
   // xác zombie
-  z_walker: [[0.28, 'ammo9', 4, 8], [0.14, 'bandage', 1, 1], [0.14, 'food', 1, 1], [0.14, 'water', 1, 1]],
+  z_walker: [[0.28, 'ammo9', 4, 8], [0.14, 'bandage', 1, 1], [0.14, 'food', 1, 1], [0.14, 'water', 1, 1], [0.06, 'antibio', 1, 1], [0.06, 'syringe', 1, 1]],
   z_runner: [[0.22, 'ammo9', 4, 8], [0.12, 'water', 1, 1], [0.08, 'bandage', 1, 1]],
   z_brute: [[0.8, 'ammo9', 10, 20], [0.45, 'medkit', 1, 1], [0.45, 'shells', 4, 8]],
-  z_cop: [[0.95, 'ammo9', 10, 18], [0.35, 'bandage', 1, 1], [0.2, 'shells', 2, 4]],
-  z_soldier: [[0.8, 'ammo9', 14, 24], [0.65, 'shells', 4, 8], [0.35, 'medkit', 1, 1]],
+  z_cop: [[0.95, 'ammo9', 10, 18], [0.35, 'bandage', 1, 1], [0.2, 'shells', 2, 4], [0.1, 'antibio', 1, 1]],
+  z_soldier: [[0.8, 'ammo9', 14, 24], [0.65, 'shells', 4, 8], [0.35, 'medkit', 1, 1], [0.25, 'syringe', 1, 1], [0.2, 'antibio', 1, 1]],
 };
 // đồ cố định (nhiệm vụ / vũ khí)
 const FIXED = {

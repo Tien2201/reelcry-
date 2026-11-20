@@ -122,6 +122,10 @@ export class Sound {
     else if (kind === 'drink') { for (let i = 0; i < 4; i++) this.tone('sine', 380 + i * 30, 260, 0.08, 0.05, undefined, undefined, i * 0.16); }
     else { for (let i = 0; i < 3; i++) this.noise(0.06, 'lowpass', 700, 0.12, undefined, undefined, 1); }
   }
+  infect() { this.tone('sawtooth', 220, 90, 0.6, 0.12); this.noise(0.4, 'bandpass', 600, 0.15, undefined, undefined, 2); this.tone('sine', 70, 40, 1.2, 0.18, undefined, undefined, 0.1); }
+  cough() { for (let i = 0; i < 2; i++) this.noise(0.12, 'bandpass', 420 + i * 80, 0.16, undefined, undefined, 3); }
+  revive() { [523, 659, 784, 1046].forEach((f, i) => this.tone('sine', f, f, 0.35, 0.08, undefined, undefined, i * 0.09)); this.noise(0.6, 'highpass', 5000, 0.04); }
+  flower() { [880, 1175, 1568].forEach((f, i) => this.tone('triangle', f, f * 1.01, 0.25, 0.06, undefined, undefined, i * 0.07)); }
   unlock() { this.tone('square', 1800, 1500, 0.04, 0.08); this.tone('square', 900, 600, 0.06, 0.1, undefined, undefined, 0.08); this.noise(0.15, 'bandpass', 2500, 0.1); }
   radio() {
     if (!this.ac) return;

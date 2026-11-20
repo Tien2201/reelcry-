@@ -341,7 +341,7 @@ export function makeCharacterSprites() {
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 11, P = new Pix(16 * N, 16);
+  const N = 15, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
   // 0 đạn 9mm
   { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
@@ -365,8 +365,33 @@ export function makeItemIcons() {
   { const r = at(9); r(1, 7, 10, 2, '#2a2a30'); r(1, 6, 10, 1, '#6a6a7c'); r(10, 7, 5, 3, '#7a4a2a'); r(5, 9, 3, 2, '#7a4a2a'); r(9, 9, 2, 3, '#2a2a30'); }
   // 10 tiểu liên
   { const r = at(10); r(1, 6, 11, 3, '#2a2a30'); r(1, 6, 11, 1, '#6a6a7c'); r(6, 9, 2, 5, '#2a2a30'); r(10, 9, 2, 3, '#2a2a30'); r(12, 7, 3, 2, '#3a3a40'); }
+  // 11 kháng sinh (lọ thuốc)
+  { const r = at(11); r(4, 5, 8, 9, '#e8e4dc'); r(4, 5, 1, 9, '#ffffff'); r(4, 2, 8, 3, '#d86a2a'); r(5, 8, 6, 3, '#3a8ac8'); r(6, 9, 4, 1, '#e8f4ff'); }
+  // 12 ống tiêm
+  { const r = at(12); for (let i = 0; i < 9; i++) { r(3 + i, 11 - i, 2, 2, i < 6 ? '#cfe8f0' : '#9ab0b8'); } r(4, 9, 3, 3, '#6ab0d8'); r(12, 1, 2, 2, '#8a8a8a'); r(1, 13, 2, 2, '#c8c8c8'); }
+  // 13 thuốc giải (lọ xanh lá)
+  { const r = at(13); r(6, 1, 4, 2, '#3a3a40'); r(5, 3, 6, 11, '#6ae08a'); r(5, 3, 1, 11, '#c8ffd8'); r(5, 8, 6, 3, '#2a8a4a'); r(7, 5, 2, 2, '#ffffff'); }
+  // 14 hoa bỉ ngạn
+  { const r = at(14); r(7, 8, 2, 7, '#2a7a2a'); r(4, 11, 3, 1, '#3a8a3a'); const pet = '#e8242a', tip = '#ff6a5a';
+    for (const [x, y] of [[3, 3], [11, 3], [2, 6], [12, 6], [5, 1], [9, 1], [4, 5], [10, 5]]) r(x, y, 2, 2, pet);
+    r(6, 3, 4, 4, '#c81a20'); r(7, 4, 2, 2, '#ffd84a'); for (const [x, y] of [[2, 2], [13, 2], [1, 7], [14, 7]]) r(x, y, 1, 1, tip); }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
+}
+
+// ---------- hoa bỉ ngạn mọc trong thế giới (phát sáng nhẹ) ----------
+export function makeFlowerSprite() {
+  const P = new Pix(16, 20, { emissive: true });
+  const stem = '#2a6a2a';
+  for (let y = 9; y < 20; y++) { P.set(7 + (y > 15 ? 1 : 0), y, stem); }
+  P.set(5, 15, '#3a8a3a'); P.set(6, 16, '#3a8a3a'); P.set(10, 14, '#3a8a3a'); P.set(9, 15, '#3a8a3a');
+  const pet = ['#a8141a', '#e8242a', '#ff5a4a'];
+  const curls = [[[7, 8], [5, 6], [3, 5], [2, 3], [3, 2]], [[8, 8], [10, 6], [12, 5], [13, 3], [12, 2]], [[7, 7], [6, 4], [6, 2], [5, 0]], [[8, 7], [9, 4], [9, 2], [10, 0]], [[7, 8], [4, 8], [2, 7], [1, 6]], [[8, 8], [11, 8], [13, 7], [14, 6]]];
+  for (const c of curls) c.forEach(([x, y], i) => { const col = pet[Math.min(2, i)]; P.set(x, y, col); P.glow(x, y, col); });
+  for (const [x, y] of [[6, 7], [7, 6], [8, 6], [9, 7], [7, 7], [8, 7]]) { P.set(x, y, '#c81a20'); P.glow(x, y, '#ff3a2a'); }
+  for (const [x, y] of [[3, 1], [12, 1], [1, 5], [14, 5], [6, 0], [9, 0]]) { P.set(x, y, '#ffd84a'); P.glow(x, y, '#ffe080'); }
+  P.outline('#1a0a0a');
+  return { map: tex(P), emissiveMap: tex(P.emissiveCanvas()), w: 16 / PPU, h: 20 / PPU };
 }
 
 // ---------- lửa (6 khung) ----------

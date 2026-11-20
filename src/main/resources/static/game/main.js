@@ -172,7 +172,16 @@ let wave = 0, toSpawn = 0, spawnTimer = 0, intermission = 0, kills = 0, score = 
 let hurtFlash = 0, lightning = 0, lightningT = 8, thunderQ = [], playStart = 0;
 // pha trong ngày: dusk (chiều tà) → night (đêm, zombie tấn công) → dawn (rạng đông) → day (nghỉ ngơi)
 let phase = 'title', phaseT = 0, dayNo = 0, nightKills = 0, nightTotal = 1, hourFrom = 0, strayT = 0, dayStartHour = 6.9;
-const DAY_LEN = 150, DUSK_LEN = 14, DAWN_LEN = 7;
+// độ dài một ván: ngày (lục soát) và đêm (cầm cự) tính bằng giây thực
+const DURATIONS = {
+  short: { name: 'Ngắn', day: 100, night: 90, est: '~10 phút' },
+  normal: { name: 'Vừa', day: 150, night: 120, est: '~15–20 phút' },
+  long: { name: 'Dài', day: 240, night: 170, est: '~30 phút' },
+};
+let durKey = DURATIONS[store.get('deadnight_dur', 'normal')] ? store.get('deadnight_dur', 'normal') : 'normal';
+let DAY_LEN = DURATIONS[durKey].day, NIGHT_LEN = DURATIONS[durKey].night;
+const DUSK_LEN = 14, DAWN_LEN = 7;
+let nightCleared = false;
 const zPool = {};
 let tracerMesh, pickupAtlas, glowTex, beam;
 
@@ -611,8 +620,8 @@ function rollNightWeather() {
 function nextWave() {
   wave++;
   phase = 'night'; phaseT = 0;
-  toSpawn = Math.min(Math.round((8 + wave * 4) * (Q.called ? 1.6 : 1)), 80);
-  nightTotal = toSpawn; nightKills = 0;
+  toSpawn = Math.min(Math.round((8 + wave * 4) * (NIGHT_LEN / 120) * (Q.called ? 1.6 : 1)), 90);
+  nightTotal = toSpawn; nightKills = 0; nightCleared = false;
   spawnTimer = 2.5; intermission = 0;
   atmos.hour = Math.max(atmos.hour, 19.6);
   hourFrom = atmos.hour;
@@ -670,10 +679,11 @@ function startDusk() {
 function updatePhase(dt) {
   phaseT += dt;
   if (phase === 'night') {
-    // đêm trôi theo số zombie bị hạ (và chậm dần theo thời gian), hết zombie thì rạng đông
-    const target = 19.6 + Math.min(1, nightKills / Math.max(1, nightTotal)) * 8.9;
-    atmos.hour = Math.min(target, atmos.hour + dt * 0.5);
-    if (toSpawn <= 0 && !zombies.some((z) => z.state !== 'dead')) startDawn();
+    // đêm dài cố định; hạ hết đợt zombie (không tính zombie còn nấp trong nhà) thì trời mau sáng
+    const cleared = toSpawn <= 0 && !zombies.some((z) => z.state !== 'dead' && z.aggro);
+    if (cleared && !nightCleared && phaseT > 8) { nightCleared = true; phaseT = Math.max(phaseT, NIGHT_LEN - 6); }
+    atmos.hour = 19.6 + 9.9 * Math.min(1, phaseT / NIGHT_LEN);
+    if (phaseT >= NIGHT_LEN) startDawn();
   } else if (phase === 'dawn') {
     const k = Math.min(1, phaseT / DAWN_LEN);
     atmos.hour = hourFrom + (30.9 - hourFrom) * k;
@@ -941,7 +951,7 @@ function makeSnapshot(base) {
   const w = {
     t: Date.now(), st: state.mode === 'over' ? 'over' : 'play', ph: PH.indexOf(phase), hr: Math.round(atmos.hour * 100), wx: WX.indexOf(atmos.kind), d: dayNo, wv: wave, ts: toSpawn, k: kills,
     q: [Q.found ? 1 : 0, Q.parts, Q.called ? 1 : 0, h ? ['in', 'wait', 'out'].indexOf(h.stage) + 1 : 0, h ? Math.ceil(h.left) : 0, Q.won ? 1 : 0],
-    pw: power ? 1 : 0, ar: world.pois.armory.open ? 1 : 0, g: net.gameId, z,
+    pw: power ? 1 : 0, ar: world.pois.armory.open ? 1 : 0, g: net.gameId, dl: [DAY_LEN, NIGHT_LEN], z,
   };
   // giữ presence dưới 4 KiB
   while (z.length > 8 && base + JSON.stringify(w).length > 3900) z.splice(z.length - 8, 8);
@@ -967,6 +977,7 @@ function applySnapshot(w) {
   const wk = WX[w.wx] || 'clear';
   if (wk !== atmos.kind) atmos.setWeather(wk);
   dayNo = w.d | 0; wave = w.wv | 0; toSpawn = w.ts | 0; kills = w.k | 0;
+  if (Array.isArray(w.dl)) { DAY_LEN = clamp(+w.dl[0] || 150, 30, 600); NIGHT_LEN = clamp(+w.dl[1] || 120, 30, 600); }
   // nhiệm vụ chung
   const q = Array.isArray(w.q) ? w.q : [];
   if (q[0] && !Q.found) { Q.found = true; showMsg('BỘ ĐÀM HỎNG', 'Cần xăng cho máy phát & 2 linh kiện để gọi cứu hộ'); }
@@ -1515,7 +1526,8 @@ function updateHud() {
   hud.dirty = false;
   const w = WEAPONS[player.weapon], g = curGun();
   const alive = zombies.filter((z) => z.state !== 'dead' && z.aggro).length;
-  setText('left', phase === 'night' ? `Zombie đang kéo tới: ${toSpawn + alive}` : phase === 'dawn' ? 'Trời sáng rồi!' : phase === 'day' ? `Trời tối sau ~${Math.ceil((DAY_LEN - phaseT) / 10) * 10} giây` : 'Màn đêm sắp buông…');
+  const hrs = atmos.hour, left10 = (v) => Math.max(0, Math.ceil(v / 10) * 10);
+  setText('left', phase === 'night' ? `Bình minh sau ~${left10((29.5 - hrs) / 9.9 * NIGHT_LEN)} giây · zombie: ${toSpawn + alive}` : phase === 'dawn' ? 'Trời sáng rồi!' : phase === 'day' ? `Trời tối sau ~${left10((16.4 - hrs) / (16.4 - 6.9) * DAY_LEN)} giây` : 'Màn đêm sắp buông…');
   const [qt, qs] = questText();
   setText('q-text', qt);
   const qsub = $('q-sub');
@@ -2010,11 +2022,12 @@ function updatePickups(dt) {
 function updateWaves(dt) {
   if (phase !== 'night' || toSpawn <= 0) return;
   spawnTimer -= dt;
-  const alive = zombies.filter((z) => z.state !== 'dead').length;
+  const alive = zombies.filter((z) => z.state !== 'dead' && z.aggro).length;
   if (spawnTimer <= 0 && alive < (quality === 'high' ? 40 : 28)) {
     const batch = Math.min(toSpawn, 1 + Math.floor(wave / 3));
     for (let i = 0; i < batch; i++) if (spawnZombie()) toSpawn--;
-    spawnTimer = Math.max(0.4, 1.7 - wave * 0.1) * rand(0.6, 1.3);
+    // rải đều đợt zombie trong khoảng 2/3 đầu của đêm
+    spawnTimer = clamp((NIGHT_LEN * 0.65 / Math.max(1, nightTotal)) * batch, 0.35, 4) * rand(0.7, 1.3);
     hud.dirty = true;
   }
 }
@@ -2165,6 +2178,7 @@ function startGame() {
   document.body.classList.add('playing');
   hud.dirty = true;
   resetWorldState(); questReset();
+  if (!net.active || net.host) { DAY_LEN = DURATIONS[durKey].day; NIGHT_LEN = DURATIONS[durKey].night; }
   dayNo = 1;
   atmos.hour = 7.4; dayStartHour = 7.4; atmos.setWeather('clear', true); atmos.rate = 0.12;
   startDay(true);
@@ -2198,6 +2212,7 @@ function gameOver() {
   store.set('deadnight_days', String(best));
   document.body.classList.remove('playing');
   $('ov-night').textContent = dayNo; $('ov-kills').textContent = kills; $('ov-loot').textContent = player.lootCount; $('ov-best').textContent = best;
+  $('ov-time').textContent = Math.max(1, Math.round((gtime - playStart) / 60));
   setTimeout(() => $('over').classList.remove('hidden'), 900);
 }
 function toMenu() {
@@ -2214,6 +2229,7 @@ function toMenu() {
 }
 function setQualityLabel() {
   $('q-btn').textContent = 'Đồ hoạ: ' + (quality === 'high' ? 'Cao' : 'Nhẹ');
+  $('dur-btn').textContent = `Thời lượng: ${DURATIONS[durKey].name} (${DURATIONS[durKey].est})`;
   $('px-btn').textContent = 'Pixel: ' + pixelK + 'x';
   const vb = document.querySelector('#view-bar .vb[data-v="pixel"]');
   if (vb) vb.textContent = 'Pixel ' + pixelK + 'x';
@@ -2432,6 +2448,13 @@ function frame(now) {
 $('start-btn').addEventListener('click', startGame);
 $('view-btn').addEventListener('click', startView);
 $('px-btn').addEventListener('click', cyclePixel);
+$('dur-btn').addEventListener('click', () => {
+  const keys = Object.keys(DURATIONS);
+  durKey = keys[(keys.indexOf(durKey) + 1) % keys.length];
+  store.set('deadnight_dur', durKey);
+  DAY_LEN = DURATIONS[durKey].day; NIGHT_LEN = DURATIONS[durKey].night;
+  setQualityLabel();
+});
 document.querySelectorAll('#view-bar .vb').forEach((b) => b.addEventListener('click', () => viewAction(b.dataset.v)));
 $('view-show').addEventListener('click', () => viewAction('hud'));
 $('again-btn').addEventListener('click', () => (net.active && !net.host ? toast('Chờ chủ phòng bắt đầu ván mới…') : startGame()));

@@ -315,6 +315,66 @@ function shoot() {
 }
 let muzzleT = 0;
 
+// ================= TÌM ĐƯỜNG (flow field BFS từ vị trí người chơi) =================
+const NAV = { res: 0.5, w: 0, h: 0, block: null, dist: null, queue: null, cell: -1 };
+const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+function navBuild() {
+  NAV.w = Math.round((BOUNDS.x1 - BOUNDS.x0) / NAV.res) + 1;
+  NAV.h = Math.round((BOUNDS.z1 - BOUNDS.z0) / NAV.res) + 1;
+  const n = NAV.w * NAV.h;
+  NAV.block = new Uint8Array(n); NAV.dist = new Int32Array(n); NAV.queue = new Int32Array(n);
+  for (let j = 0; j < NAV.h; j++)
+    for (let i = 0; i < NAV.w; i++)
+      if (insideSolid(BOUNDS.x0 + i * NAV.res, BOUNDS.z0 + j * NAV.res, 0.3)) NAV.block[j * NAV.w + i] = 1;
+  NAV.cell = -1;
+}
+function navCell(x, z) {
+  const i = clamp(Math.round((x - BOUNDS.x0) / NAV.res), 0, NAV.w - 1), j = clamp(Math.round((z - BOUNDS.z0) / NAV.res), 0, NAV.h - 1);
+  return j * NAV.w + i;
+}
+function navCompute() {
+  const s = navCell(player.x, player.z);
+  if (s === NAV.cell) return;
+  NAV.cell = s;
+  const { w, h, block, dist, queue } = NAV;
+  dist.fill(-1);
+  let head = 0, tail = 0;
+  dist[s] = 0; queue[tail++] = s;
+  while (head < tail) {
+    const c = queue[head++], ci = c % w, cj = (c / w) | 0, d = dist[c] + 1;
+    for (let k = 0; k < 8; k++) {
+      const ni = ci + N8[k][0], nj = cj + N8[k][1];
+      if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
+      const nc = nj * w + ni;
+      if (dist[nc] !== -1 || block[nc]) continue;
+      if (k >= 4 && (block[cj * w + ni] || block[nj * w + ci])) continue;
+      dist[nc] = d; queue[tail++] = nc;
+    }
+  }
+}
+const navOut = { x: 0, z: 0 };
+function navDir(z) {
+  const { w, h, dist } = NAV;
+  const c = navCell(z.x, z.z), ci = c % w, cj = (c / w) | 0;
+  let best = -1, bd = dist[c] >= 0 ? dist[c] : 1e9;
+  for (let k = 0; k < 8; k++) {
+    const ni = ci + N8[k][0], nj = cj + N8[k][1];
+    if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
+    const nd = dist[nj * w + ni];
+    if (nd >= 0 && nd < bd) { bd = nd; best = k; }
+  }
+  if (best < 0) return false;
+  const tx = BOUNDS.x0 + (ci + N8[best][0]) * NAV.res, tz = BOUNDS.z0 + (cj + N8[best][1]) * NAV.res;
+  const dx = tx - z.x, dz = tz - z.z, l = Math.hypot(dx, dz) || 1;
+  navOut.x = dx / l; navOut.z = dz / l;
+  return true;
+}
+function navLOS(x0, z0, x1, z1) {
+  const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.35);
+  for (let i = 1; i < n; i++) { const t = i / n; if (NAV.block[navCell(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)]) return false; }
+  return true;
+}
+
 // ================= ZOMBIE =================
 function spriteFor(type) {
   const p = zPool[type];
@@ -577,6 +637,7 @@ function updatePlayer(dt) {
 }
 
 function updateZombies(dt) {
+  if (NAV.block) navCompute();
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i], s = z.sprite;
     z.t += dt;
@@ -600,12 +661,13 @@ function updateZombies(dt) {
     let dx = player.x - z.x, dz = player.z - z.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
-    if (z.stuck > 0.35) {
-      const sx = -dz * z.side, sz = dx * z.side;
-      dx = dx * 0.25 + sx; dz = dz * 0.25 + sz;
-      z.stuck -= dt * 0.5;
-      if (z.stuck > 1.6) { z.stuck = 0; z.side *= -1; }
-    }
+    // đi thẳng khi nhìn thấy người chơi ở gần, còn lại đi theo flow field vòng qua vật cản
+    if (d > 1.0 && !(d < 7 && navLOS(z.x, z.z, player.x, player.z)) && navDir(z)) { dx = navOut.x; dz = navOut.z; }
+    if (z.stuck > 0.6) { const sx = -dz * z.side, sz = dx * z.side; dx = dx * 0.4 + sx * 0.6; dz = dz * 0.4 + sz * 0.6; z.stuck -= dt; if (z.stuck > 1.2) { z.stuck = 0; z.side *= -1; } }
+    z.ux = z.ux === undefined ? dx : z.ux + (dx - z.ux) * Math.min(1, dt * 7);
+    z.uz = z.uz === undefined ? dz : z.uz + (dz - z.uz) * Math.min(1, dt * 7);
+    const ul = Math.hypot(z.ux, z.uz) || 1;
+    dx = z.ux / ul; dz = z.uz / ul;
     for (let j = i + 1; j < zombies.length; j++) {
       const o = zombies[j];
       if (o.state === 'dead') continue;
@@ -633,7 +695,7 @@ function updateZombies(dt) {
         sound.hurt();
         fx.decals.add(player.x + rand(-0.3, 0.3), player.z + rand(-0.3, 0.3), 0.7);
         const kb = z.type === 'brute' ? 1.1 : 0.4;
-        player.x += dx * kb; player.z += dz * kb; collide(player);
+        player.x += (player.x - z.x) / d * kb; player.z += (player.z - z.z) / d * kb; collide(player);
         hud.dirty = true;
         if (player.hp <= 0) { gameOver(); return; }
       }
@@ -871,6 +933,7 @@ function init() {
   camera.updateMatrixWorld();
   camQuat.copy(camera.quaternion);
   world = buildWorld(scene, quality, camera);
+  navBuild();
   SPR = makeCharacterSprites();
   pickupAtlas = makePickupAtlas();
   glowTex = softDisc(64, 0, 2.2);
@@ -929,6 +992,7 @@ function init() {
   last = performance.now();
   requestAnimationFrame(frame);
   if (QS.has('shot')) setTimeout(startGame, 50);
+  if (QS.has('debug')) window.__dbg = () => ({ mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, spawnTimer: +spawnTimer.toFixed(2), zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +z.stuck.toFixed(2), z.side]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
 }
 
 // ================= KHÓI & TÀN LỬA =================
@@ -959,9 +1023,13 @@ function frame(now) {
   gtime += dt;
   U.time.value = gtime;
   if (state.mode === 'play') {
-    updatePlayer(dt);
-    if (state.mode === 'play') updateZombies(dt);
-    if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); }
+    const steps = QS.has('debug') ? (+QS.get('speed') || 1) : 1;
+    for (let k = 0; k < steps && state.mode === 'play'; k++) {
+      if (k) { gtime += dt; U.time.value = gtime; }
+      updatePlayer(dt);
+      if (state.mode === 'play') updateZombies(dt);
+      if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); }
+    }
   } else if (state.mode === 'over') {
     updateZombies(dt * 0.3);
     updateBullets(dt);

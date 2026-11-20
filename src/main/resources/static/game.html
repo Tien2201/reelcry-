@@ -20,11 +20,12 @@
     --gold: #f2c14e;
     --stam: #e6c75c;
     --hp: #d8382a;
+    --sl: env(safe-area-inset-left, 0px);
+    --sr: env(safe-area-inset-right, 0px);
+    --st: env(safe-area-inset-top, 0px);
+    --sb: env(safe-area-inset-bottom, 0px);
+    color-scheme: dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #07080c; --ink: #f1e6cf; }
-  }
-  :root[data-theme="dark"] { --bg: #07080c; --ink: #f1e6cf; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
     font-family: "VT323", ui-monospace, "Courier New", monospace; user-select: none; -webkit-user-select: none;
@@ -40,7 +41,7 @@
 
   #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .6s; }
   body.playing #hud { opacity: 1; }
-  #hp-box { position: absolute; left: 14px; top: 12px; padding: 8px 12px 9px; width: min(300px, 46vw); }
+  #hp-box { position: absolute; left: calc(14px + var(--sl)); top: calc(12px + var(--st)); padding: 8px 12px 9px; width: min(300px, 46vw); }
   .row { display: flex; align-items: center; gap: 8px; }
   .lbl { font-size: 18px; letter-spacing: 1px; color: var(--ink-dim); width: 54px; }
   .bar { flex: 1; height: 12px; background: #1a0c0c; border: 2px solid #000; position: relative; overflow: hidden; }
@@ -50,14 +51,14 @@
   .bar.st > i { background: repeating-linear-gradient(90deg, var(--stam) 0 6px, #b0902e 6px 8px); }
   #hp-box.low #hp-fill { animation: pulse .6s infinite alternate; }
   @keyframes pulse { to { filter: brightness(1.8); } }
-  #night-box { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); text-align: center; padding: 4px 18px 6px; }
+  #night-box { position: absolute; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); text-align: center; padding: 4px 18px 6px; }
   #night { font-size: 30px; color: var(--blood); letter-spacing: 3px; line-height: 1; text-shadow: 0 0 10px rgba(210,58,42,.5); }
   #atmo { font-size: 18px; color: var(--ink-dim); line-height: 1; }
   #left { font-size: 17px; color: var(--ink); line-height: 1.1; }
-  #score-box { position: absolute; right: 14px; top: 12px; text-align: right; padding: 6px 12px; }
+  #score-box { position: absolute; right: calc(14px + var(--sr)); top: calc(12px + var(--st)); text-align: right; padding: 6px 12px; }
   #score { font-size: 30px; color: var(--gold); line-height: 1; }
   #kills { font-size: 17px; color: var(--ink-dim); }
-  #weapon-box { position: absolute; right: 14px; bottom: 14px; padding: 8px 12px; min-width: 210px; }
+  #weapon-box { position: absolute; right: calc(14px + var(--sr)); bottom: calc(14px + var(--sb)); padding: 8px 12px; min-width: 210px; }
   #wname { font-size: 20px; letter-spacing: 1px; }
   #ammo-line { font-size: 40px; line-height: .95; }
   #ammo.empty { color: var(--blood); }
@@ -100,10 +101,10 @@
   .tbtn { position: fixed; z-index: 5; width: 58px; height: 58px; border-radius: 50%; display: none; place-items: center;
     font-family: inherit; font-size: 26px; color: var(--ink); background: rgba(10,8,14,.55); border: 2px solid rgba(217,192,138,.6); }
   body.touch.playing .tbtn { display: grid; }
-  #t-reload { right: 18px; bottom: 132px; }
-  #t-swap { right: 86px; bottom: 170px; }
-  #t-pause { right: 16px; top: 86px; width: 42px; height: 42px; font-size: 18px; }
-  body.touch #weapon-box { right: auto; left: 14px; bottom: 14px; min-width: 0; }
+  #t-reload { right: calc(18px + var(--sr)); bottom: calc(132px + var(--sb)); }
+  #t-swap { right: calc(86px + var(--sr)); bottom: calc(170px + var(--sb)); }
+  #t-pause { right: calc(16px + var(--sr)); top: calc(86px + var(--st)); width: 42px; height: 42px; font-size: 18px; }
+  body.touch #weapon-box { right: auto; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); min-width: 0; }
   body.touch #weapon-box #slots { display: none; }
 
   @media (max-width: 960px), (max-height: 480px) {
@@ -120,7 +121,7 @@
     #hp-box { width: 40vw; padding: 6px 8px; }
     .lbl { width: 34px; font-size: 15px; }
     #night { font-size: 24px; } #atmo, #left { font-size: 15px; }
-    #night-box { top: 8px; padding: 3px 10px; }
+    #night-box { top: calc(8px + var(--st)); padding: 3px 10px; }
     #score { font-size: 24px; } #kills { font-size: 14px; }
     #score-box { padding: 4px 8px; }
     #ammo-line { font-size: 32px; }

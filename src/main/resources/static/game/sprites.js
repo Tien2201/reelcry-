@@ -401,3 +401,15 @@ export function makeJackFace() {
 }
 
 export { vnoise };
+
+// ---------- diều giấy (bay lơ lửng trên trời khi chiều tà) ----------
+export function makeKite() {
+  const P = new Pix(16, 32);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.abs(x + 0.5 - 8) / 8 + Math.abs(y + 0.5 - 8) / 8;
+    if (d <= 1) P.set(x, y, x < 8 ? (y < 8 ? '#d8402a' : '#f0c040') : (y < 8 ? '#3a6ac8' : '#e8e0d0'));
+  }
+  for (let y = 16; y < 32; y++) { const x = 8 + Math.round(Math.sin(y * 0.6) * 1.5); P.set(x, y, '#2a2a2a'); if (y % 5 === 0) { P.set(x - 1, y, '#d8402a'); P.set(x + 1, y, '#f0c040'); } }
+  P.outline('#1a1418');
+  return { map: tex(P), w: 16 / PPU, h: 32 / PPU };
+}

@@ -428,6 +428,7 @@ export function sideWallTex(o) {
 // ---------- nền đất cả bản đồ ----------
 // kind: 0 cỏ, 1 đất, 2 đá lát, 3 bùn, 4 đất trồng, 5 đất rừng, 6 đất mộ
 export function groundTex(L) {
+  const PPU = L.ppu || 16;
   const W = Math.round(L.w * PPU), H = Math.round(L.h * PPU);
   const mask = document.createElement('canvas');
   mask.width = W; mask.height = H;
@@ -462,7 +463,8 @@ export function groundTex(L) {
   const C = 5;
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
-      const jx = (vnoise(x * 0.14, y * 0.14, 3) - 0.5) * 7, jy = (vnoise(x * 0.14 + 40, y * 0.14, 4) - 0.5) * 7;
+      const js = PPU / 16;
+      const jx = (vnoise(x * 0.14 / js, y * 0.14 / js, 3) - 0.5) * 7 * js, jy = (vnoise(x * 0.14 / js + 40, y * 0.14 / js, 4) - 0.5) * 7 * js;
       const k = kindAt(x + jx, y + jy);
       let c, h = 0;
       if (k === 0 || k === 5) {

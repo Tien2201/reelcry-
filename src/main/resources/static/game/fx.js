@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { spriteLit, patchMaterial, softDisc, makeRng } from './pixel.js';
 import { makeCrowAtlas, makeBloodAtlas, makeSmallAtlas } from './sprites.js';
-import { mistTex, shaftTex } from './textures.js';
+import { mistTex, shaftTex, backdropTex } from './textures.js';
 import { U } from './world.js';
 
 const V = new THREE.Vector3(), S = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), C = new THREE.Color(), EU = new THREE.Euler();
@@ -261,30 +261,115 @@ export class Motes {
   }
 }
 
-// ---------- sương mù sát mặt đất ----------
+// ---------- sương mù: các dải đứng trước/sau phố, trôi theo gió ----------
 export class Mist {
-  constructor(parent, layers = 3) {
+  constructor(parent) {
     const t = mistTex();
-    this.layers = [];
-    for (let i = 0; i < layers; i++) {
-      const mt = t.clone(); mt.needsUpdate = true;
-      mt.repeat.set(5, 4);
-      const m = new THREE.MeshBasicMaterial({ map: mt, transparent: true, depthWrite: false, opacity: 0, color: 0xffffff, fog: true });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(110, 80), m);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.set(0, 0.25 + i * 0.45, 0);
-      mesh.renderOrder = 3 + i;
+    const defs = [{ z: -1.7, y: 0, h: 3.2, k: 1 }, { z: -9.5, y: 1.8, h: 4.2, k: 0.9 }, { z: 6.5, y: 0, h: 2.6, k: 0.7 }, { z: -24, y: 3.6, h: 7, k: 1.1 }];
+    this.layers = defs.map((d, i) => {
+      const u = { map: { value: t }, uColor: { value: new THREE.Color() }, uOpacity: { value: 0 }, uOff: { value: new THREE.Vector2() } };
+      const m = new THREE.ShaderMaterial({
+        uniforms: u, transparent: true, depthWrite: false,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform sampler2D map; uniform vec3 uColor; uniform float uOpacity; uniform vec2 uOff; varying vec2 vUv;
+          void main(){
+            float n = texture2D(map, vec2(vUv.x * 5.0, vUv.y * 0.8) + uOff).a * 0.7 + texture2D(map, vec2(vUv.x * 2.3, vUv.y * 0.5) + uOff * 0.6 + 0.37).a * 0.5;
+            float a = n * smoothstep(0.0, 0.3, vUv.y) * (1.0 - smoothstep(0.35, 1.0, vUv.y)) * uOpacity;
+            gl_FragColor = vec4(uColor, a);
+          }`,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(120, d.h), m);
+      mesh.position.set(0, d.y + d.h / 2, d.z);
+      mesh.renderOrder = 4 + i;
+      mesh.frustumCulled = false;
       parent.add(mesh);
-      this.layers.push({ mesh, map: mt, sp: 0.006 + i * 0.004 });
-    }
+      return { mesh, u, d, sp: 0.004 + i * 0.002 };
+    });
   }
-  update(dt, t, amount, color) {
-    for (const [i, L] of this.layers.entries()) {
-      L.map.offset.set(t * L.sp, t * L.sp * 0.6 + i * 0.3);
-      L.mesh.material.opacity = amount * (0.34 - i * 0.07);
-      L.mesh.material.color.copy(color);
+  update(dt, t, amount, color, camX) {
+    for (const L of this.layers) {
+      L.mesh.position.x = camX;
+      L.u.uOff.value.set(camX / 120 * 5 + t * L.sp * 5, 0);
+      L.u.uOpacity.value = amount * 0.55 * L.d.k;
+      L.u.uColor.value.copy(color).lerp(new THREE.Color(1, 1, 1), 0.18);
       L.mesh.visible = amount > 0.01;
     }
+  }
+}
+
+// ---------- bầu trời: dải màu, sao, trăng, mây pixel + đồi xa ----------
+export class Sky {
+  constructor(parent) {
+    this.u = {
+      uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() },
+      uStars: { value: 0 }, uMoon: { value: 0 }, uMoonCol: { value: new THREE.Color(1, 1, 1) }, uClouds: { value: 0 }, uCloudCol: { value: new THREE.Color() },
+      uTime: U.time, uFlash: { value: 0 },
+    };
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.u, depthWrite: false,
+      vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform vec3 uTop, uHor, uGlow, uMoonCol, uCloudCol; uniform float uStars, uMoon, uClouds, uTime, uFlash;
+        varying vec2 vP;
+        float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+        void main(){
+          vec2 q = floor(vP * 1.2) / 1.2;
+          float wy = q.y + 60.0;
+          vec3 col = mix(uHor, uTop, smoothstep(2.0, 30.0, wy));
+          col += uGlow * exp(-pow((q.x + 70.0) / 90.0, 2.0)) * exp(-max(wy - 3.0, 0.0) / 9.0);
+          float st = step(0.988, h21(floor(q * 0.9))) * (0.6 + 0.4 * sin(uTime * 2.0 + h21(floor(q)) * 40.0));
+          col += st * uStars * smoothstep(9.0, 16.0, wy) * 0.9;
+          vec2 mc = vec2(55.0, 15.5);
+          float d = length(vec2(q.x, wy) - mc);
+          col = mix(col, uMoonCol * (1.0 - 0.15 * step(0.6, vn(q * 0.8))), smoothstep(3.2, 2.9, d) * uMoon);
+          col += uMoonCol * exp(-d / 7.0) * 0.35 * uMoon;
+          float c = vn(vec2(q.x * 0.035 + uTime * 0.004, wy * 0.16)) * 0.6 + vn(vec2(q.x * 0.09 - uTime * 0.006, wy * 0.35)) * 0.4;
+          float cm = smoothstep(0.55, 0.7, c) * smoothstep(7.0, 11.0, wy) * (1.0 - smoothstep(20.0, 30.0, wy)) * uClouds;
+          col = mix(col, uCloudCol * (0.85 + 0.15 * step(0.66, c)), cm);
+          col += vec3(0.35, 0.4, 0.5) * uFlash;
+          gl_FragColor = vec4(col, 1.0);
+        }`,
+    });
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(800, 260), mat);
+    this.mesh.position.set(0, 60, -160);
+    this.mesh.renderOrder = -10;
+    this.mesh.frustumCulled = false;
+    parent.add(this.mesh);
+    // đồi xa (3 lớp bóng trong 1 texture, mỗi lớp một màu)
+    const bt = backdropTex();
+    bt.wrapS = THREE.RepeatWrapping;
+    this.hu = { map: { value: bt }, uFog: { value: new THREE.Color() }, uDark: { value: new THREE.Color() }, uOff: { value: 0 } };
+    const hm = new THREE.ShaderMaterial({
+      uniforms: this.hu, transparent: true, depthWrite: false,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform sampler2D map; uniform vec3 uFog, uDark; uniform float uOff; varying vec2 vUv;
+        void main(){
+          vec4 t = texture2D(map, vec2(vUv.x * 2.0 + uOff, vUv.y));
+          if (t.a < 0.5) discard;
+          float layer = floor(t.r * 255.0 / 60.0 + 0.5);
+          vec3 c = mix(uFog, uDark, 0.18 + (3.0 - layer) * 0.2 + (1.0 - vUv.y) * 0.15);
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    });
+    this.hills = new THREE.Mesh(new THREE.PlaneGeometry(420, 44), hm);
+    this.hills.position.set(0, 12, -110);
+    this.hills.renderOrder = -9;
+    this.hills.frustumCulled = false;
+    parent.add(this.hills);
+  }
+  update(t, A, camX, flash) {
+    this.mesh.position.x = camX;
+    this.hills.position.x = camX;
+    this.hu.uOff.value = camX * 0.25 / 420 * 2;
+    const u = this.u;
+    u.uTop.value.copy(A.skyTop); u.uHor.value.copy(A.skyHor); u.uGlow.value.copy(A.glow);
+    u.uStars.value = A.stars; u.uMoon.value = A.moon; u.uMoonCol.value.copy(A.moonCol);
+    u.uClouds.value = A.clouds; u.uCloudCol.value.copy(A.cloudCol);
+    u.uFlash.value = flash;
+    this.hu.uFog.value.copy(A.skyHor).lerp(A.fog, 0.5);
+    this.hu.uDark.value.copy(A.fog).multiplyScalar(0.35);
   }
 }
 

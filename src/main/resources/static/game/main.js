@@ -1,9 +1,10 @@
-// DEAD NIGHT — game sinh tồn zombie phong cách HD-2D (sprite pixel trong cảnh 3D).
+// DEAD NIGHT — game sinh tồn zombie phong cách HD-2D: sprite pixel trong diorama 3D,
+// camera thấp nhìn ngang, cuộn theo nhân vật dọc con phố của ngôi làng.
 import * as THREE from 'three';
-import { buildWorld, U, BOUNDS } from './world.js';
+import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND } from './world.js';
 import { Post } from './post.js';
 import { Atmos, PRESETS, presetForNight } from './atmos.js';
-import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves } from './fx.js';
+import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW } from './sprites.js';
 import { spriteLit, softDisc } from './pixel.js';
 import { Sound } from './audio.js';
@@ -14,6 +15,7 @@ const DBG = QS.has('shot');
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rand = (a, b) => a + Math.random() * (b - a);
 const TAU = Math.PI * 2;
+const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
 const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
@@ -26,17 +28,18 @@ THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replac
   'float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 0.01 );',
   'float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 1.2 );');
 
-// ================= RENDERER / SCENE =================
+// ================= RENDERER / SCENE / CAMERA =================
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 30, 90);
-const camera = new THREE.PerspectiveCamera(24, 1, 2, 170);
-const PITCH = THREE.MathUtils.degToRad(31);
-let camDist = 28;
+scene.fog = new THREE.Fog(0x000000, 30, 100);
+// camera thấp kiểu diorama: nhìn gần như ngang vào mặt tiền các ngôi nhà
+const CAM = { y: 9.6, back: 26, lookY: 3.0, lookZ: -3.2, fov: 30 };
+const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
+let camScale = 1;
 const post = new Post(renderer);
 const overlay = $('fx2d');
 const g2 = overlay.getContext('2d');
@@ -48,8 +51,7 @@ function resize() {
   renderer.setPixelRatio(PR);
   renderer.setSize(W, H, false);
   camera.aspect = W / H;
-  const vh = clamp(21 / camera.aspect, 12, 24);
-  camDist = vh / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camScale = clamp(1.75 / camera.aspect, 1, 2.3);
   camera.updateProjectionMatrix();
   const s = renderer.getDrawingBufferSize(new THREE.Vector2());
   post.setSize(s.x, s.y);
@@ -62,8 +64,8 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1);
 sun.castShadow = true;
-const sunSize = 24;
-Object.assign(sun.shadow.camera, { left: -sunSize, right: sunSize, top: sunSize, bottom: -sunSize, near: 1, far: 90 });
+const sunSize = 26;
+Object.assign(sun.shadow.camera, { left: -sunSize, right: sunSize, top: sunSize, bottom: -sunSize, near: 1, far: 110 });
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.035;
 scene.add(sun, sun.target);
 const flashlight = new THREE.SpotLight('#fff0d6', 0, 22, 0.44, 0.6, 1.5);
@@ -80,26 +82,20 @@ function setupShadowsAndPool() {
   const hi = quality === 'high';
   sun.shadow.mapSize.set(hi ? 2048 : 1024, hi ? 2048 : 1024);
   flashlight.shadow.mapSize.set(hi ? 1024 : 512, hi ? 1024 : 512);
-  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-  if (flashlight.shadow.map) { flashlight.shadow.map.dispose(); flashlight.shadow.map = null; }
   if (!pool.length) for (let i = 0; i < 10; i++) { const l = new THREE.PointLight(0xffffff, 0, 8, 2); scene.add(l); pool.push(l); }
 }
 
-// ================= ÂM THANH, KHÍ QUYỂN =================
 const sound = new Sound();
 const atmos = new Atmos();
 
-// ================= THẾ GIỚI (dựng sau khi màn hình chờ hiện) =================
 let world, fx = {}, SPR, camQuat = new THREE.Quaternion();
-const camTarget = new THREE.Vector3(0, 0.8, 0);
+const camTarget = new THREE.Vector3(0, 1, 1);
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 function placeCamera(shake = 0) {
-  camera.position.set(
-    camTarget.x + (Math.random() - 0.5) * shake,
-    camTarget.y + camDist * Math.sin(PITCH) + (Math.random() - 0.5) * shake,
-    camTarget.z + camDist * Math.cos(PITCH));
-  camera.lookAt(camTarget.x + (Math.random() - 0.5) * shake * 0.3, camTarget.y, camTarget.z);
+  const r = () => (Math.random() - 0.5) * shake;
+  camera.position.set(camTarget.x + r(), CAM.lookY + (CAM.y - CAM.lookY) * camScale + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * camScale);
+  camera.lookAt(camTarget.x + r() * 0.3, CAM.lookY, CAM.lookZ);
 }
 
 // ---------- sprite nhân vật ----------
@@ -130,7 +126,7 @@ function makeSprite(atlasList, xray) {
   const group = new THREE.Group();
   group.add(mesh, blob);
   scene.add(group);
-  fx.hide && fx.hide.push(xr, blob);
+  if (world) world.hideInReflection.push(xr, blob);
   return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, cur: 0, w: a0.w, h: a0.h };
 }
 function setFrame(s, dir, frame) {
@@ -153,8 +149,8 @@ function dirFromAngle(a) {
 // ================= TRẠNG THÁI GAME =================
 const WEAPONS = [
   { key: 'pistol', name: 'SÚNG LỤC', dmg: 34, rate: 0.26, mag: 12, reload: 1.0, spread: 0.035, pellets: 1, speed: 38, kick: 0.06, infinite: true, shake: 0.12 },
-  { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.24, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, unlock: 2 },
-  { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.08, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, unlock: 4 },
+  { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.2, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, unlock: 2 },
+  { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.07, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, unlock: 4 },
 ];
 const ZT = {
   walker: { r: 0.36, speed: [1.0, 1.5], hp: 60, dmg: 10, score: 10, atk: 0.9, hpW: 6 },
@@ -214,17 +210,20 @@ function stickVec(st, max = 56) {
   if (d > max) { st.ox = st.x - dx / d * max; st.oy = st.y - dy / d * max; dx = dx / d * max; dy = dy / d * max; }
   return d < 5 ? { x: 0, y: 0, m: 0 } : { x: dx / Math.min(d, max), y: dy / Math.min(d, max), m: Math.min(d, max) / max };
 }
-// màn hình → điểm trên mặt phẳng ngang y = h
-const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1);
-function screenToGround(sx, sy, h = 1) {
+// màn hình → điểm ngắm: mặt phẳng ngang ngang tầm súng, nếu chỉ lên cao thì lấy điểm trên mặt tường kè
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const planeH = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1), planeV = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+function aimPoint(sx, sy) {
   ndc.set(sx / W * 2 - 1, -(sy / H) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  plane.constant = -h;
-  return ray.ray.intersectPlane(plane, tmpV2) ? tmpV2 : null;
+  const p = ray.ray.intersectPlane(planeH, tmpV2);
+  if (p && p.z > BOUNDS.z0 - 0.4) return p;
+  planeV.constant = -(BOUNDS.z0 - 0.4);
+  return ray.ray.intersectPlane(planeV, tmpV2);
 }
 
 // ================= VA CHẠM =================
-function collide(o, solidOnly = false) {
+function collide(o) {
   let hit = false;
   const C = world.colliders;
   for (let i = 0; i < C.circles.length; i++) {
@@ -251,6 +250,7 @@ function collide(o, solidOnly = false) {
   return hit;
 }
 function bulletBlocked(x, z) {
+  if (z < WALL_Z + 0.1) return true;
   const C = world.colliders;
   for (const c of C.circles) { if (c.low) continue; const dx = x - c.x, dz = z - c.z; if (dx * dx + dz * dz < c.r * c.r) return true; }
   for (const b of C.boxes) if (!b.low && x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return true;
@@ -263,58 +263,6 @@ function insideSolid(x, z, pad = 0.4) {
   return false;
 }
 
-// ================= NGƯỜI CHƠI & VŨ KHÍ =================
-function newPlayer() {
-  const sp = player ? player.sprite : makeSprite([SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
-  return {
-    x: world.plaza.x + 2.2, z: world.plaza.z + 3.2, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3,
-    aim: Math.PI / 2, dir: 'down', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
-    guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: w.mag, reserve: i === 0 ? Infinity : 0 })),
-    sprite: sp,
-  };
-}
-const curGun = () => player.guns[player.weapon];
-function switchWeapon(i) {
-  if (!player.guns[i].owned || i === player.weapon) return;
-  player.weapon = i; player.reloading = 0; player.cooldown = 0.25;
-  setSpriteMap(player.sprite, i);
-  sound.reload(); hud.dirty = true;
-}
-function cycleWeapon() {
-  for (let k = 1; k <= WEAPONS.length; k++) { const i = (player.weapon + k) % WEAPONS.length; if (player.guns[i].owned) { switchWeapon(i); return; } }
-}
-function reload() {
-  const g = curGun(), w = WEAPONS[player.weapon];
-  if (player.reloading > 0 || g.ammo >= w.mag || g.reserve <= 0) return;
-  player.reloading = w.reload; sound.reload(); hud.dirty = true;
-}
-function muzzlePos(out) {
-  const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
-  return out.set(player.x + ca * 0.75, 1.0, player.z + sa * 0.75);
-}
-function shoot() {
-  const g = curGun(), w = WEAPONS[player.weapon];
-  if (player.cooldown > 0 || player.reloading > 0) return;
-  if (g.ammo <= 0) { sound.empty(); player.cooldown = 0.25; reload(); return; }
-  g.ammo--; player.cooldown = w.rate; player.recoil = w.kick; hud.dirty = true;
-  const m = muzzlePos(tmpV);
-  for (let i = 0; i < w.pellets; i++) {
-    const a = player.aim + rand(-w.spread, w.spread) * (w.pellets > 1 ? 1 : 0.6);
-    const sp = w.speed * rand(0.92, 1.05);
-    bullets.push({ x: m.x, z: m.z, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg: w.dmg, life: 0.6, pierce: w.pellets > 1 ? 0 : 1 });
-  }
-  muzzleLight.position.copy(m); muzzleLight.intensity = 45;
-  muzzleT = 0.06;
-  shake = Math.max(shake, w.shake);
-  for (let i = 0; i < 6; i++) { const a = player.aim + rand(-0.5, 0.5), s = rand(3, 8); fx.spark.spawn(m.x, m.y, m.z, Math.cos(a) * s, rand(-0.5, 1.5), Math.sin(a) * s, rand(0.06, 0.14), 0.07, '#ffd890', { grav: 0, drag: 6, mode: 1 }); }
-  const sa = player.aim + Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1);
-  fx.lit.spawn(player.x, 1.0, player.z, Math.cos(sa) * rand(1.5, 2.5), rand(2, 3), Math.sin(sa) * rand(1.5, 2.5), 2.5, 0.07, '#d8b050', { grav: 12, drag: 1, bounce: 0.35, spin: 14 });
-  sound.shoot(w.key);
-  fx.crows.scare(player.x, player.z, 14);
-  if (g.ammo === 0) reload();
-}
-let muzzleT = 0;
-
 // ================= TÌM ĐƯỜNG (flow field BFS từ vị trí người chơi) =================
 const NAV = { res: 0.5, w: 0, h: 0, block: null, dist: null, queue: null, cell: -1 };
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -324,8 +272,11 @@ function navBuild() {
   const n = NAV.w * NAV.h;
   NAV.block = new Uint8Array(n); NAV.dist = new Int32Array(n); NAV.queue = new Int32Array(n);
   for (let j = 0; j < NAV.h; j++)
-    for (let i = 0; i < NAV.w; i++)
-      if (insideSolid(BOUNDS.x0 + i * NAV.res, BOUNDS.z0 + j * NAV.res, 0.3)) NAV.block[j * NAV.w + i] = 1;
+    for (let i = 0; i < NAV.w; i++) {
+      const x = BOUNDS.x0 + i * NAV.res, z = BOUNDS.z0 + j * NAV.res;
+      if (z < WALL_Z + 0.3) continue;
+      if (insideSolid(x, z, 0.3) && !(z < WALL_Z + 0.6)) NAV.block[j * NAV.w + i] = 1;
+    }
   NAV.cell = -1;
 }
 function navCell(x, z) {
@@ -375,6 +326,66 @@ function navLOS(x0, z0, x1, z1) {
   return true;
 }
 
+// ================= NGƯỜI CHƠI & VŨ KHÍ =================
+function newPlayer() {
+  const sp = player ? player.sprite : makeSprite([SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
+  return {
+    x: -1.5, z: 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3,
+    aim: 0, dir: 'right', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
+    guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: w.mag, reserve: i === 0 ? Infinity : 0 })),
+    sprite: sp,
+  };
+}
+const curGun = () => player.guns[player.weapon];
+function switchWeapon(i) {
+  if (!player.guns[i].owned || i === player.weapon) return;
+  player.weapon = i; player.reloading = 0; player.cooldown = 0.25;
+  setSpriteMap(player.sprite, i);
+  sound.reload(); hud.dirty = true;
+}
+function cycleWeapon() {
+  for (let k = 1; k <= WEAPONS.length; k++) { const i = (player.weapon + k) % WEAPONS.length; if (player.guns[i].owned) { switchWeapon(i); return; } }
+}
+function reload() {
+  const g = curGun(), w = WEAPONS[player.weapon];
+  if (player.reloading > 0 || g.ammo >= w.mag || g.reserve <= 0) return;
+  player.reloading = w.reload; sound.reload(); hud.dirty = true;
+}
+function muzzlePos(out) {
+  return out.set(player.x + Math.cos(player.aim) * 0.75, 1.0, player.z + Math.sin(player.aim) * 0.75);
+}
+let muzzleT = 0;
+function shoot() {
+  const g = curGun(), w = WEAPONS[player.weapon];
+  if (player.cooldown > 0 || player.reloading > 0) return;
+  if (g.ammo <= 0) { sound.empty(); player.cooldown = 0.25; reload(); return; }
+  g.ammo--; player.cooldown = w.rate; player.recoil = w.kick; hud.dirty = true;
+  // hỗ trợ ngắm: góc nhìn thấp khó ngắm theo chiều sâu, nên hút nhẹ về zombie gần hướng bắn
+  let aim = player.aim, bestDa = 0.24;
+  for (const z of zombies) {
+    if (z.y > 0.3 || (z.state !== 'walk' && z.state !== 'rise' && z.state !== 'wade')) continue;
+    const dx = z.x - player.x, dz = z.z - player.z, d = Math.hypot(dx, dz);
+    if (d > 17 || d < 0.3) continue;
+    const da = Math.abs(angDiff(Math.atan2(dz, dx), player.aim)) - Math.min(0.1, 0.5 / d);
+    if (da < bestDa) { bestDa = da; aim = Math.atan2(dz, dx); }
+  }
+  const m = muzzlePos(tmpV);
+  for (let i = 0; i < w.pellets; i++) {
+    const a = aim + rand(-w.spread, w.spread) * (w.pellets > 1 ? 1 : 0.6);
+    const sp = w.speed * rand(0.92, 1.05);
+    bullets.push({ x: m.x, z: m.z, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg: w.dmg, life: 0.6, pierce: w.pellets > 1 ? 0 : 1 });
+  }
+  muzzleLight.position.copy(m); muzzleLight.intensity = 45;
+  muzzleT = 0.06;
+  shake = Math.max(shake, w.shake);
+  for (let i = 0; i < 6; i++) { const a = aim + rand(-0.5, 0.5), s = rand(3, 8); fx.spark.spawn(m.x, m.y, m.z, Math.cos(a) * s, rand(-0.5, 1.5), Math.sin(a) * s, rand(0.06, 0.14), 0.07, '#ffd890', { grav: 0, drag: 6, mode: 1 }); }
+  const sa = aim + Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1);
+  fx.lit.spawn(player.x, 1.0, player.z, Math.cos(sa) * rand(1.5, 2.5), rand(2, 3), Math.sin(sa) * rand(1.5, 2.5), 2.5, 0.07, '#d8b050', { grav: 12, drag: 1, bounce: 0.35, spin: 14 });
+  sound.shoot(w.key);
+  fx.crows.scare(player.x, player.z, 14);
+  if (g.ammo === 0) reload();
+}
+
 // ================= ZOMBIE =================
 function spriteFor(type) {
   const p = zPool[type];
@@ -385,43 +396,78 @@ function spriteFor(type) {
 function releaseSprite(z) {
   const s = z.sprite;
   s.group.visible = false;
-  s.mesh.rotation.set(0, 0, 0); s.group.position.y = 0; s.mesh.position.y = 0; s.xr.visible = true; s.blob.visible = true;
+  s.mesh.rotation.set(0, 0, 0); s.group.position.y = 0; s.xr.visible = true; s.blob.visible = true;
   s.mat.color.setScalar(1);
   zPool[z.type].push(s);
 }
-function spawnZombie() {
-  let type = 'walker';
+function pickType() {
   const r = Math.random();
-  if (wave >= 4 && r < 0.06 + wave * 0.012) type = 'brute';
-  else if (wave >= 2 && r < 0.36) type = 'runner';
+  if (wave >= 4 && r < 0.06 + wave * 0.012) return 'brute';
+  if (wave >= 2 && r < 0.36) return 'runner';
+  return 'walker';
+}
+function newZombie(type, x, y, z, st) {
   const T = ZT[type];
-  let x, z, rise = false;
-  const graves = world.graves.filter((g) => Math.hypot(g.x - player.x, g.z - player.z) > 6);
-  if (graves.length && Math.random() < 0.35) {
-    const g = graves[Math.floor(Math.random() * graves.length)];
-    x = g.x + rand(-0.2, 0.2); z = g.z + rand(-0.3, 0.3); rise = true;
-  } else {
-    let ok = false;
-    for (let tries = 0; tries < 30 && !ok; tries++) {
-      const side = Math.floor(Math.random() * 4);
-      if (side === 0) { x = rand(BOUNDS.x0, BOUNDS.x1); z = BOUNDS.z0 + 0.5; }
-      else if (side === 1) { x = rand(BOUNDS.x0, BOUNDS.x1); z = BOUNDS.z1 - 0.5; }
-      else if (side === 2) { x = BOUNDS.x0 + 0.5; z = rand(BOUNDS.z0, BOUNDS.z1); }
-      else { x = BOUNDS.x1 - 0.5; z = rand(BOUNDS.z0, BOUNDS.z1); }
-      if (insideSolid(x, z, 0.5) || Math.hypot(x - player.x, z - player.z) < 12) continue;
-      tmpV.set(x, 1, z).project(camera);
-      ok = Math.abs(tmpV.x) > 1.05 || Math.abs(tmpV.y) > 1.05 || tries > 24;
-    }
-    if (!ok) return false;
-  }
   const hp = T.hp + wave * T.hpW;
-  const z0 = {
-    type, x, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025), hp, maxHp: hp, dmg: T.dmg, score: T.score, atkT: 0, atkCd: T.atk,
-    walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: Math.random() < 0.5 ? 1 : -1, state: rise ? 'rise' : 'walk', t: 0, sprite: spriteFor(type),
+  const zz = {
+    type, x, y, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025), hp, maxHp: hp, dmg: T.dmg, score: T.score, atkT: 0, atkCd: T.atk,
+    walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: Math.random() < 0.5 ? 1 : -1, state: st, t: 0, sprite: spriteFor(type),
   };
-  z0.sprite.group.position.set(x, rise ? -z0.sprite.h : 0, z);
-  if (rise) { sound.rise(x, z); for (let i = 0; i < 10; i++) fx.lit.spawn(x + rand(-0.4, 0.4), 0.1, z + rand(-0.4, 0.4), rand(-1, 1), rand(2, 4), rand(-1, 1), 1.2, 0.12, '#4a3626', { grav: 9, bounce: 0.2 }); }
-  zombies.push(z0);
+  zz.sprite.group.position.set(x, y, z);
+  zombies.push(zz);
+  return zz;
+}
+// chọn điểm nhảy/bậc thang gần người chơi cho zombie đi trên thềm
+function terracePlan(z) {
+  const near = STAIRS.filter((s) => Math.abs(s.x - player.x) < 9);
+  if (near.length && Math.random() < 0.45) {
+    const s = near[Math.floor(Math.random() * near.length)];
+    z.tx = s.x; z.stair = s;
+  } else {
+    let tx = player.x + rand(-5, 5);
+    for (let k = 0; k < 6 && STAIRS.some((s) => Math.abs(s.x - tx) < 1.6); k++) tx += 2;
+    z.tx = clamp(tx, BOUNDS.x0 + 1, BOUNDS.x1 - 1); z.stair = null;
+  }
+}
+function spawnZombie() {
+  const type = pickType();
+  const roll = Math.random();
+  const nearPond = Math.abs(player.x - POND.cx) < 18;
+  const nearCem = player.x > 22;
+  if (roll < 0.34) {
+    // đi trên bậc thềm phía sau rồi nhảy xuống / xuống bậc thang
+    const side = Math.random() < 0.5 ? -1 : 1;
+    let x = player.x + side * rand(13, 18);
+    if (x < BOUNDS.x0 + 1 || x > BOUNDS.x1 - 1) x = player.x - side * rand(13, 18);
+    x = clamp(x, BOUNDS.x0 + 1, BOUNDS.x1 - 1);
+    const z = newZombie(type, x, TY, WALL_Z - 1.3 - Math.random() * 0.9, 'terrace');
+    terracePlan(z);
+    return true;
+  }
+  if (roll < 0.46 && nearCem) {
+    const g = world.graves[Math.floor(Math.random() * world.graves.length)];
+    const z = newZombie(type, g.x + rand(-0.2, 0.2), TY, g.z, 'rise');
+    z.riseLevel = TY; z.sprite.group.position.y = TY - z.sprite.h;
+    sound.rise(z.x, z.z);
+    return true;
+  }
+  if (roll < 0.58 && nearPond) {
+    // trồi lên từ mặt ao rồi lội vào bờ
+    const x = Math.random() < 0.5 ? rand(POND.cx - 5, POND.c0 - 0.6) : rand(POND.c1 + 0.6, POND.cx + 5);
+    const z = newZombie(type, x, -0.6, POND.cz + rand(-0.6, 0.8), 'rise');
+    z.riseLevel = -0.6; z.sprite.group.position.y = -0.6 - z.sprite.h;
+    sound.rise(x, z.z);
+    for (let i = 0; i < 12; i++) fx.spark.spawn(x + rand(-0.4, 0.4), -0.8, z.z + rand(-0.3, 0.3), rand(-1, 1), rand(1.5, 3.5), rand(-0.5, 0.5), 0.7, 0.07, '#7aa0b8', { grav: 9, mode: 1 });
+    return true;
+  }
+  // từ hai đầu phố
+  const side = Math.random() < 0.5 ? -1 : 1;
+  let x = player.x + side * rand(15, 21);
+  if (x < BOUNDS.x0 || x > BOUNDS.x1) x = player.x - side * rand(15, 21);
+  x = clamp(x, BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5);
+  let z = rand(BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.4);
+  for (let k = 0; k < 8 && insideSolid(x, z, 0.5); k++) z = rand(BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.4);
+  newZombie(type, x, 0, z, 'walk');
   return true;
 }
 function killZombie(z, ang) {
@@ -503,7 +549,7 @@ function updateHud() {
   });
 }
 
-// ================= VÒNG LẶP CẬP NHẬT =================
+// ================= ÁNH SÁNG, KHÍ QUYỂN =================
 const emitterMul = { lamp: 1, window: 1, fire: 1 };
 function flick(e, t) {
   if (e.flicker === 'fire') return 0.78 + 0.14 * Math.sin(t * 11 + e.phase) * Math.sin(t * 6.3 + e.phase * 2) + 0.08 * Math.sin(t * 23 + e.phase);
@@ -521,8 +567,8 @@ function updateLights(t, A) {
   const n = quality === 'high' ? 10 : 6;
   for (const e of world.emitters) {
     e.cur = e.base * flick(e, t) * emitterMul[e.kind];
-    const d = Math.hypot(e.pos.x - camTarget.x, (e.pos.z - camTarget.z) * 1.2);
-    e.w = e.cur * (1 - clamp((d - 15) / 9, 0, 1));
+    const d = Math.hypot(e.pos.x - camTarget.x, (e.pos.z - camTarget.z) * 0.8);
+    e.w = e.cur * (1 - clamp((d - 14) / 8, 0, 1));
   }
   const sorted = world.emitters.filter((e) => e.w > 0.05).sort((a, b) => b.w - a.w);
   for (let i = 0; i < pool.length; i++) {
@@ -532,9 +578,7 @@ function updateLights(t, A) {
   }
   for (const L of world.lampHeads) L.mat.emissiveIntensity = 4.2 * (L.e.cur / Math.max(0.01, L.e.base));
   for (const m of world.windowMats) m.emissiveIntensity = 2.4 * A.windows;
-  for (const gs of world.glowSprites) {
-    gs.s.material.color.copy(gs.color).multiplyScalar(gs.base * (gs.color.r > gs.color.g * 1.4 ? A.fires : A.lamps));
-  }
+  for (const gs of world.glowSprites) gs.s.material.color.copy(gs.color).multiplyScalar(gs.base * (gs.kind === 'fire' ? A.fires : A.lamps));
 }
 function applyAtmos(dt, t) {
   const A = atmos.update(dt);
@@ -543,44 +587,52 @@ function applyAtmos(dt, t) {
   hemi.color.copy(A.hemiSky); hemi.groundColor.copy(A.hemiGround);
   hemi.intensity = A.hemiI + lightning * 1.5;
   scene.fog.color.copy(A.fog); scene.fog.near = A.fogNear; scene.fog.far = A.fogFar;
-  renderer.setClearColor(A.fog);
-  // bóng đổ mặt trời/trăng đi theo camera, căn theo lưới texel để đỡ rung
+  renderer.setClearColor(A.skyHor);
   const step = (sunSize * 2) / sun.shadow.mapSize.x;
-  const sx = Math.round(camTarget.x / step) * step, sz = Math.round(camTarget.z / step) * step;
+  const sx = Math.round(camTarget.x / step) * step, sz = -3;
   sun.target.position.set(sx, 0, sz);
-  sun.position.set(sx + A.sunDir.x * 40, A.sunDir.y * 40, sz + A.sunDir.z * 40);
+  sun.position.set(sx + A.sunDir.x * 50, A.sunDir.y * 50, sz + A.sunDir.z * 50);
   const P = post.params;
   P.exposure = A.exposure; P.bloom = A.bloom; P.threshold = A.threshold; P.sat = A.sat; P.contrast = A.contrast; P.vignette = A.vignette;
   P.lift = A.lift; P.gain = A.gain;
   P.flash = [hurtFlash * 0.25 + lightning * 0.5, lightning * 0.55, lightning * 0.65];
   U.wet.value = A.wet; U.wind.value = A.wind;
-  world.water.material.uniforms.uRain.value = A.rain;
+  if (world.water.material.uniforms) world.water.material.uniforms.uRain.value = A.rain;
   updateLights(t, A);
-  // thời tiết
   const px = renderer.getDrawingBufferSize(tmpV2).y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   fx.rain.update(camTarget, A.rain, A.wind, px);
   fx.fireflies.update(A.fireflies, null, px);
   fx.ash.update(A.ash, camTarget, px);
-  fx.mist.update(dt, t, A.mist, A.fog.clone().lerp(new THREE.Color(1, 1, 1), 0.25));
+  fx.mist.update(dt, t, A.mist, A.fog, camTarget.x);
   fx.shafts.update(t, A.shafts, A.sunColor, A.sunDir);
   fx.leaves.update(dt, t, A.leaves, world.canopies, camTarget, A.wind);
   fx.moths.update(t, world.lampHeads, camTarget, A.lamps > 0.5);
-  // chớp
+  fx.sky.update(t, A, camera.position.x, lightning);
+  // diều chỉ bay khi trời còn sáng
+  const k = world.kite;
+  k.visible = world.kiteLine.visible = A.kite > 0.5;
+  if (k.visible) {
+    k.position.set(camTarget.x * 0.55 + 9 + Math.sin(t * 0.3) * 1.5, 15.5 + Math.sin(t * 0.7) * 0.8, -26);
+    k.rotation.z = Math.sin(t * 1.3) * 0.25;
+    const lp = world.kiteLine.geometry.attributes.position;
+    lp.setXYZ(0, k.position.x, k.position.y - 0.4, k.position.z); lp.setXYZ(1, k.position.x - 9, 3.6, -19); lp.needsUpdate = true;
+  }
   if (A.lightning > 0.5 && state.mode !== 'loading') {
     lightningT -= dt;
-    if (lightningT <= 0) {
-      lightningT = rand(6, 14);
-      lightning = 1;
-      thunderQ.push(rand(0.3, 1.6));
-    }
+    if (lightningT <= 0) { lightningT = rand(6, 14); lightning = 1; thunderQ.push(rand(0.3, 1.6)); }
   }
   lightning = Math.max(0, lightning - dt * (lightning > 0.5 ? 6 : 2.5));
   if (lightning > 0.4 && Math.random() < 0.1) lightning = 0.9;
   for (let i = thunderQ.length - 1; i >= 0; i--) { thunderQ[i] -= dt; if (thunderQ[i] <= 0) { sound.thunder(rand(0.6, 1)); thunderQ.splice(i, 1); } }
-  sound.update(dt, { rain: A.rain, wind: A.wind, crickets: (1 - A.rain) * (A.id === 'blood' ? 0.2 : 1) * (state.mode === 'play' || state.mode === 'title' ? 1 : 0), fire: Math.max(0, 1 - Math.hypot(player.x - world.plaza.x, player.z - world.plaza.z) / 9), music: 1 });
+  sound.update(dt, {
+    rain: A.rain, wind: A.wind,
+    crickets: (1 - A.rain) * (A.id === 'blood' ? 0.2 : 1) * (state.mode === 'play' || state.mode === 'title' ? 1 : 0),
+    fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: 1,
+  });
   return A;
 }
 
+// ================= CẬP NHẬT =================
 function updatePlayer(dt) {
   let mx = 0, mz = 0;
   if (keys.KeyW || keys.ArrowUp) mz -= 1;
@@ -594,7 +646,7 @@ function updatePlayer(dt) {
   const sprint = (keys.ShiftLeft || keys.ShiftRight || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
   player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22) * dt, 0, 1);
   const spd = player.speed * (sprint ? 1.55 : 1) * mag;
-  player.x += mx * spd * dt; player.z += mz * spd * dt;
+  player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
   collide(player);
   player.moving = mag > 0.1;
   if (player.moving) {
@@ -604,10 +656,11 @@ function updatePlayer(dt) {
   }
   let firing = false;
   const as = stickVec(sticks.aim);
-  if (as.m > 0) { player.aim = Math.atan2(as.y, as.x); firing = as.m > 0.35; }
+  if (as.m > 0) { player.aim = Math.atan2(as.y * 0.8, as.x); firing = as.m > 0.35; }
   else if (!isTouch && mouse.has) {
-    const p = screenToGround(mouse.x, mouse.y, 1.0);
+    const p = aimPoint(mouse.x, mouse.y);
     if (p) player.aim = Math.atan2(p.z - player.z, p.x - player.x);
+    else player.aim = mouse.x > W / 2 ? 0 : Math.PI;
     firing = mouse.down;
   } else if (player.moving) player.aim = Math.atan2(mz, mx);
   if (keys.Space) firing = true;
@@ -623,17 +676,57 @@ function updatePlayer(dt) {
     }
   }
   if (firing) shoot();
-  // sprite
   const sp = player.sprite;
   player.dir = dirFromAngle(player.aim);
-  const frame = player.moving ? Math.floor(player.walk) % 4 : 0;
-  setFrame(sp, player.dir, frame);
+  setFrame(sp, player.dir, player.moving ? Math.floor(player.walk) % 4 : 0);
   sp.group.position.set(player.x - Math.cos(player.aim) * player.recoil, 0, player.z - Math.sin(player.aim) * player.recoil);
   sp.mat.color.setScalar(player.inv > 0 && Math.floor(player.inv * 20) % 2 ? 2.2 : 1);
-  // đèn pin
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
   flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
   flashlight.target.position.set(player.x + ca * 9, 0.15, player.z + sa * 9);
+}
+
+function zombieTerrace(z, dt) {
+  const s = z.sprite;
+  const spd = z.speed * 0.9;
+  if (z.state === 'terrace') {
+    const dx = z.tx - z.x;
+    if (Math.abs(dx) > 0.15) { z.x += Math.sign(dx) * Math.min(Math.abs(dx), spd * dt); z.dir = dx > 0 ? 'right' : 'left'; }
+    else z.state = z.stair ? 'stairtop' : 'edge';
+  } else if (z.state === 'edge') {
+    const tz = WALL_Z - 0.25;
+    z.z += Math.min(tz - z.z, spd * dt); z.dir = 'down';
+    if (Math.abs(tz - z.z) < 0.05) { z.state = 'drop'; z.t = 0; z.z0 = z.z; }
+  } else if (z.state === 'stairtop') {
+    const tz = WALL_Z - STAIR_DEPTH + 0.1;
+    z.dir = 'down';
+    if (z.z < tz) z.z = Math.min(tz, z.z + spd * dt); else z.z = Math.max(tz, z.z - spd * dt);
+    if (Math.abs(tz - z.z) < 0.05) z.state = 'stairs';
+  } else if (z.state === 'stairs') {
+    z.z += spd * 0.8 * dt; z.dir = 'down';
+    z.y = TY * clamp((WALL_Z - z.z) / STAIR_DEPTH, 0, 1);
+    if (z.z >= WALL_Z + 0.55) { z.y = 0; z.state = 'walk'; }
+  } else if (z.state === 'wade') {
+    const tz = STREET_FRONT - 0.15;
+    z.z = Math.max(tz, z.z - spd * 0.7 * dt); z.dir = 'up';
+    z.y = -0.6 * clamp((z.z - tz) / Math.max(0.1, z.z0 - tz), 0, 1);
+    if (Math.random() < 0.15) fx.spark.spawn(z.x + rand(-0.3, 0.3), -0.8, z.z + 0.1, rand(-0.5, 0.5), rand(0.5, 1.5), rand(0, 0.5), 0.4, 0.05, '#8ab0c8', { grav: 8, mode: 1 });
+    if (z.z <= tz + 0.01) { z.y = 0; z.state = 'walk'; }
+  } else if (z.state === 'drop') {
+    z.t += dt / 0.6;
+    const k = Math.min(1, z.t);
+    z.z = z.z0 + (WALL_Z + 0.8 - z.z0) * k;
+    z.y = TY * (1 - k) + Math.sin(k * Math.PI) * 0.7;
+    if (k >= 1) {
+      z.y = 0; z.state = 'walk';
+      for (let i = 0; i < 8; i++) fx.lit.spawn(z.x + rand(-0.4, 0.4), 0.05, z.z + rand(-0.3, 0.3), rand(-1.2, 1.2), rand(0.5, 1.5), rand(-0.5, 0.5), 0.8, 0.13, '#6a5a48', { grav: 4, drag: 3 });
+      sound.rise(z.x, z.z);
+      if (Math.abs(z.x - player.x) < 10) shake = Math.max(shake, z.type === 'brute' ? 0.35 : 0.12);
+    }
+  }
+  z.walk += dt * spd * 2.6;
+  setFrame(s, z.dir, Math.floor(z.walk) % 4);
+  s.group.position.set(z.x, z.y, z.z);
 }
 
 function updateZombies(dt) {
@@ -650,18 +743,23 @@ function updateZombies(dt) {
     }
     if (z.state === 'rise') {
       const k = Math.min(1, z.t / 1.8);
-      s.group.position.y = -s.h * (1 - k);
-      if (Math.random() < 0.3) fx.lit.spawn(z.x + rand(-0.4, 0.4), 0.05, z.z + rand(-0.3, 0.3), rand(-0.6, 0.6), rand(1, 2.5), rand(-0.4, 0.4), 0.8, 0.1, '#3e2c1e', { grav: 9 });
+      s.group.position.set(z.x, z.riseLevel - s.h * (1 - k), z.z);
+      if (Math.random() < 0.3) fx.lit.spawn(z.x + rand(-0.4, 0.4), z.riseLevel + 0.05, z.z + rand(-0.3, 0.3), rand(-0.6, 0.6), rand(1, 2.5), rand(-0.4, 0.4), 0.8, 0.1, '#3e2c1e', { grav: 9 });
       setFrame(s, 'down', Math.floor(z.t * 6) % 4);
-      if (k >= 1) z.state = 'walk';
       s.mat.color.setScalar(z.hitT > 0 ? 3 : 1);
       z.hitT -= dt;
+      if (k >= 1) {
+        z.y = z.riseLevel;
+        if (z.riseLevel > 0.5) { z.state = 'terrace'; z.z = WALL_Z - 1.5; terracePlan(z); }
+        else if (z.riseLevel < -0.1) { z.state = 'wade'; z.z0 = z.z; }
+        else z.state = 'walk';
+      }
       continue;
     }
+    if (z.state !== 'walk') { zombieTerrace(z, dt); s.mat.color.setScalar(1); continue; }
     let dx = player.x - z.x, dz = player.z - z.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
-    // đi thẳng khi nhìn thấy người chơi ở gần, còn lại đi theo flow field vòng qua vật cản
     if (d > 1.0 && !(d < 7 && navLOS(z.x, z.z, player.x, player.z)) && navDir(z)) { dx = navOut.x; dz = navOut.z; }
     if (z.stuck > 0.6) { const sx = -dz * z.side, sz = dx * z.side; dx = dx * 0.4 + sx * 0.6; dz = dz * 0.4 + sz * 0.6; z.stuck -= dt; if (z.stuck > 1.2) { z.stuck = 0; z.side *= -1; } }
     z.ux = z.ux === undefined ? dx : z.ux + (dx - z.ux) * Math.min(1, dt * 7);
@@ -670,7 +768,7 @@ function updateZombies(dt) {
     dx = z.ux / ul; dz = z.uz / ul;
     for (let j = i + 1; j < zombies.length; j++) {
       const o = zombies[j];
-      if (o.state === 'dead') continue;
+      if (o.state !== 'walk') continue;
       const ex = z.x - o.x, ez = z.z - o.z, ed = ex * ex + ez * ez, rr = z.r + o.r;
       if (ed < rr * rr && ed > 1e-4) { const e = Math.sqrt(ed), p = (rr - e) / 2, nx = ex / e, nz = ez / e; z.x += nx * p; z.z += nz * p; o.x -= nx * p; o.z -= nz * p; }
     }
@@ -708,7 +806,7 @@ function updateBullets(dt) {
     const b = bullets[i];
     b.px = b.x; b.pz = b.z;
     b.x += b.vx * dt; b.z += b.vz * dt; b.life -= dt;
-    let dead = b.life <= 0 || b.x < BOUNDS.x0 - 4 || b.x > BOUNDS.x1 + 4 || b.z < BOUNDS.z0 - 4 || b.z > BOUNDS.z1 + 4;
+    let dead = b.life <= 0 || b.x < BOUNDS.x0 - 6 || b.x > BOUNDS.x1 + 6 || b.z > BOUNDS.z1 + 14;
     if (!dead && bulletBlocked(b.x, b.z)) {
       dead = true;
       for (let k = 0; k < 6; k++) fx.spark.spawn(b.x, 1, b.z, rand(-3, 3), rand(0, 3), rand(-3, 3), rand(0.1, 0.25), 0.06, '#ffe0a0', { grav: 8, mode: 1 });
@@ -719,10 +817,11 @@ function updateBullets(dt) {
       const sx = b.x - b.px, sz = b.z - b.pz, sl = sx * sx + sz * sz || 1e-6;
       for (let j = zombies.length - 1; j >= 0; j--) {
         const z = zombies[j];
-        if (z.state === 'dead') continue;
+        if (z.state === 'dead' || z.y > 0.3 || (z.state === 'rise' && z.riseLevel > 0.3)) continue;
+        if (z.state === 'rise' && z.t < 0.6) continue;
         const t = clamp(((z.x - b.px) * sx + (z.z - b.pz) * sz) / sl, 0, 1);
         const cx = b.px + sx * t, cz = b.pz + sz * t;
-        if ((z.x - cx) ** 2 + (z.z - cz) ** 2 < (z.r + 0.08) ** 2) {
+        if ((z.x - cx) ** 2 + (z.z - cz) ** 2 < (z.r + 0.14) ** 2) {
           const a = Math.atan2(b.vz, b.vx);
           z.hp -= b.dmg; z.hitT = 0.1;
           const kb = z.type === 'brute' ? 0.04 : 0.16;
@@ -740,13 +839,11 @@ function updateBullets(dt) {
     }
     if (dead) bullets.splice(i, 1);
   }
-  // vệt đạn
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), E = new THREE.Euler();
   let n = 0;
   for (const b of bullets) {
     if (n >= 64) break;
-    const a = Math.atan2(b.vz, b.vx);
-    const len = 1.1;
+    const a = Math.atan2(b.vz, b.vx), len = 1.1;
     P.set(b.x - Math.cos(a) * len / 2, 1.0, b.z - Math.sin(a) * len / 2);
     Q.setFromEuler(E.set(0, -a, 0));
     M.compose(P, Q, S.set(len, 0.045, 0.045));
@@ -766,7 +863,7 @@ function updatePickups(dt) {
       if (p.type === 'med') { player.hp = Math.min(player.maxHp, player.hp + 30); floaters.push({ x: p.x, y: 1.8, z: p.z, text: '+30 MÁU', t: 1.2, color: '#7fe07f' }); }
       else { player.guns.forEach((g, k) => { if (g.owned && g.reserve !== Infinity) g.reserve += WEAPONS[k].mag; }); floaters.push({ x: p.x, y: 1.8, z: p.z, text: '+ĐẠN', t: 1.2, color: '#f2c14e' }); }
       sound.pickup(); hud.dirty = true;
-      scene.remove(p.mesh); p.mesh.material.map.dispose(); pickups.splice(i, 1);
+      scene.remove(p.mesh); pickups.splice(i, 1);
     } else if (p.t <= 0) { scene.remove(p.mesh); pickups.splice(i, 1); }
   }
 }
@@ -775,7 +872,7 @@ function updateWaves(dt) {
   if (toSpawn > 0) {
     spawnTimer -= dt;
     const alive = zombies.filter((z) => z.state !== 'dead').length;
-    if (spawnTimer <= 0 && alive < (quality === 'high' ? 42 : 28)) {
+    if (spawnTimer <= 0 && alive < (quality === 'high' ? 40 : 28)) {
       const batch = Math.min(toSpawn, 1 + Math.floor(wave / 3));
       for (let i = 0; i < batch; i++) if (spawnZombie()) toSpawn--;
       spawnTimer = Math.max(0.4, 1.7 - wave * 0.1) * rand(0.6, 1.3);
@@ -794,34 +891,30 @@ function updateWaves(dt) {
 }
 
 function updateCamera(dt) {
-  let lead = 0;
-  if (state.mode === 'play') lead = isTouch ? 1.2 : 2.0;
-  let tx = player.x + Math.cos(player.aim) * lead, tz = player.z + Math.sin(player.aim) * lead * 0.8;
-  if (state.mode === 'title') {
-    const t = gtime * 0.05;
-    tx = world.plaza.x + Math.sin(t) * 9; tz = world.plaza.z - 2 + Math.sin(t * 0.7) * 5;
-  }
-  tx = clamp(tx, -19, 19); tz = clamp(tz, -13.5, 15.5);
-  const k = Math.min(1, dt * (state.mode === 'title' ? 0.8 : 5));
-  camTarget.x += (tx - camTarget.x) * k; camTarget.z += (tz - camTarget.z) * k;
+  let tx = player.x;
+  if (state.mode === 'play') tx += Math.cos(player.aim) * (isTouch ? 1.5 : 2.4);
+  if (state.mode === 'title') tx = Math.sin(gtime * 0.035) * 38;
+  tx = clamp(tx, BOUNDS.x0 + 9, BOUNDS.x1 - 9);
+  const k = Math.min(1, dt * (state.mode === 'title' ? 1 : 4));
+  camTarget.x += (tx - camTarget.x) * k;
+  camTarget.z = 1;
   shake = Math.max(0, shake - dt * 1.8);
   placeCamera(shake);
   sound.setListener(camTarget.x, camTarget.z);
-  // vòng nhìn xuyên & đẩy cỏ
   const s = renderer.getDrawingBufferSize(tmpV2);
   tmpV.set(player.x, 1.0, player.z).project(camera);
   U.seeCenter.value.set((tmpV.x * 0.5 + 0.5) * s.x, (tmpV.y * 0.5 + 0.5) * s.y);
-  U.seeRadius.value = s.y * 0.12;
+  U.seeRadius.value = s.y * 0.13;
   tmpV.set(player.x, 1.0, player.z).applyMatrix4(camera.matrixWorldInverse);
   U.seeDepth.value = -tmpV.z - 1.0;
   U.seeZ.value = state.mode === 'title' ? 999 : player.z;
   post.params.focus = -tmpV.z;
   U.push.value[0].set(player.x, 0, player.z, 1.1);
-  const near = zombies.filter((z) => z.state === 'walk').map((z) => ({ z, d: Math.abs(z.x - camTarget.x) + Math.abs(z.z - camTarget.z) })).sort((a, b) => a.d - b.d);
+  const near = zombies.filter((z) => z.state === 'walk').map((z) => ({ z, d: Math.abs(z.x - camTarget.x) })).sort((a, b) => a.d - b.d);
   for (let i = 1; i < 6; i++) { const o = near[i - 1]; if (o) U.push.value[i].set(o.z.x, 0, o.z.z, o.z.r + 0.5); else U.push.value[i].set(0, -99, 0, 0.01); }
 }
 
-// ---------- vẽ lớp 2D: số sát thương, cần điều khiển, tâm ngắm ----------
+// ---------- lớp 2D: số sát thương, cần điều khiển, tâm ngắm ----------
 function draw2D() {
   const g = g2;
   g.setTransform(ODPR, 0, 0, ODPR, 0, 0);
@@ -838,8 +931,8 @@ function draw2D() {
   }
   g.globalAlpha = 1;
   for (const z of zombies) {
-    if (z.state !== 'walk' || (z.hp >= z.maxHp && z.type !== 'brute')) continue;
-    tmpV.set(z.x, z.sprite.h + 0.25, z.z).project(camera);
+    if (z.state === 'dead' || (z.hp >= z.maxHp && z.type !== 'brute')) continue;
+    tmpV.set(z.x, z.y + z.sprite.h + 0.25, z.z).project(camera);
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
     const w = z.type === 'brute' ? 44 : 30;
@@ -896,23 +989,22 @@ function startGame() {
   document.body.classList.add('playing');
   hud.dirty = true;
   nextWave();
-  // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<kiểu thời tiết>&px=..&pz=..
+  // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<kiểu thời tiết>&px=..
   if (QS.has('shot')) {
     atmos.go(+QS.get('shot'), 0.01); atmos.update(1);
-    if (QS.has('px')) { player.x = +QS.get('px'); player.z = +QS.get('pz'); }
+    if (QS.has('px')) player.x = +QS.get('px');
+    if (QS.has('pz')) player.z = +QS.get('pz');
     player.hp = player.maxHp = 1e6; toSpawn = 0;
-    const types = ['walker', 'runner', 'walker', 'brute', 'walker', 'runner'];
-    types.forEach((t, i) => spawnAt(t, player.x + Math.cos(i * 1.05 + 0.4) * rand(3.5, 6), player.z + Math.sin(i * 1.05 + 0.4) * rand(3, 5)));
-    camTarget.set(player.x, 0.8, player.z);
+    const types = ['walker', 'runner', 'walker', 'brute', 'walker'];
+    types.forEach((t, i) => spawnAt(t, player.x + (i % 2 ? 1 : -1) * rand(3, 7), rand(BOUNDS.z0 + 0.3, BOUNDS.z1 - 0.3)));
+    const tz = newZombie('walker', player.x + 5, TY, WALL_Z - 1.4, 'terrace'); tz.tx = player.x + 2; tz.stair = null; tz.speed *= 0.3;
+    camTarget.x = player.x;
     window.__dn = { get zombies() { return zombies; }, get player() { return player; }, camera, size: () => [W, H] };
   }
 }
 function spawnAt(type, x, z) {
-  const T = ZT[type], hp = T.hp;
-  const zz = { type, x, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * 0.3, hp, maxHp: hp, dmg: 0, score: T.score, atkT: 0, atkCd: T.atk,
-    walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: 1, state: 'walk', t: 0, sprite: spriteFor(type) };
-  zz.sprite.group.position.set(x, 0, z);
-  zombies.push(zz);
+  const zz = newZombie(type, x, 0, z, 'walk');
+  zz.speed *= 0.3; zz.dmg = 0;
 }
 function gameOver() {
   state.mode = 'over';
@@ -932,32 +1024,31 @@ function init() {
   placeCamera();
   camera.updateMatrixWorld();
   camQuat.copy(camera.quaternion);
-  world = buildWorld(scene, quality, camera);
+  world = buildWorld(scene, quality);
   navBuild();
   SPR = makeCharacterSprites();
   pickupAtlas = makePickupAtlas();
   glowTex = softDisc(64, 0, 2.2);
-  fx.hide = world.hideInReflection;
+  fx.sky = new Sky(scene);
   fx.lit = new Particles(scene, 500, { camQuat });
   fx.blood = new Particles(scene, 600, { camQuat });
   fx.spark = new Particles(scene, 300, { additive: true, camQuat });
   fx.smoke = new Particles(scene, 260, { cube: true, camQuat });
   fx.ember = new Particles(scene, 200, { additive: true, camQuat });
   fx.decals = new Decals(scene, 200);
-  fx.blood.onLand = (x, z, r, i) => { if (Math.random() < 0.35) fx.decals.add(x, z, rand(0.25, 0.55)); return true; };
+  fx.blood.onLand = (x, z) => { if (Math.random() < 0.35 && z > WALL_Z) fx.decals.add(x, z, rand(0.25, 0.55)); return true; };
   fx.rain = new Rain(scene, quality === 'high' ? 2400 : 1200);
-  const fz = [{ x: world.pond.x, z: world.pond.z, w: 14, d: 9 }, { x: -2, z: 15, w: 30, d: 10 }, { x: 22, z: 15, w: 14, d: 10 }, { x: -24, z: -4, w: 12, d: 10 }, { x: 0, z: -20, w: 60, d: 4 }, { x: 20, z: -12, w: 14, d: 8 }];
-  fx.fireflies = new Motes(scene, quality === 'high' ? 160 : 90, { color: new THREE.Color(3.2, 4.2, 1.2), size: 0.11, zones: fz });
+  const fz = [{ x: POND.cx, z: POND.cz, w: 16, d: 7 }, { x: 0, z: 9, w: 140, d: 9 }, { x: 0, z: 4.5, w: 140, d: 2 }, { x: 44, z: 11, w: 14, d: 7 }];
+  fx.fireflies = new Motes(scene, quality === 'high' ? 220 : 120, { color: new THREE.Color(3.2, 4.2, 1.2), size: 0.11, zones: fz });
   fx.ash = new Motes(scene, quality === 'high' ? 500 : 250, { color: new THREE.Color(1.6, 0.7, 0.4), size: 0.05, zones: [{ x: 0, z: 0, w: 1, d: 1 }], mode: 'ash', glow: false });
-  fx.mist = new Mist(scene, 3);
-  fx.shafts = new Shafts(scene, [{ x: -18, y: 12, z: -6, w: 3.2 }, { x: 13, y: 12, z: -4, w: 2.6 }, { x: -6, y: 12, z: 15, w: 3 }, { x: 24, y: 12, z: 14, w: 3.4 }, { x: -27, y: 12, z: 9, w: 2.8 }, { x: 4, y: 12, z: -20, w: 3.6 }]);
+  fx.mist = new Mist(scene);
+  fx.shafts = new Shafts(scene, [{ x: -27, y: 15, z: -8, w: 3.2 }, { x: -12, y: 15, z: -7, w: 2.6 }, { x: 10.5, y: 15, z: -9, w: 3 }, { x: 31, y: 15, z: -8, w: 3.4 }, { x: -50, y: 15, z: -9, w: 2.8 }, { x: 47, y: 15, z: -9, w: 3.6 }]);
   fx.crows = new Crows(scene, world.perches, camQuat, (p) => sound.caw(p.x, p.z));
   fx.moths = new Moths(scene, camQuat);
   fx.leaves = new Leaves(scene, camQuat);
   for (const m of [fx.lit.mesh, fx.blood.mesh, fx.spark.mesh, fx.smoke.mesh, fx.ember.mesh, fx.rain.mesh, fx.rain.splash, fx.fireflies.mesh, fx.ash.mesh, fx.moths.mesh, fx.leaves.p.mesh]) world.hideInReflection.push(m);
   for (const L of fx.mist.layers) world.hideInReflection.push(L.mesh);
   for (const it of fx.shafts.items) world.hideInReflection.push(it.mesh);
-  // luồng sáng đèn pin thể tích
   const beamGeo = new THREE.ConeGeometry(2.4, 9, 24, 1, true);
   beamGeo.translate(0, -4.5, 0); beamGeo.rotateZ(Math.PI / 2);
   beam = new THREE.Mesh(beamGeo, new THREE.ShaderMaterial({
@@ -980,7 +1071,7 @@ function init() {
   tracerMesh.count = 0; tracerMesh.frustumCulled = false;
   scene.add(tracerMesh); world.hideInReflection.push(tracerMesh);
   player = newPlayer();
-  camTarget.set(world.plaza.x, 0.8, world.plaza.z);
+  camTarget.set(player.x, 1, 1);
   atmos.go(1, 0.01); atmos.update(1);
   setQualityLabel();
   $('best').textContent = bestScore();
@@ -992,13 +1083,13 @@ function init() {
   last = performance.now();
   requestAnimationFrame(frame);
   if (QS.has('shot')) setTimeout(startGame, 50);
-  if (QS.has('debug')) window.__dbg = () => ({ mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, spawnTimer: +spawnTimer.toFixed(2), zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +z.stuck.toFixed(2), z.side]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
+  if (QS.has('debug')) window.__dbg = () => ({ mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2)]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
 }
 
 // ================= KHÓI & TÀN LỬA =================
 function updateSmoke(dt, A) {
   for (const s of world.smokeSources) {
-    if (Math.abs(s.x - camTarget.x) > 24 || Math.abs(s.z - camTarget.z) > 20) continue;
+    if (Math.abs(s.x - camTarget.x) > 24) continue;
     s.acc = (s.acc || 0) + dt * s.rate;
     while (s.acc > 1) {
       s.acc -= 1;
@@ -1034,13 +1125,14 @@ function frame(now) {
     updateZombies(dt * 0.3);
     updateBullets(dt);
   } else {
-    setFrame(player.sprite, 'down', 0);
+    setFrame(player.sprite, 'right', 0);
     player.sprite.group.position.set(player.x, 0, player.z);
     flashlight.position.set(player.x, 1.15, player.z + 0.3);
-    flashlight.target.position.set(player.x, 0.15, player.z + 6);
+    flashlight.target.position.set(player.x + 6, 0.15, player.z);
   }
   updateCamera(dt);
   const A = applyAtmos(dt, gtime);
+  for (const fn of world.animated) fn(dt, gtime, A.wind);
   flashlight.intensity = state.mode === 'loading' ? 0 : 40 * A.flash;
   aura.position.set(player.x, 2.2, player.z + 0.6); aura.intensity = 3.5 * A.flash;
   beam.visible = state.mode === 'play';
@@ -1056,9 +1148,10 @@ function frame(now) {
   if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) $('msg').classList.remove('show'); }
   if (state.mode === 'play' || state.mode === 'over') updateHud();
   post.params.maxBlur = quality === 'high' ? 7 : 5;
+  post.params.range = 7; post.params.fall = 12; post.params.nearK = 1.3;
   if (DBG) renderer.info.reset();
   post.render(scene, camera, gtime);
-  if (DBG) window.__info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, tex: renderer.info.memory.textures, progs: renderer.info.programs.length, leaves: world.leafMesh.count, q: quality };
+  if (DBG) window.__info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, leaves: world.leafCount, q: quality };
   draw2D();
 }
 
@@ -1079,8 +1172,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
 $('help').innerHTML = isTouch
-  ? 'Ngón trái: di chuyển (kéo hết cỡ để chạy) · Ngón phải: ngắm &amp; bắn<br>R: nạp đạn · ⇄: đổi súng · ❚❚: tạm dừng'
-  : 'WASD: di chuyển · Shift: chạy · Chuột: ngắm &amp; bắn<br>R: nạp đạn · 1/2/3, Q, lăn chuột: đổi súng · P: tạm dừng · M: tắt tiếng';
+  ? 'Ngón trái: di chuyển (kéo hết cỡ để chạy) · Ngón phải: ngắm &amp; bắn<br>R: nạp đạn · ⇄: đổi súng · ❚❚: tạm dừng · Nên xoay ngang màn hình'
+  : 'A/D: đi dọc phố · W/S: tiến/lùi · Shift: chạy · Chuột: ngắm &amp; bắn<br>R: nạp đạn · 1/2/3, Q, lăn chuột: đổi súng · P: tạm dừng · M: tắt tiếng';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

@@ -26,6 +26,7 @@ export class Sound {
       this.wind = loop('bandpass', 420, 0.6);
       this.rain = loop('highpass', 1400, 0.4);
       this.rain2 = loop('lowpass', 500, 0.3);
+      this.water = loop('bandpass', 900, 0.5);
       // nền nhạc trầm (hợp âm La thứ) rất nhỏ
       this.pad = ac.createGain(); this.pad.gain.value = 0;
       const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 0.4;
@@ -107,6 +108,7 @@ export class Sound {
     this.wind.f.frequency.setTargetAtTime(320 + Math.sin(t * 0.3) * 120 + amb.wind * 120, t, 0.8);
     this.rain.g.gain.setTargetAtTime(this.muted ? 0 : amb.rain * 0.09, t, 0.8);
     this.rain2.g.gain.setTargetAtTime(this.muted ? 0 : amb.rain * 0.06, t, 0.8);
+    this.water.g.gain.setTargetAtTime(this.muted ? 0 : (amb.water || 0) * 0.08, t, 0.5);
     this.pad.gain.setTargetAtTime(this.muted ? 0 : 0.02 * amb.music, t, 1.5);
     this.cricketT -= dt;
     if (this.cricketT <= 0 && amb.crickets > 0.05) {

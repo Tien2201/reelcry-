@@ -17,6 +17,7 @@ export const STREET_FRONT = 3.25;
 export const STAIRS = [{ x: -38, w: 1.9 }, { x: -12.4, w: 1.9 }, { x: 33.6, w: 1.9 }];
 export const STAIR_DEPTH = 1.9;
 export const POND = { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 };
+export const STREAM = { x0: -29.0, x1: -27.0 };
 const XMIN = -72, XMAX = 72;
 
 export const U = {
@@ -377,6 +378,7 @@ export function buildWorld(scene, quality) {
   for (let i = 0; i < 46; i++) {
     const x = XMIN + 4 + rng() * (XMAX - XMIN - 8);
     if (STAIRS.some((s) => Math.abs(s.x - x) < s.w)) continue;
+    if (x > STREAM.x0 - 0.5 && x < STREAM.x1 + 0.5) continue;
     const len = 1 + Math.floor(rng() * 4);
     for (let k = 0; k < len; k++) leaves.add(x + (rng() - 0.5) * 0.3, TY - 0.05 - k * 0.32, WALL_Z + 0.06, 0.34, 0.34, 0.2, k === 0 ? '#4e7a2e' : '#3e6a26');
   }
@@ -489,6 +491,87 @@ export function buildWorld(scene, quality) {
     lilies.setMatrixAt(i, mat4(x, WATER_Y + 0.02, z, -Math.PI / 2, 0, rng() * 6.28));
   }
   root.add(lilies); hideInReflection.push(lilies);
+
+  // ======================= SUỐI & THÁC NƯỚC =======================
+  // suối chảy từ thềm sau → đổ thác xuống thềm → chảy ra mép tường kè → đổ thác
+  // xuống song chắn dưới phố → chui qua gầm cầu ra ao
+  const waterMats = [], waterfalls = [];
+  const fogU = THREE.UniformsLib.fog;
+  const WATER_GLSL = 'float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }';
+  function streamStrip(x0, x1, z0, z1, y) {
+    const len = z1 - z0, wid = x1 - x0;
+    const m = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([fogU, { uLight: { value: 1 }, uTint: { value: new THREE.Color(1, 1, 1) }, uW: { value: wid }, uL: { value: len } }]),
+      transparent: true, depthWrite: false, fog: true,
+      vertexShader: `varying vec2 vUv; #include <fog_pars_vertex>
+        void main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition; #include <fog_vertex> }`.replace(/#include <fog_pars_vertex>/, '\n#include <fog_pars_vertex>\n').replace(/#include <fog_vertex>/, '\n#include <fog_vertex>\n'),
+      fragmentShader: `uniform float uTime, uLight, uW, uL; uniform vec3 uTint; varying vec2 vUv;
+        #include <fog_pars_fragment>
+        ${WATER_GLSL}
+        void main(){
+          vec2 px = floor(vec2(vUv.x * uW * 16.0, vUv.y * uL * 16.0));
+          float o = h21(vec2(px.x, 0.0));
+          float n = fract((px.y + uTime * 14.0 * (0.8 + o * 0.4)) / (5.0 + o * 7.0) + o * 3.0);
+          float streak = smoothstep(0.72, 0.95, n);
+          vec3 col = mix(vec3(0.05, 0.14, 0.18), vec3(0.14, 0.32, 0.38), 0.5 + 0.5 * sin(px.x * 0.9 + px.y * 0.15 + uTime * 2.0));
+          col += streak * vec3(0.5, 0.65, 0.7);
+          float edge = min(vUv.x, 1.0 - vUv.x);
+          col += (1.0 - smoothstep(0.0, 0.16, edge)) * 0.3;
+          float sp = step(0.985, h21(px + floor(uTime * 6.0)));
+          col = col * uTint * uLight + sp * uTint * 0.9;
+          gl_FragColor = vec4(col, 0.9);
+          #include <fog_fragment>
+        }`,
+    });
+    m.uniforms.uTime = U.time;
+    const g = new THREE.PlaneGeometry(wid, len);
+    g.rotateX(-Math.PI / 2);
+    // đảo UV để vân nước chảy về phía trước (z tăng)
+    const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+    const mesh = new THREE.Mesh(g, m);
+    mesh.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+    mesh.renderOrder = 2;
+    root.add(mesh); waterMats.push(m);
+    for (let z = z0 + 0.3; z < z1; z += 0.55) for (const sx of [x0 - 0.2, x1 + 0.2]) stones.add(sx, y + 0.06, z + (rng() - 0.5) * 0.15, 0.38 + rng() * 0.12, 0.24, 0.5, ['#6a6a6e', '#7a7872', '#5a5a5e'][Math.floor(rng() * 3)], rng() * 0.4);
+  }
+  function waterfall(x0, x1, yTop, yBot, z) {
+    const wid = x1 - x0, hei = yTop - yBot;
+    const m = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([fogU, { uLight: { value: 1 }, uTint: { value: new THREE.Color(1, 1, 1) }, uW: { value: wid }, uH: { value: hei } }]),
+      transparent: true, depthWrite: false, fog: true,
+      vertexShader: '\n#include <fog_pars_vertex>\nvarying vec2 vUv; void main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+      fragmentShader: `uniform float uTime, uLight, uW, uH; uniform vec3 uTint; varying vec2 vUv;
+        #include <fog_pars_fragment>
+        ${WATER_GLSL}
+        void main(){
+          vec2 px = floor(vec2(vUv.x * uW * 16.0, vUv.y * uH * 16.0));
+          float o = h21(vec2(px.x, 1.0));
+          float n = fract((px.y + uTime * 24.0 * (0.8 + o * 0.5)) / (7.0 + o * 9.0) + o * 5.0);
+          float b = smoothstep(0.35, 0.95, n) * (0.7 + 0.3 * h21(vec2(px.x, floor((px.y + uTime * 24.0) / 3.0))));
+          float foam = smoothstep(0.2, 0.0, vUv.y) + smoothstep(0.9, 1.0, vUv.y) * 0.5;
+          vec3 col = mix(vec3(0.1, 0.24, 0.32), vec3(0.82, 0.93, 1.0), clamp(b * 0.85 + foam, 0.0, 1.0));
+          float sp = step(0.972, h21(px + floor(uTime * 8.0)));
+          col = col * uTint * uLight + sp * 1.8 * uTint;
+          float a = (0.8 + foam * 0.2) * smoothstep(0.0, 0.08, vUv.x) * (1.0 - smoothstep(0.92, 1.0, vUv.x));
+          gl_FragColor = vec4(col, a);
+          #include <fog_fragment>
+        }`,
+    });
+    m.uniforms.uTime = U.time;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(wid, hei), m);
+    mesh.position.set((x0 + x1) / 2, (yTop + yBot) / 2, z);
+    mesh.renderOrder = 3;
+    root.add(mesh); waterMats.push(m);
+    waterfalls.push({ x0, x1, y: Math.max(yBot, 0.05), z: z + 0.15, top: yTop });
+  }
+  streamStrip(STREAM.x0, STREAM.x1, -27, BACK_Z - 0.62, BY + 0.05);
+  waterfall(STREAM.x0, STREAM.x1, BY + 0.2, TY + 0.02, BACK_Z + 0.14);
+  streamStrip(STREAM.x0, STREAM.x1, BACK_Z + 0.05, WALL_Z - 0.32, TY + 0.05);
+  waterfall(STREAM.x0, STREAM.x1, TY + 0.2, -0.35, WALL_Z + 0.14);
+  waterfalls[1].y = 0.05;
+  // song chắn nước dưới chân thác (ngoài phần đi được của phố)
+  misc.add((STREAM.x0 + STREAM.x1) / 2, 0.012, WALL_Z + 0.4, STREAM.x1 - STREAM.x0 + 0.5, 0.025, 0.62, '#121418');
+  for (let i = 0; i < 7; i++) misc.add(STREAM.x0 - 0.15 + i * (STREAM.x1 - STREAM.x0 + 0.3) / 6, 0.03, WALL_Z + 0.4, 0.05, 0.03, 0.6, '#3a3c42');
 
   // ======================= NHÀ =======================
   function buildHouse(h) {
@@ -686,7 +769,7 @@ export function buildWorld(scene, quality) {
     if (flowers) for (let i = 0; i < 6; i++) misc.add(x + (rr() - 0.5) * 1.4 * s, y0 + 0.6 * s + rr() * 0.6 * s, z + 0.35 * s + rr() * 0.3, 0.16, 0.16, 0.16, flowers);
   }
   const VSfar = hi ? 0.62 : 0.75;
-  tree(-27.5, -7.5, 1.35, 'oak', TY);
+  tree(-23.4, -8.8, 1.3, 'oak', TY);
   tree(-58.5, -7, 1.2, 'oak2', TY);
   tree(-37.2, -9.2, 1.0, 'autumn', TY);
   tree(10.8, -9.5, 0.95, 'gold', TY);
@@ -704,6 +787,7 @@ export function buildWorld(scene, quality) {
   for (let x = XMIN + 3; x < XMAX - 3; x += rng.range(2.6, 5.5)) {
     if (STAIRS.some((s) => Math.abs(s.x - x) < 2.2)) continue;
     if (x > cemetery.x0 - 1 && x < cemetery.x1) continue;
+    if (x > STREAM.x0 - 1.6 && x < STREAM.x1 + 1.6) continue;
     bush(x, -3.0 - rng() * 0.8, 0.8 + rng() * 0.45, TY, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, flowerCols[Math.floor(rng() * flowerCols.length)]);
   }
   for (let x = XMIN + 2; x < XMAX - 2; x += rng.range(5, 10)) {
@@ -1013,6 +1097,7 @@ export function buildWorld(scene, quality) {
     };
     const grassy = (k) => k === 0 || k === 5;
     const onTerraceFree = (x, z) => {
+      if (x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4) return false;
       if (STAIRS.some((s) => Math.abs(s.x - x) < s.w / 2 + 0.2 && z > WALL_Z - STAIR_DEPTH - 0.2)) return false;
       return !HOUSES.some((h) => !h.by && Math.abs(h.x - x) < h.w / 2 + 0.4 && z < h.zf + 0.4 && z > h.zf - h.d - 0.4);
     };
@@ -1067,7 +1152,7 @@ export function buildWorld(scene, quality) {
     }
     {
       const items = [];
-      for (let i = 0; i < 900 * dens; i++) { const x = XMIN + rng() * (XMAX - XMIN), z = BACK_Z - 1 - rng() * 14; items.push([x, BY, z, 1.0 + rng() * 0.6, tint(x, z)]); }
+      for (let i = 0; i < 900 * dens; i++) { const x = XMIN + rng() * (XMAX - XMIN), z = BACK_Z - 1 - rng() * 14; if (x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4 && z > -26) continue; items.push([x, BY, z, 1.0 + rng() * 0.6, tint(x, z)]); }
       makeSet(T.fernTex(), items, 0.08);
     }
   }
@@ -1087,7 +1172,7 @@ export function buildWorld(scene, quality) {
   return {
     root, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
     hideInReflection, grassMeshes, water, leafMeshes, animated, houses, kite, kiteLine,
-    campfire, cemetery, field, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, jackMat,
+    campfire, cemetery, field, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, jackMat, waterMats, waterfalls,
     leafCount: leafMeshes.reduce((a, m) => a + m.count, 0),
   };
 }

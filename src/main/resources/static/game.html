@@ -107,6 +107,28 @@
   body.touch #weapon-box { right: auto; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); min-width: 0; }
   body.touch #weapon-box #slots { display: none; }
 
+  .btn.alt { background: #2c5a6a; border-color: #9ad8e8; outline-color: #0c2028; box-shadow: 0 4px 0 #0c2028, 0 0 22px rgba(90,180,210,.35); }
+  .btn.alt:hover { background: #3a7488; }
+  #view-ui { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  #view-top { position: absolute; left: calc(14px + var(--sl)); top: calc(10px + var(--st)); font-size: 18px; line-height: 1.25; color: #f1e6cf;
+    text-shadow: 0 2px 0 #000, 0 0 8px rgba(0,0,0,.8); max-width: min(760px, 70vw); }
+  #view-keys { font-size: 16px; color: #d8d0bc; }
+  #view-clock { font-size: 20px; color: var(--gold); }
+  body.touch #view-keys { display: none; }
+  #view-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(12px + var(--sb)); display: flex; gap: 6px; align-items: center;
+    max-width: calc(100vw - 32px - var(--sl) - var(--sr)); overflow-x: auto; padding: 6px 8px; pointer-events: auto;
+    background: var(--panel); border: 2px solid var(--edge); outline: 2px solid var(--edge-dark); scrollbar-width: none; }
+  #view-bar::-webkit-scrollbar { display: none; }
+  .vb { font-family: inherit; font-size: 18px; white-space: nowrap; padding: 3px 10px 4px; color: var(--ink); background: #1e1a24; border: 2px solid #4a4050; cursor: pointer; }
+  .vb:hover { border-color: var(--edge); }
+  .vb.on { background: #8a6a24; border-color: var(--gold); color: #fff; }
+  .vsep { width: 2px; align-self: stretch; background: #4a4050; flex: none; }
+  #view-show { position: fixed; z-index: 6; right: calc(14px + var(--sr)); bottom: calc(14px + var(--sb)); width: 44px; height: 44px; font-size: 22px;
+    color: var(--ink); background: rgba(10,8,14,.55); border: 2px solid rgba(217,192,138,.6); border-radius: 50%; cursor: pointer; }
+  #toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); z-index: 8; font-size: 26px; color: #fff; text-shadow: 0 2px 0 #000;
+    background: rgba(10,8,14,.7); padding: 4px 16px; border: 2px solid var(--edge); opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  body.viewing #game { cursor: grab; }
   @media (max-width: 960px), (max-height: 480px) {
     #hp-box { width: min(240px, 30vw); padding: 5px 8px 6px; }
     .lbl { width: 36px; font-size: 16px; }
@@ -157,6 +179,7 @@
     <div class="tag">SINH TỒN QUA TỪNG ĐÊM</div>
     <div class="btns">
       <button class="btn" id="start-btn">BẮT ĐẦU</button>
+      <button class="btn alt" id="view-btn">NGẮM CẢNH</button>
       <button class="btn ghost" id="q-btn">Đồ hoạ: Cao</button>
     </div>
     <div class="help"><span id="help"></span><br>Kỷ lục: <b style="color:var(--gold);font-weight:400" id="best">0</b></div>
@@ -175,6 +198,18 @@
     <div class="btns"><button class="btn" id="again-btn">CHƠI LẠI</button></div>
   </div>
 </div>
+<div id="view-ui" class="hidden">
+  <div id="view-top">DEAD NIGHT · NGẮM CẢNH HD-2D<br><span id="view-keys">1 chiều tà · 2 đêm xanh · 3 ban ngày · 4 đêm khuya · 5 rạng đông · R mưa · T giông · F sương · N tự chạy giờ · G DOF · B bloom · H ẩn chữ · P chụp ảnh · kéo/lăn chuột: dời &amp; zoom · WASD: đi dạo · Esc: thoát</span><br><span id="view-clock"></span></div>
+  <div id="view-bar">
+    <button class="vb" data-v="golden">Chiều tà</button><button class="vb" data-v="blue">Đêm xanh</button><button class="vb" data-v="day">Ban ngày</button><button class="vb" data-v="night">Đêm khuya</button><button class="vb" data-v="dawn">Rạng đông</button>
+    <span class="vsep"></span>
+    <button class="vb" data-v="rain">Mưa</button><button class="vb" data-v="storm">Giông</button><button class="vb" data-v="fog">Sương</button><button class="vb" data-v="auto">Tự chạy giờ</button>
+    <span class="vsep"></span>
+    <button class="vb" data-v="dof">DOF</button><button class="vb" data-v="bloom">Bloom</button><button class="vb" data-v="hud">Ẩn chữ</button><button class="vb" data-v="shot">Chụp</button><button class="vb" data-v="exit">Thoát</button>
+  </div>
+</div>
+<button id="view-show" class="hidden" aria-label="Hiện bảng điều khiển">☰</button>
+<div id="toast"></div>
 <div id="loading">ĐANG DỰNG NGÔI LÀNG…</div>
 
 <script type="importmap">

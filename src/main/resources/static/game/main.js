@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND } from './world.js';
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
-import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies } from './fx.js';
+import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW } from './sprites.js';
 import { spriteLit, softDisc } from './pixel.js';
 import { Sound } from './audio.js';
@@ -94,7 +94,8 @@ const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 function placeCamera(shake = 0) {
   const r = () => (Math.random() - 0.5) * shake;
-  camera.position.set(camTarget.x + r(), CAM.lookY + (CAM.y - CAM.lookY) * camScale + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * camScale);
+  const cs = camScale * (state.mode === 'view' ? view.zoom : 1);
+  camera.position.set(camTarget.x + r(), CAM.lookY + (CAM.y - CAM.lookY) * cs + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * cs);
   camera.lookAt(camTarget.x + r() * 0.3, CAM.lookY, CAM.lookZ);
 }
 
@@ -174,6 +175,7 @@ const sticks = { move: null, aim: null };
 addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  if (state.mode === 'view') { viewKey(e.code); return; }
   if (state.mode !== 'play') return;
   if (e.code === 'KeyR') reload();
   if (e.code === 'Digit1') switchWeapon(0);
@@ -184,24 +186,39 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
-canvas.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true; });
-canvas.addEventListener('mousedown', (e) => { sound.init(); if (e.button === 0) mouse.down = true; });
-addEventListener('mouseup', () => { mouse.down = false; });
-canvas.addEventListener('wheel', () => { if (state.mode === 'play') cycleWeapon(); }, { passive: true });
+canvas.addEventListener('mousemove', (e) => {
+  if (view.drag) { view.pan -= (e.clientX - view.drag.x) * viewPxToWorld(); view.drag.x = e.clientX; }
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
+});
+canvas.addEventListener('mousedown', (e) => { sound.init(); if (state.mode === 'view') { view.drag = { x: e.clientX }; return; } if (e.button === 0) mouse.down = true; });
+addEventListener('mouseup', () => { mouse.down = false; view.drag = null; });
+canvas.addEventListener('wheel', (e) => {
+  if (state.mode === 'view') view.zoom = clamp(view.zoom * (1 + e.deltaY * 0.0012), 0.5, 1.8);
+  else if (state.mode === 'play') cycleWeapon();
+}, { passive: true });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('blur', () => { mouse.down = false; for (const k in keys) keys[k] = false; if (state.mode === 'play' && !state.paused) togglePause(); });
 function onTouch(e) {
   e.preventDefault(); sound.init();
   for (const t of e.changedTouches) {
-    const st = { id: t.identifier, ox: t.clientX, oy: t.clientY, x: t.clientX, y: t.clientY };
+    const st = { id: t.identifier, ox: t.clientX, oy: t.clientY, x: t.clientX, y: t.clientY, lx: t.clientX };
     if (t.clientX < W / 2) { if (!sticks.move) sticks.move = st; } else if (!sticks.aim) sticks.aim = st;
   }
 }
 function onTouchMove(e) {
   e.preventDefault();
+  if (state.mode === 'view' && e.touches.length >= 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    if (!view.pinch) view.pinch = { d0: d, z0: view.zoom };
+    view.zoom = clamp(view.pinch.z0 * view.pinch.d0 / Math.max(20, d), 0.5, 1.8);
+    return;
+  }
   for (const t of e.changedTouches) for (const k of ['move', 'aim']) if (sticks[k] && sticks[k].id === t.identifier) { sticks[k].x = t.clientX; sticks[k].y = t.clientY; }
 }
-function onTouchEnd(e) { for (const t of e.changedTouches) for (const k of ['move', 'aim']) if (sticks[k] && sticks[k].id === t.identifier) sticks[k] = null; }
+function onTouchEnd(e) {
+  if (e.touches.length < 2) view.pinch = null;
+  for (const t of e.changedTouches) for (const k of ['move', 'aim']) if (sticks[k] && sticks[k].id === t.identifier) sticks[k] = null;
+}
 canvas.addEventListener('touchstart', onTouch, { passive: false });
 canvas.addEventListener('touchmove', onTouchMove, { passive: false });
 canvas.addEventListener('touchend', onTouchEnd);
@@ -669,6 +686,9 @@ function applyAtmos(dt, t) {
   fx.leaves.update(dt, t, A.leaves, world.canopies, camTarget, A.wind);
   fx.moths.update(t, world.lampHeads, camTarget, A.lamps > 0.5);
   fx.sky.update(t, A, camera.position.x, lightning);
+  const wl = clamp(A.hemiI * 0.38 + A.sunI * 0.1 + lightning * 0.8, 0.3, 1.05);
+  for (const m of world.waterMats) { m.uniforms.uLight.value = wl; m.uniforms.uTint.value.copy(A.hemiSky).lerp(new THREE.Color(1, 1, 1), 0.55); }
+  fx.flock.update(dt, t, Math.max(A.birds, A.rain * 0.8 * (1 - A.night)), camTarget.x);
   fx.butterflies.update(t, A.butterflies, camTarget.x);
   U.win.value = A.windows;
   world.bulbMat.color.setScalar(0.15 + A.lamps * 1.6);
@@ -692,9 +712,101 @@ function applyAtmos(dt, t) {
   sound.update(dt, {
     rain: A.rain, wind: A.wind,
     crickets: (1 - A.rain) * A.night * (A.ash > 0 ? 0.2 : 1), birds: A.birds,
-    fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: 1,
+    fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: state.mode === 'view' ? 0.6 : 1,
+    water: Math.max(0, 1 - Math.abs(camTarget.x - (world.waterfalls[1].x0 + world.waterfalls[1].x1) / 2) / 16),
   });
   return A;
+}
+
+// ================= CHẾ ĐỘ NGẮM CẢNH (giống bảng điều khiển trong video mẫu) =================
+const view = { zoom: 1, pan: 0, auto: false, target: null, dof: true, bloom: true, ui: true, drag: null, pinch: null, shot: false };
+const VIEW_TIMES = { golden: 17.0, blue: 19.7, day: 11.5, night: 23.5, dawn: 5.9 };
+function viewPxToWorld() { return (2 * Math.tan(THREE.MathUtils.degToRad(CAM.fov / 2)) * camera.position.distanceTo(camTarget)) / H; }
+function startView() {
+  sound.init();
+  for (const z of zombies) releaseSprite(z);
+  zombies = []; bullets = [];
+  for (const p of pickups) scene.remove(p.mesh);
+  pickups = []; floaters = [];
+  fx.decals.clear();
+  player = newPlayer(); setSpriteMap(player.sprite, 0);
+  state.mode = 'view'; state.paused = false; phase = 'view';
+  Object.assign(view, { zoom: 1, pan: 0, auto: false, target: null, dof: true, bloom: true, ui: true });
+  atmos.hour = 17; atmos.setWeather('clear', true); atmos.rate = 0.35;
+  $('title').classList.add('hidden'); $('view-ui').classList.remove('hidden'); $('view-show').classList.add('hidden');
+  document.body.classList.add('viewing');
+  syncView();
+  toast(isTouch ? 'Kéo bên trái để đi dạo · kéo bên phải để dời cảnh · chụm 2 ngón để zoom' : 'Kéo chuột để dời cảnh · lăn chuột để zoom · WASD để đi dạo');
+}
+function exitView() {
+  state.mode = 'title'; phase = 'title';
+  post.params.dof = true;
+  $('view-ui').classList.add('hidden'); $('view-show').classList.add('hidden'); $('title').classList.remove('hidden');
+  document.body.classList.remove('viewing');
+}
+function viewAction(a) {
+  if (VIEW_TIMES[a] !== undefined) { view.target = VIEW_TIMES[a]; view.auto = false; }
+  else if (a === 'rain' || a === 'storm' || a === 'fog') atmos.setWeather(atmos.kind === a ? 'clear' : a);
+  else if (a === 'auto') { view.auto = !view.auto; view.target = null; }
+  else if (a === 'dof') view.dof = !view.dof;
+  else if (a === 'bloom') view.bloom = !view.bloom;
+  else if (a === 'hud') { view.ui = !view.ui; $('view-ui').classList.toggle('hidden', !view.ui); $('view-show').classList.toggle('hidden', view.ui); }
+  else if (a === 'shot') view.shot = true;
+  else if (a === 'exit') exitView();
+  syncView();
+}
+function viewKey(code) {
+  const map = { Digit1: 'golden', Digit2: 'blue', Digit3: 'day', Digit4: 'night', Digit5: 'dawn', KeyR: 'rain', KeyT: 'storm', KeyF: 'fog', KeyN: 'auto', KeyG: 'dof', KeyB: 'bloom', KeyH: 'hud', KeyP: 'shot', Escape: 'exit' };
+  if (map[code]) viewAction(map[code]);
+}
+function syncView() {
+  const h = ((atmos.hour % 24) + 24) % 24;
+  const cur = view.target !== null ? view.target : h;
+  const near = (t) => { const d = (((cur - t) % 24) + 24) % 24; return Math.min(d, 24 - d) < 0.7; };
+  document.querySelectorAll('#view-bar .vb').forEach((b) => {
+    const v = b.dataset.v;
+    let on = false;
+    if (VIEW_TIMES[v] !== undefined) on = !view.auto && near(VIEW_TIMES[v]);
+    else if (v === 'rain' || v === 'storm' || v === 'fog') on = atmos.kind === v;
+    else if (v === 'auto') on = view.auto;
+    else if (v === 'dof') on = view.dof;
+    else if (v === 'bloom') on = view.bloom;
+    b.classList.toggle('on', on);
+  });
+}
+let toastT = 0;
+function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); toastT = 2.6; }
+function updateViewer(dt) {
+  if (view.auto) atmos.hour += dt * 0.4;
+  else if (view.target !== null) {
+    const diff = (((view.target - atmos.hour) % 24) + 24) % 24;
+    const step = Math.min(diff, dt * Math.max(1.2, diff * 1.3));
+    atmos.hour += step;
+    if (diff < 0.01) { view.target = null; syncView(); }
+  }
+  // đi dạo tự do (không có zombie, không bắn)
+  let mx = 0, mz = 0;
+  if (keys.KeyW || keys.ArrowUp) mz -= 1;
+  if (keys.KeyS || keys.ArrowDown) mz += 1;
+  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
+  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  let mag = Math.hypot(mx, mz);
+  if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
+  const ms = stickVec(sticks.move);
+  if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
+  if (sticks.aim) { view.pan -= (sticks.aim.x - sticks.aim.lx) * viewPxToWorld(); sticks.aim.lx = sticks.aim.x; }
+  const spd = player.speed * 0.8 * mag;
+  player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
+  collide(player);
+  player.moving = mag > 0.1;
+  if (player.moving) { player.walk += dt * spd * 1.6; player.aim = Math.atan2(mz, mx); view.pan *= Math.exp(-dt * 1.5); }
+  setFrame(player.sprite, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0);
+  player.sprite.group.position.set(player.x, 0, player.z);
+  const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
+  flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
+  flashlight.target.position.set(player.x + ca * 9, 0.15, player.z + sa * 9);
+  const hh = ((atmos.hour % 24) + 24) % 24;
+  $('view-clock').textContent = String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0') + ' · ' + atmos.weatherName;
 }
 
 // ================= CẬP NHẬT =================
@@ -949,7 +1061,9 @@ function updateCamera(dt) {
   let tx = player.x;
   if (state.mode === 'play') tx += Math.cos(player.aim) * (isTouch ? 1.5 : 2.4);
   if (state.mode === 'title') tx = Math.sin(gtime * 0.035) * 38;
+  if (state.mode === 'view') tx = player.x + view.pan;
   tx = clamp(tx, BOUNDS.x0 + 9, BOUNDS.x1 - 9);
+  if (state.mode === 'view') view.pan = tx - player.x;
   const k = Math.min(1, dt * (state.mode === 'title' ? 1 : 4));
   camTarget.x += (tx - camTarget.x) * k;
   camTarget.z = 1;
@@ -1132,6 +1246,8 @@ function init() {
   player = newPlayer();
   camTarget.set(player.x, 1, 1);
   fx.butterflies = new Butterflies(scene, camQuat, TY);
+  fx.flock = new Flock(scene);
+  for (const b of fx.flock.birds) world.hideInReflection.push(b.mesh);
   world.hideInReflection.push(fx.butterflies.mesh);
   atmos.hour = 15.5; atmos.update(0);
   setQualityLabel();
@@ -1195,6 +1311,7 @@ function frame(now) {
     updateZombies(dt * 0.3);
     updateBullets(dt);
   }
+  if (state.mode === 'view') updateViewer(dt);
   if (state.mode === 'title') {
     setFrame(player.sprite, 'right', 0);
     player.sprite.group.position.set(player.x, 0, player.z);
@@ -1220,14 +1337,38 @@ function frame(now) {
   if (state.mode === 'play' || state.mode === 'over') updateHud();
   post.params.maxBlur = quality === 'high' ? 7 : 5;
   post.params.range = 7; post.params.fall = 12; post.params.nearK = 1.3;
+  post.params.dof = state.mode === 'view' ? view.dof : true;
+  if (state.mode === 'view' && !view.bloom) post.params.bloom = 0;
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
+  // bụi nước dưới chân thác
+  for (const wf of world.waterfalls) {
+    if (Math.abs((wf.x0 + wf.x1) / 2 - camTarget.x) > 24 || Math.random() > 0.75) continue;
+    const c = 0.45 + 0.4 * clamp(A.hemiI * 0.5 + A.sunI * 0.15, 0, 1);
+    fx.spark.spawn(rand(wf.x0, wf.x1), wf.y + 0.05, wf.z + rand(0, 0.25), rand(-0.6, 0.6), rand(0.8, 2.2), rand(0.1, 0.9), rand(0.35, 0.8), rand(0.05, 0.09), new THREE.Color(c * 0.8, c * 0.9, c), { grav: 5, drag: 1.5, mode: 1 });
+  }
   if (DBG) renderer.info.reset();
   post.render(scene, camera, gtime);
+  if (view.shot) {
+    view.shot = false;
+    try {
+      canvas.toBlob((b) => {
+        if (!b) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b); a.download = 'dead-night-' + Date.now() + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      });
+      toast('Đã chụp ảnh màn hình');
+    } catch (e) { toast('Không chụp được ảnh'); }
+  }
   if (DBG) window.__info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, leaves: world.leafCount, q: quality };
   draw2D();
 }
 
 // ================= NÚT BẤM =================
 $('start-btn').addEventListener('click', startGame);
+$('view-btn').addEventListener('click', startView);
+document.querySelectorAll('#view-bar .vb').forEach((b) => b.addEventListener('click', () => viewAction(b.dataset.v)));
+$('view-show').addEventListener('click', () => viewAction('hud'));
 $('again-btn').addEventListener('click', startGame);
 $('resume-btn').addEventListener('click', togglePause);
 $('q-btn').addEventListener('click', () => {

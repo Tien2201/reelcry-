@@ -557,3 +557,39 @@ export class Butterflies {
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }
+
+// ---------- đàn chim bay ngang trời (ban ngày, chiều tà, chiều mưa) ----------
+export class Flock {
+  constructor(parent, n = 9) {
+    const atlas = makeCrowAtlas();
+    const geo = new THREE.PlaneGeometry(atlas.w, atlas.h);
+    this.birds = Array.from({ length: n }, (_, i) => {
+      const map = atlas.map.clone(); map.needsUpdate = true; map.repeat.set(1 / 3, 1);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, color: '#16141c', side: THREE.DoubleSide }));
+      mesh.visible = false;
+      parent.add(mesh);
+      const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
+      return { mesh, map, ox: -row * 1.3, oy: -row * 0.3 + Math.random() * 0.4, oz: side * row * 0.8, ph: Math.random() * 10 };
+    });
+    this.active = false; this.t = 6; this.x = 0; this.dir = 1;
+  }
+  update(dt, t, amount, camX) {
+    if (!this.active) {
+      this.t -= dt;
+      if (this.t <= 0 && amount > 0.3) {
+        this.active = true; this.dir = Math.random() < 0.5 ? 1 : -1;
+        this.x = camX - this.dir * 34; this.y = 11 + Math.random() * 4; this.z = -14 - Math.random() * 8; this.speed = 4.5 + Math.random() * 2;
+      }
+      for (const b of this.birds) b.mesh.visible = false;
+      return;
+    }
+    this.x += this.dir * this.speed * dt;
+    for (const b of this.birds) {
+      b.mesh.visible = true;
+      b.mesh.position.set(this.x + b.ox * this.dir + Math.sin(t * 1.3 + b.ph) * 0.25, this.y + b.oy + Math.sin(t * 2.1 + b.ph) * 0.18, this.z + b.oz);
+      b.map.offset.x = (1 + (Math.floor(t * 7 + b.ph) % 2)) / 3;
+      b.mesh.scale.x = this.dir;
+    }
+    if ((this.x - camX) * this.dir > 36) { this.active = false; this.t = 14 + Math.random() * 20; }
+  }
+}

@@ -3,8 +3,8 @@
 import * as THREE from 'three';
 import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND } from './world.js';
 import { Post } from './post.js';
-import { Atmos, PRESETS, presetForNight } from './atmos.js';
-import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky } from './fx.js';
+import { Atmos } from './atmos.js';
+import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW } from './sprites.js';
 import { spriteLit, softDisc } from './pixel.js';
 import { Sound } from './audio.js';
@@ -161,6 +161,9 @@ const state = { mode: 'loading', paused: false };
 let player, zombies = [], bullets = [], pickups = [], floaters = [];
 let wave = 0, toSpawn = 0, spawnTimer = 0, intermission = 0, kills = 0, score = 0, shake = 0, gtime = 0;
 let hurtFlash = 0, lightning = 0, lightningT = 8, thunderQ = [], playStart = 0;
+// pha trong ngày: dusk (chiều tà) → night (đêm, zombie tấn công) → dawn (rạng đông) → day (nghỉ ngơi)
+let phase = 'title', phaseT = 0, dayNo = 0, nightKills = 0, nightTotal = 1, hourFrom = 0, strayT = 0;
+const DAY_LEN = 50, DUSK_LEN = 13, DAWN_LEN = 7;
 const zPool = { walker: [], runner: [], brute: [] };
 let tracerMesh, pickupAtlas, glowTex, beam;
 
@@ -429,9 +432,9 @@ function terracePlan(z) {
     z.tx = clamp(tx, BOUNDS.x0 + 1, BOUNDS.x1 - 1); z.stair = null;
   }
 }
-function spawnZombie() {
-  const type = pickType();
-  const roll = Math.random();
+function spawnZombie(stray = false) {
+  const type = stray ? 'walker' : pickType();
+  const roll = stray ? 1 : Math.random();
   const nearPond = Math.abs(player.x - POND.cx) < 18;
   const nearCem = player.x > 22;
   if (roll < 0.34) {
@@ -471,7 +474,8 @@ function spawnZombie() {
   return true;
 }
 function killZombie(z, ang) {
-  kills++; score += z.score * wave;
+  kills++; score += z.score * Math.max(1, wave);
+  if (phase === 'night') nightKills++;
   z.state = 'dead'; z.t = 0;
   z.sprite.xr.visible = false; z.sprite.blob.visible = false;
   fx.decals.add(z.x, z.z, z.type === 'brute' ? 2.4 : 1.7);
@@ -479,13 +483,13 @@ function killZombie(z, ang) {
     const a = ang + rand(-1.1, 1.1), s = rand(1.5, 5.5);
     fx.blood.spawn(z.x, rand(0.6, 1.4), z.z, Math.cos(a) * s, rand(1, 4), Math.sin(a) * s, 2, rand(0.06, 0.13), Math.random() < 0.5 ? '#7a0e0c' : '#a01814', { grav: 11, drag: 0.6 });
   }
-  floaters.push({ x: z.x, y: 2.4, z: z.z, text: '+' + z.score * wave, t: 1.1, color: '#f2c14e' });
+  floaters.push({ x: z.x, y: 2.4, z: z.z, text: '+' + z.score * Math.max(1, wave), t: 1.1, color: '#f2c14e' });
   const roll = Math.random();
   if (roll < 0.06 + (z.type === 'brute' ? 0.5 : 0)) addPickup(z.x, z.z, 'med');
   else if (roll < 0.24) addPickup(z.x, z.z, 'ammo');
   hud.dirty = true;
 }
-function addPickup(x, z, type) {
+function addPickup(x, z, type, life = 22) {
   const map = pickupAtlas.map.clone(); map.needsUpdate = true; map.repeat.set(0.5, 1); map.offset.set(type === 'med' ? 0.5 : 0, 0);
   const mat = spriteLit(new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, emissive: new THREE.Color(0.35, 0.35, 0.35), emissiveMap: map }));
   const geo = new THREE.PlaneGeometry(pickupAtlas.w * 1.2, pickupAtlas.h * 1.2); geo.translate(0, pickupAtlas.h * 0.6, 0);
@@ -495,17 +499,26 @@ function addPickup(x, z, type) {
   glow.scale.set(1.3, 1.3, 1); glow.position.set(0, 0.5, -0.05);
   mesh.add(glow);
   scene.add(mesh);
-  pickups.push({ x, z, type, t: 22, mesh });
+  pickups.push({ x, z, type, t: life, mesh });
 }
 
-// ================= SÓNG / ĐÊM =================
+// ================= SÓNG / ĐÊM / NGÀY =================
+function rollNightWeather() {
+  if (wave % 5 === 0) return 'blood';
+  if (wave === 1) return 'clear';
+  const r = Math.random();
+  return r < 0.17 ? 'storm' : r < 0.34 ? 'rain' : r < 0.48 ? 'fog' : 'clear';
+}
 function nextWave() {
   wave++;
+  phase = 'night'; phaseT = 0;
   toSpawn = Math.min(6 + wave * 4, 70);
+  nightTotal = toSpawn; nightKills = 0;
   spawnTimer = 2.5; intermission = 0;
-  const pi = presetForNight(wave);
-  atmos.go(pi, wave === 1 ? 0.01 : 6);
-  showMsg(`ĐÊM ${wave}`, PRESETS[pi].name);
+  atmos.hour = Math.max(atmos.hour, 19.6);
+  hourFrom = atmos.hour;
+  atmos.setWeather(rollNightWeather());
+  showMsg(`ĐÊM ${wave}`, atmos.weatherName);
   sound.wave();
   WEAPONS.forEach((w, i) => {
     if (w.unlock === wave && !player.guns[i].owned) {
@@ -514,6 +527,51 @@ function nextWave() {
     }
   });
   hud.dirty = true;
+}
+function startDawn() {
+  phase = 'dawn'; phaseT = 0; hourFrom = atmos.hour;
+  showMsg('TRỜI SÁNG', `Đã sống sót đêm ${wave} · +25 máu`);
+  player.hp = Math.min(player.maxHp, player.hp + 25);
+  score += wave * 100; hud.dirty = true;
+  atmos.setWeather('clear');
+}
+function startDay() {
+  phase = 'day'; phaseT = 0; dayNo++; strayT = 6;
+  const r = Math.random();
+  atmos.setWeather(r < 0.25 ? 'rain' : r < 0.35 ? 'fog' : 'clear');
+  showMsg(`NGÀY ${dayNo}`, atmos.kind === 'rain' ? 'Mưa rào · nhặt đồ tiếp tế' : 'Nghỉ ngơi · nhặt đồ tiếp tế');
+  // thùng tiếp tế rơi gần người chơi
+  for (let i = 0; i < 3; i++) addPickup(clamp(player.x + rand(-7, 7), BOUNDS.x0 + 1, BOUNDS.x1 - 1), rand(BOUNDS.z0 + 0.6, BOUNDS.z1 - 0.6), i === 0 ? 'med' : 'ammo', 45);
+}
+function startDusk() {
+  phase = 'dusk'; phaseT = 0; hourFrom = atmos.hour;
+  showMsg('CHIỀU TÀ', 'Màn đêm sắp buông xuống…');
+  if (atmos.kind === 'rain' && Math.random() < 0.6) atmos.setWeather('clear');
+}
+function updatePhase(dt) {
+  phaseT += dt;
+  if (phase === 'night') {
+    // đêm trôi theo số zombie bị hạ (và chậm dần theo thời gian), hết zombie thì rạng đông
+    const target = 19.6 + Math.min(1, nightKills / Math.max(1, nightTotal)) * 8.9;
+    atmos.hour = Math.min(target, atmos.hour + dt * 0.5);
+    if (toSpawn <= 0 && !zombies.some((z) => z.state !== 'dead')) startDawn();
+  } else if (phase === 'dawn') {
+    const k = Math.min(1, phaseT / DAWN_LEN);
+    atmos.hour = hourFrom + (30.9 - hourFrom) * k;
+    if (k >= 1) { atmos.hour = 6.9; startDay(); }
+  } else if (phase === 'day') {
+    atmos.hour = 6.9 + (16.4 - 6.9) * Math.min(1, phaseT / DAY_LEN);
+    strayT -= dt;
+    if (strayT <= 0) {
+      strayT = rand(9, 14);
+      if (zombies.filter((z) => z.state !== 'dead').length < 2) spawnZombie(true);
+    }
+    if (phaseT >= DAY_LEN) startDusk();
+  } else if (phase === 'dusk') {
+    const k = Math.min(1, phaseT / DUSK_LEN);
+    atmos.hour = hourFrom + (19.6 - hourFrom) * k;
+    if (k >= 1) nextWave();
+  }
 }
 let msgTimer = 0;
 function showMsg(title, sub) {
@@ -530,15 +588,18 @@ function updateHud() {
   $('st-fill').style.width = (player.stamina * 100).toFixed(1) + '%';
   $('hp-box').classList.toggle('low', player.hp < 30);
   $('reload-tag').classList.toggle('show', player.reloading > 0);
+  const hh = ((atmos.hour % 24) + 24) % 24, clock = String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0');
+  setText('night', phase === 'day' || phase === 'dawn' ? `NGÀY ${Math.max(1, dayNo)}` : `ĐÊM ${phase === 'dusk' ? wave + 1 : wave}`);
+  setText('atmo', `${clock} · ${atmos.weatherName}`);
+  if (phase === 'day') hud.dirty = true;
   if (!hud.dirty) return;
   hud.dirty = false;
   const w = WEAPONS[player.weapon], g = curGun();
-  setText('night', `ĐÊM ${wave}`);
-  setText('atmo', PRESETS[atmos.index].name);
+
   setText('score', String(score));
   setText('kills', `${kills} hạ gục`);
   const alive = zombies.filter((z) => z.state !== 'dead').length;
-  setText('left', intermission > 0 ? 'Trời sắp sáng…' : `Zombie còn lại: ${toSpawn + alive}`);
+  setText('left', phase === 'night' ? `Zombie còn lại: ${toSpawn + alive}` : phase === 'dawn' ? 'Trời sáng rồi!' : phase === 'day' ? `Nghỉ ngơi · còn ${Math.ceil(DAY_LEN - phaseT)} giây` : 'Màn đêm sắp buông…');
   setText('wname', w.name);
   setText('ammo', String(g.ammo));
   setText('reserve', g.reserve === Infinity ? '∞' : String(g.reserve));
@@ -608,6 +669,10 @@ function applyAtmos(dt, t) {
   fx.leaves.update(dt, t, A.leaves, world.canopies, camTarget, A.wind);
   fx.moths.update(t, world.lampHeads, camTarget, A.lamps > 0.5);
   fx.sky.update(t, A, camera.position.x, lightning);
+  fx.butterflies.update(t, A.butterflies, camTarget.x);
+  U.win.value = A.windows;
+  world.bulbMat.color.setScalar(0.15 + A.lamps * 1.6);
+  world.jackMat.emissiveIntensity = 3 * Math.max(0.15, A.lamps);
   // diều chỉ bay khi trời còn sáng
   const k = world.kite;
   k.visible = world.kiteLine.visible = A.kite > 0.5;
@@ -626,7 +691,7 @@ function applyAtmos(dt, t) {
   for (let i = thunderQ.length - 1; i >= 0; i--) { thunderQ[i] -= dt; if (thunderQ[i] <= 0) { sound.thunder(rand(0.6, 1)); thunderQ.splice(i, 1); } }
   sound.update(dt, {
     rain: A.rain, wind: A.wind,
-    crickets: (1 - A.rain) * (A.id === 'blood' ? 0.2 : 1) * (state.mode === 'play' || state.mode === 'title' ? 1 : 0),
+    crickets: (1 - A.rain) * A.night * (A.ash > 0 ? 0.2 : 1), birds: A.birds,
     fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: 1,
   });
   return A;
@@ -869,24 +934,14 @@ function updatePickups(dt) {
 }
 
 function updateWaves(dt) {
-  if (toSpawn > 0) {
-    spawnTimer -= dt;
-    const alive = zombies.filter((z) => z.state !== 'dead').length;
-    if (spawnTimer <= 0 && alive < (quality === 'high' ? 40 : 28)) {
-      const batch = Math.min(toSpawn, 1 + Math.floor(wave / 3));
-      for (let i = 0; i < batch; i++) if (spawnZombie()) toSpawn--;
-      spawnTimer = Math.max(0.4, 1.7 - wave * 0.1) * rand(0.6, 1.3);
-      hud.dirty = true;
-    }
-  } else if (!zombies.some((z) => z.state !== 'dead')) {
-    if (intermission === 0) {
-      intermission = 7;
-      showMsg(`ĐÃ SỐNG SÓT ĐÊM ${wave}`, '+25 máu · chuẩn bị cho đêm tiếp theo');
-      player.hp = Math.min(player.maxHp, player.hp + 25);
-      score += wave * 100; hud.dirty = true;
-    }
-    intermission -= dt;
-    if (intermission <= 0.0001) nextWave();
+  if (phase !== 'night' || toSpawn <= 0) return;
+  spawnTimer -= dt;
+  const alive = zombies.filter((z) => z.state !== 'dead').length;
+  if (spawnTimer <= 0 && alive < (quality === 'high' ? 40 : 28)) {
+    const batch = Math.min(toSpawn, 1 + Math.floor(wave / 3));
+    for (let i = 0; i < batch; i++) if (spawnZombie()) toSpawn--;
+    spawnTimer = Math.max(0.4, 1.7 - wave * 0.1) * rand(0.6, 1.3);
+    hud.dirty = true;
   }
 }
 
@@ -988,10 +1043,13 @@ function startGame() {
   $('title').classList.add('hidden'); $('over').classList.add('hidden'); $('pause').classList.add('hidden');
   document.body.classList.add('playing');
   hud.dirty = true;
-  nextWave();
-  // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<kiểu thời tiết>&px=..
+  dayNo = 0;
+  atmos.hour = 16.4; atmos.setWeather('clear', true); atmos.rate = 0.12;
+  startDusk();
+  // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<giờ>&w=<rain|storm|fog|blood>&px=..
   if (QS.has('shot')) {
-    atmos.go(+QS.get('shot'), 0.01); atmos.update(1);
+    phase = 'shot';
+    atmos.hour = +QS.get('shot'); atmos.setWeather(QS.get('w') || 'clear', true); atmos.update(0);
     if (QS.has('px')) player.x = +QS.get('px');
     if (QS.has('pz')) player.z = +QS.get('pz');
     player.hp = player.maxHp = 1e6; toSpawn = 0;
@@ -1000,11 +1058,12 @@ function startGame() {
     const tz = newZombie('walker', player.x + 5, TY, WALL_Z - 1.4, 'terrace'); tz.tx = player.x + 2; tz.stair = null; tz.speed *= 0.3;
     camTarget.x = player.x;
     window.__dn = { get zombies() { return zombies; }, get player() { return player; }, camera, size: () => [W, H] };
+    window.__setHour = (h, w) => { atmos.hour = h; if (w && w !== atmos.kind) atmos.setWeather(w, true); };
   }
 }
 function spawnAt(type, x, z) {
   const zz = newZombie(type, x, 0, z, 'walk');
-  zz.speed *= 0.3; zz.dmg = 0;
+  zz.speed *= 0.3; zz.dmg = 0; zz.atkT = 1e9;
 }
 function gameOver() {
   state.mode = 'over';
@@ -1072,7 +1131,9 @@ function init() {
   scene.add(tracerMesh); world.hideInReflection.push(tracerMesh);
   player = newPlayer();
   camTarget.set(player.x, 1, 1);
-  atmos.go(1, 0.01); atmos.update(1);
+  fx.butterflies = new Butterflies(scene, camQuat, TY);
+  world.hideInReflection.push(fx.butterflies.mesh);
+  atmos.hour = 15.5; atmos.update(0);
   setQualityLabel();
   $('best').textContent = bestScore();
   if (DBG) renderer.info.autoReset = false;
@@ -1083,7 +1144,8 @@ function init() {
   last = performance.now();
   requestAnimationFrame(frame);
   if (QS.has('shot')) setTimeout(startGame, 50);
-  if (QS.has('debug')) window.__dbg = () => ({ mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2)]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
+  if (QS.has('debug')) window.__dbgKill = () => { toSpawn = 0; zombies.forEach((z) => { if (z.state !== 'dead') killZombie(z, 0); }); };
+  if (QS.has('debug')) window.__dbg = () => ({ phase, hour: +atmos.hour.toFixed(2), weather: atmos.kind, hud: [$('night').textContent, $('atmo').textContent, $('left').textContent, $('msg-title').textContent], mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2)]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
 }
 
 // ================= KHÓI & TÀN LỬA =================
@@ -1119,12 +1181,21 @@ function frame(now) {
       if (k) { gtime += dt; U.time.value = gtime; }
       updatePlayer(dt);
       if (state.mode === 'play') updateZombies(dt);
-      if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); }
+      if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); if (phase !== 'shot') updatePhase(dt); }
     }
-  } else if (state.mode === 'over') {
+  } else if (state.mode === 'title') {
+    // màn hình tiêu đề: tua nhanh một vòng ngày đêm, có mưa và sương để khoe hiệu ứng
+    atmos.hour += dt * 0.42;
+    const h = atmos.hour % 24;
+    atmos.rate = 0.3;
+    const want = h > 12.5 && h < 15.2 ? 'rain' : h > 0.6 && h < 3 ? 'storm' : h > 4.4 && h < 6.6 ? 'fog' : 'clear';
+    if (want !== atmos.kind) atmos.setWeather(want);
+  }
+  if (state.mode === 'over') {
     updateZombies(dt * 0.3);
     updateBullets(dt);
-  } else {
+  }
+  if (state.mode === 'title') {
     setFrame(player.sprite, 'right', 0);
     player.sprite.group.position.set(player.x, 0, player.z);
     flashlight.position.set(player.x, 1.15, player.z + 0.3);

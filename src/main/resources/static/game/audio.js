@@ -114,6 +114,13 @@ export class Sound {
       const f = 4300 + Math.random() * 600, x = this.lx + (Math.random() - 0.5) * 30, z = this.lz + (Math.random() - 0.5) * 20;
       for (let i = 0; i < 3; i++) this.tone('sine', f, f * 1.01, 0.035, 0.012 * amb.crickets, x, z, i * 0.06);
     }
+    this.birdT = (this.birdT || 1) - dt;
+    if (this.birdT <= 0 && amb.birds > 0.05) {
+      this.birdT = 0.8 + Math.random() * 3 / amb.birds;
+      const f = 2300 + Math.random() * 1500, x = this.lx + (Math.random() - 0.5) * 34, z = this.lz - 4 - Math.random() * 8;
+      const n = 2 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) this.tone('sine', f * (1 + (i % 2) * 0.18), f * (1.25 + (i % 2) * 0.1), 0.07, 0.022 * amb.birds, x, z, i * 0.09);
+    }
     this.crackleT -= dt;
     if (this.crackleT <= 0 && amb.fire > 0.02) {
       this.crackleT = 0.04 + Math.random() * 0.25;

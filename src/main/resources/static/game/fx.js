@@ -303,13 +303,14 @@ export class Sky {
     this.u = {
       uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() },
       uStars: { value: 0 }, uMoon: { value: 0 }, uMoonCol: { value: new THREE.Color(1, 1, 1) }, uClouds: { value: 0 }, uCloudCol: { value: new THREE.Color() },
+      uSunPos: { value: new THREE.Vector2(0, -50) }, uMoonPos: { value: new THREE.Vector2(55, 15) }, uSunVis: { value: 0 }, uSunCol: { value: new THREE.Color(1, 1, 1) },
       uTime: U.time, uFlash: { value: 0 },
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.u, depthWrite: false,
       vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `
-        uniform vec3 uTop, uHor, uGlow, uMoonCol, uCloudCol; uniform float uStars, uMoon, uClouds, uTime, uFlash;
+        uniform vec3 uTop, uHor, uGlow, uMoonCol, uCloudCol, uSunCol; uniform float uStars, uMoon, uClouds, uTime, uFlash, uSunVis; uniform vec2 uSunPos, uMoonPos;
         varying vec2 vP;
         float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -318,10 +319,13 @@ export class Sky {
           vec2 q = floor(vP * 1.2) / 1.2;
           float wy = q.y + 60.0;
           vec3 col = mix(uHor, uTop, smoothstep(2.0, 30.0, wy));
-          col += uGlow * exp(-pow((q.x + 70.0) / 90.0, 2.0)) * exp(-max(wy - 3.0, 0.0) / 9.0);
+          col += uGlow * exp(-pow((q.x - uSunPos.x) / 90.0, 2.0)) * exp(-max(wy - 3.0, 0.0) / 9.0);
+          float ds = length(vec2(q.x, wy) - uSunPos);
+          col = mix(col, uSunCol * 1.8 + 0.4, smoothstep(4.2, 3.8, ds) * uSunVis);
+          col += uSunCol * exp(-ds / 12.0) * 0.5 * uSunVis;
           float st = step(0.988, h21(floor(q * 0.9))) * (0.6 + 0.4 * sin(uTime * 2.0 + h21(floor(q)) * 40.0));
           col += st * uStars * smoothstep(9.0, 16.0, wy) * 0.9;
-          vec2 mc = vec2(55.0, 15.5);
+          vec2 mc = uMoonPos;
           float d = length(vec2(q.x, wy) - mc);
           col = mix(col, uMoonCol * (1.0 - 0.15 * step(0.6, vn(q * 0.8))), smoothstep(3.2, 2.9, d) * uMoon);
           col += uMoonCol * exp(-d / 7.0) * 0.35 * uMoon;
@@ -366,6 +370,7 @@ export class Sky {
     const u = this.u;
     u.uTop.value.copy(A.skyTop); u.uHor.value.copy(A.skyHor); u.uGlow.value.copy(A.glow);
     u.uStars.value = A.stars; u.uMoon.value = A.moon; u.uMoonCol.value.copy(A.moonCol);
+    u.uSunPos.value.copy(A.sunPos); u.uMoonPos.value.copy(A.moonPos); u.uSunVis.value = A.sunVis; u.uSunCol.value.copy(A.sunColor);
     u.uClouds.value = A.clouds; u.uCloudCol.value.copy(A.cloudCol);
     u.uFlash.value = flash;
     this.hu.uFog.value.copy(A.skyHor).lerp(A.fog, 0.5);
@@ -522,3 +527,33 @@ export class Leaves {
 
 export function glowTexture() { return softDisc(64, 0, 2); }
 export { makeRng };
+
+// ---------- bướm bay ban ngày quanh cỏ hoa ----------
+export class Butterflies {
+  constructor(parent, camQuat, ty, max = 28) {
+    const atlas = makeSmallAtlas();
+    atlas.repeat.set(0.25, 1); atlas.offset.set(0.25, 0);
+    const mat = spriteLit(new THREE.MeshLambertMaterial({ map: atlas, alphaTest: 0.5, side: THREE.DoubleSide, emissive: new THREE.Color(0.25, 0.25, 0.25), emissiveMap: atlas }));
+    this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.26, 0.26), mat, max);
+    const cols = ['#f6f4ea', '#f2d040', '#f08a30', '#6aa0f0', '#f0a0c8'];
+    this.seeds = Array.from({ length: max }, (_, i) => ({ x: Math.random(), ph: Math.random() * 10, y: Math.random(), up: i % 3 === 0, z: Math.random() }));
+    this.seeds.forEach((s, i) => this.mesh.setColorAt(i, new THREE.Color(cols[i % cols.length])));
+    this.mesh.count = 0; this.mesh.frustumCulled = false;
+    this.camQuat = camQuat; this.max = max; this.ty = ty;
+    parent.add(this.mesh);
+  }
+  update(t, amount, cx) {
+    const n = Math.round(this.max * Math.min(1, amount));
+    for (let i = 0; i < n; i++) {
+      const s = this.seeds[i];
+      const span = 34, bx = cx - span / 2 + ((s.x * span + t * 0.35 * (i % 2 ? 1 : -1)) % span + span) % span;
+      V.set(bx + Math.sin(t * 0.8 + s.ph) * 1.4, (s.up ? this.ty : 0) + 0.5 + s.y * 0.8 + Math.abs(Math.sin(t * 1.7 + s.ph)) * 0.5,
+        s.up ? -2.6 - s.z * 1.4 : 4.2 + s.z * 4 + Math.sin(t * 0.5 + s.ph * 2) * 0.8);
+      const flap = 0.25 + 0.75 * Math.abs(Math.sin(t * 16 + s.ph * 7));
+      M.compose(V, this.camQuat, S.set(flap, 1, 1));
+      this.mesh.setMatrixAt(i, M);
+    }
+    this.mesh.count = n;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}

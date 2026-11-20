@@ -28,6 +28,7 @@ export const U = {
   seeDepth: { value: 0 },
   seeZ: { value: 999 },
   wet: { value: 0 },
+  win: { value: 1 },
 };
 
 const GLSL_BAYER = `
@@ -158,6 +159,7 @@ class Voxels {
     if (this.wrap) spriteLit(mat, this.wrap);
     if (this.sway) swayPatch(mat, this.sway);
     if (this.see) seeThrough(mat);
+    this.mat = mat;
     let dm = null;
     if (this.sway && this.cast) { dm = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); swayPatch(dm, this.sway); }
     const chunks = new Map();
@@ -500,7 +502,16 @@ export function buildWorld(scene, quality) {
     const side = T.facadeTex({ w: d, h: wallH, floors: h.floors, style: h.style, plaster: h.plaster, shutter: h.shutter, door: 0, winPerFloor: 1, seed: h.seed + 50, lit: h.lit });
     const mk = (t) => {
       const m = lamb({ map: t.map, normalMap: t.normalMap });
-      if (t.emissiveMap) { m.emissiveMap = t.emissiveMap; m.emissive.set('#ffb060'); m.emissiveIntensity = 2.2; windowMats.push(m); }
+      if (t.emissiveMap) {
+        m.emissiveMap = t.emissiveMap; m.emissive.set('#ffb060'); m.emissiveIntensity = 2.2; windowMats.push(m);
+        // ban ngày: cửa sổ trông như kính thường, ban đêm mới sáng đèn
+        patchMaterial(m, 'daywin', (sh) => {
+          sh.uniforms.uWin = U.win;
+          sh.fragmentShader = 'uniform float uWin;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+            { float em = dot(texture2D(emissiveMap, vEmissiveMapUv).rgb, vec3(0.333));
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.07, 0.09, 0.12) + diffuseColor.rgb * 0.15, clamp(em * 2.5, 0.0, 1.0) * (1.0 - uWin) * 0.9); }`);
+        });
+      }
       m.shadowSide = THREE.DoubleSide;
       seeThrough(m);
       return m;
@@ -1076,7 +1087,7 @@ export function buildWorld(scene, quality) {
   return {
     root, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
     hideInReflection, grassMeshes, water, leafMeshes, animated, houses, kite, kiteLine,
-    campfire, cemetery, field, pond: POND, holePts, inPoly,
+    campfire, cemetery, field, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, jackMat,
     leafCount: leafMeshes.reduce((a, m) => a + m.count, 0),
   };
 }

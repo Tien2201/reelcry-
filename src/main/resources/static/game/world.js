@@ -1289,8 +1289,8 @@ export function buildWorld(scene, quality) {
   car(11.8, 2.9, 0.42, 'sedan', { paint: '#2a4a2a', flat: true });
   car(18.0, 0.35, 0, 'truck', { loot: 'truck', label: 'Thùng xe quân sự', lootDz: 1.6 });
   car(37.8, 2.65, 0.05, 'police', { siren: true, loot: 'trunk', label: 'Cốp xe cảnh sát' });
-  car(48.4, -0.5, Math.PI + 0.1, 'police', {});
-  car(56.4, 2.6, 0, 'ambulance', { loot: 'ambulance', label: 'Xe cứu thương' });
+  car(46.2, -0.65, Math.PI + 0.1, 'police', {});
+  car(57.6, 3.0, 0, 'ambulance', { loot: 'ambulance', label: 'Xe cứu thương' });
 
   // ======================= TRẠM XĂNG =======================
   {

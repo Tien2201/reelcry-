@@ -5,7 +5,8 @@ import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, P
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
-import { makeCharacterSprites, makePickupAtlas, DIR_ROW } from './sprites.js';
+import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons } from './sprites.js';
+import { ITEMS, ITEM_ORDER, rollLoot, searchTime } from './items.js';
 import { spriteLit, softDisc } from './pixel.js';
 import { Sound } from './audio.js';
 
@@ -152,10 +153,13 @@ function dirFromAngle(a) {
 
 // ================= TRẠNG THÁI GAME =================
 const WEAPONS = [
-  { key: 'pistol', name: 'SÚNG LỤC', dmg: 34, rate: 0.26, mag: 12, reload: 1.0, spread: 0.035, pellets: 1, speed: 38, kick: 0.06, infinite: true, shake: 0.12 },
-  { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.2, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, unlock: 2 },
-  { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.07, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, unlock: 4 },
+  { key: 'knife', name: 'DAO', melee: true, dmg: 45, rate: 0.4, reach: 1.5, arc: 1.05, mag: 0, shake: 0.05 },
+  { key: 'pistol', name: 'SÚNG LỤC', dmg: 34, rate: 0.26, mag: 12, reload: 1.0, spread: 0.035, pellets: 1, speed: 38, kick: 0.06, shake: 0.12, ammo: 'ammo9', noise: 15 },
+  { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.2, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, ammo: 'shells', noise: 19 },
+  { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.07, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, ammo: 'ammo9', noise: 17 },
 ];
+const CORPSE_LIFE = 60;
+let zid = 0;
 const ZT = {
   walker: { r: 0.36, speed: [1.0, 1.5], hp: 60, dmg: 10, score: 10, atk: 0.9, hpW: 6 },
   runner: { r: 0.33, speed: [2.7, 3.2], hp: 40, dmg: 8, score: 15, atk: 0.75, hpW: 4 },
@@ -166,9 +170,9 @@ let player, zombies = [], bullets = [], pickups = [], floaters = [];
 let wave = 0, toSpawn = 0, spawnTimer = 0, intermission = 0, kills = 0, score = 0, shake = 0, gtime = 0;
 let hurtFlash = 0, lightning = 0, lightningT = 8, thunderQ = [], playStart = 0;
 // pha trong ngày: dusk (chiều tà) → night (đêm, zombie tấn công) → dawn (rạng đông) → day (nghỉ ngơi)
-let phase = 'title', phaseT = 0, dayNo = 0, nightKills = 0, nightTotal = 1, hourFrom = 0, strayT = 0;
-const DAY_LEN = 50, DUSK_LEN = 13, DAWN_LEN = 7;
-const zPool = { walker: [], runner: [], brute: [] };
+let phase = 'title', phaseT = 0, dayNo = 0, nightKills = 0, nightTotal = 1, hourFrom = 0, strayT = 0, dayStartHour = 6.9;
+const DAY_LEN = 150, DUSK_LEN = 14, DAWN_LEN = 7;
+const zPool = {};
 let tracerMesh, pickupAtlas, glowTex, beam;
 
 // ================= INPUT =================
@@ -180,11 +184,16 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   if (state.mode === 'view') { viewKey(e.code); return; }
   if (state.mode !== 'play') return;
+  if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); toggleBag(); return; }
+  if (bagOpen) return;
   if (e.code === 'KeyR') reload();
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'Digit3') switchWeapon(2);
+  if (e.code === 'Digit4') switchWeapon(3);
   if (e.code === 'KeyQ') cycleWeapon();
+  if (e.code === 'KeyF') quickHeal();
+  if (e.code === 'KeyC') quickEat();
   if (e.code === 'KeyM') sound.muted = !sound.muted;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
 });
@@ -350,11 +359,13 @@ function navLOS(x0, z0, x1, z1) {
 
 // ================= NGƯỜI CHƠI & VŨ KHÍ =================
 function newPlayer() {
-  const sp = player ? player.sprite : makeSprite([SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
+  const sp = player ? player.sprite : makeSprite([SPR.player.knife, SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
   return {
-    x: -1.5, z: 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3,
-    aim: 0, dir: 'right', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
-    guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: w.mag, reserve: i === 0 ? Infinity : 0 })),
+    x: -1.5, z: 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3, food: 85, water: 85, starve: 0,
+    aim: 0, dir: 'right', weapon: 1, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
+    guns: WEAPONS.map((w, i) => ({ owned: i <= 1, ammo: i === 1 ? w.mag : 0 })),
+    bag: { ammo9: 24, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0 },
+    looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     sprite: sp,
   };
 }
@@ -368,9 +379,10 @@ function switchWeapon(i) {
 function cycleWeapon() {
   for (let k = 1; k <= WEAPONS.length; k++) { const i = (player.weapon + k) % WEAPONS.length; if (player.guns[i].owned) { switchWeapon(i); return; } }
 }
+const reserveOf = (i) => (WEAPONS[i].melee ? Infinity : player.bag[WEAPONS[i].ammo] || 0);
 function reload() {
   const g = curGun(), w = WEAPONS[player.weapon];
-  if (player.reloading > 0 || g.ammo >= w.mag || g.reserve <= 0) return;
+  if (w.melee || player.reloading > 0 || player.action || g.ammo >= w.mag || reserveOf(player.weapon) <= 0) return;
   player.reloading = w.reload; sound.reload(); hud.dirty = true;
 }
 function muzzlePos(out) {
@@ -379,9 +391,17 @@ function muzzlePos(out) {
 let muzzleT = 0;
 function shoot() {
   const g = curGun(), w = WEAPONS[player.weapon];
-  if (player.cooldown > 0 || player.reloading > 0) return;
-  if (g.ammo <= 0) { sound.empty(); player.cooldown = 0.25; reload(); return; }
+  if (w.melee) { melee(); return; }
+  if (player.cooldown > 0 || player.reloading > 0 || player.action) return;
+  if (g.ammo <= 0) {
+    sound.empty(); player.cooldown = 0.3;
+    if (reserveOf(player.weapon) > 0) reload();
+    else { floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'HẾT ĐẠN', t: 1.0, color: '#ff8a6a' }); if (++player.dryFire > 2) { player.dryFire = 0; switchWeapon(0); } }
+    return;
+  }
+  player.dryFire = 0;
   g.ammo--; player.cooldown = w.rate; player.recoil = w.kick; hud.dirty = true;
+  makeNoise(player.x, player.z, w.noise);
   // hỗ trợ ngắm: góc nhìn thấp khó ngắm theo chiều sâu, nên hút nhẹ về zombie gần hướng bắn
   let aim = player.aim, bestDa = 0.24;
   for (const z of zombies) {
@@ -407,12 +427,48 @@ function shoot() {
   fx.crows.scare(player.x, player.z, 14);
   if (g.ammo === 0) reload();
 }
+// chém dao: trúng tối đa 3 zombie trong cung trước mặt
+function melee() {
+  const w = WEAPONS[0];
+  if (player.cooldown > 0 || player.action) return;
+  player.cooldown = w.rate; player.swing = 0.2; player.stamina = Math.max(0, player.stamina - 0.05);
+  let hits = 0;
+  for (const z of zombies) {
+    if (!hittable(z)) continue;
+    const dx = z.x - player.x, dz = z.z - player.z, d = Math.hypot(dx, dz);
+    if (d > w.reach + z.r || Math.abs(angDiff(Math.atan2(dz, dx), player.aim)) > w.arc) continue;
+    damageZombie(z, w.dmg, Math.atan2(dz, dx), 0.55);
+    if (++hits >= 3) break;
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = player.aim + (i / 9 - 0.5) * 2 * w.arc * 0.85, r = 0.95 + Math.random() * 0.2;
+    fx.spark.spawn(player.x + Math.cos(a) * r, 1.0 + (i / 9 - 0.5) * 0.3, player.z + Math.sin(a) * r, Math.cos(a + 1.4) * 2.2, 0, Math.sin(a + 1.4) * 2.2, 0.12, 0.06, '#e8f0ff', { grav: 0, drag: 9, mode: 1 });
+  }
+  sound.swing(hits > 0);
+  shake = Math.max(shake, hits ? 0.14 : 0.03);
+  makeNoise(player.x, player.z, 4);
+}
+function hittable(z) { return z.state !== 'dead' && z.y <= 0.3 && !(z.state === 'rise' && (z.riseLevel > 0.3 || z.t < 0.6)); }
+function damageZombie(z, dmg, a, kb, cx = z.x, cz = z.z) {
+  z.hp -= dmg; z.hitT = 0.1;
+  if (!z.aggro) wake(z);
+  if (z.state === 'walk') { const k = z.type === 'brute' ? kb * 0.25 : kb; z.x += Math.cos(a) * k; z.z += Math.sin(a) * k; }
+  for (let k = 0; k < 7; k++) {
+    const aa = a + rand(-0.8, 0.8), sp = rand(1, 4.5);
+    fx.blood.spawn(cx, rand(0.7, 1.3), cz, Math.cos(aa) * sp, rand(0, 2.5), Math.sin(aa) * sp, 1.6, rand(0.05, 0.1), Math.random() < 0.5 ? '#7a0e0c' : '#a51c16', { grav: 11, drag: 0.8 });
+  }
+  sound.hit(cx, cz);
+  floaters.push({ x: z.x + rand(-0.3, 0.3), y: 2.2, z: z.z, text: String(dmg), t: 0.55, color: '#ffffff' });
+  if (z.hp <= 0) killZombie(z, a);
+}
+function wake(z) { if (z.aggro) return; z.aggro = true; z.sprite.xr.visible = true; if (Math.random() < 0.7) sound.groan(z.x, z.z, z.type === 'brute'); }
+function makeNoise(x, z, r) { for (const zz of zombies) if (!zz.aggro && zz.state === 'walk' && Math.hypot(zz.x - x, zz.z - z) < r) wake(zz); }
 
 // ================= ZOMBIE =================
-function spriteFor(type) {
-  const p = zPool[type];
+function spriteFor(skin) {
+  const p = zPool[skin] || (zPool[skin] = []);
   if (p.length) { const s = p.pop(); s.group.visible = true; return s; }
-  const list = SPR.zombies[type];
+  const list = SPR.zombies[skin];
   return makeSprite([list[Math.floor(Math.random() * list.length)]], '#ff4a4a');
 }
 function releaseSprite(z) {
@@ -420,7 +476,7 @@ function releaseSprite(z) {
   s.group.visible = false;
   s.mesh.rotation.set(0, 0, 0); s.group.position.y = 0; s.xr.visible = true; s.blob.visible = true;
   s.mat.color.setScalar(1);
-  zPool[z.type].push(s);
+  (zPool[z.skin] || (zPool[z.skin] = [])).push(s);
 }
 function pickType() {
   const r = Math.random();
@@ -428,14 +484,17 @@ function pickType() {
   if (wave >= 2 && r < 0.36) return 'runner';
   return 'walker';
 }
-function newZombie(type, x, y, z, st) {
+function newZombie(type, x, y, z, st, o = {}) {
   const T = ZT[type];
-  const hp = T.hp + wave * T.hpW;
+  const hp = T.hp + wave * T.hpW + (o.variant === 'soldier' ? 30 : 0);
+  const skin = o.variant || type;
   const zz = {
-    type, x, y, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025), hp, maxHp: hp, dmg: T.dmg, score: T.score, atkT: 0, atkCd: T.atk,
-    walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: Math.random() < 0.5 ? 1 : -1, state: st, t: 0, sprite: spriteFor(type),
+    id: ++zid, type, skin, x, y, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025), hp, maxHp: hp, dmg: T.dmg, score: T.score, atkT: 0, atkCd: T.atk,
+    walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: Math.random() < 0.5 ? 1 : -1, state: st, t: 0, sprite: spriteFor(skin),
+    aggro: o.aggro !== false, home: { x, z }, lootKind: 'z_' + skin, looted: false,
   };
   zz.sprite.group.position.set(x, y, z);
+  zz.sprite.xr.visible = zz.aggro;
   zombies.push(zz);
   return zz;
 }
@@ -511,10 +570,6 @@ function killZombie(z, ang) {
     const a = ang + rand(-1.1, 1.1), s = rand(1.5, 5.5);
     fx.blood.spawn(z.x, rand(0.6, 1.4), z.z, Math.cos(a) * s, rand(1, 4), Math.sin(a) * s, 2, rand(0.06, 0.13), Math.random() < 0.5 ? '#7a0e0c' : '#a01814', { grav: 11, drag: 0.6 });
   }
-  floaters.push({ x: z.x, y: 2.4, z: z.z, text: '+' + z.score * Math.max(1, wave), t: 1.1, color: '#f2c14e' });
-  const roll = Math.random();
-  if (roll < 0.06 + (z.type === 'brute' ? 0.5 : 0)) addPickup(z.x, z.z, 'med');
-  else if (roll < 0.24) addPickup(z.x, z.z, 'ammo');
   hud.dirty = true;
 }
 function addPickup(x, z, type, life = 22) {
@@ -540,36 +595,55 @@ function rollNightWeather() {
 function nextWave() {
   wave++;
   phase = 'night'; phaseT = 0;
-  toSpawn = Math.min(6 + wave * 4, 70);
+  toSpawn = Math.min(Math.round((8 + wave * 4) * (Q.called ? 1.6 : 1)), 80);
   nightTotal = toSpawn; nightKills = 0;
   spawnTimer = 2.5; intermission = 0;
   atmos.hour = Math.max(atmos.hour, 19.6);
   hourFrom = atmos.hour;
   atmos.setWeather(rollNightWeather());
-  showMsg(`ĐÊM ${wave}`, atmos.weatherName);
+  showMsg(`ĐÊM ${wave}`, atmos.weatherName + ' · zombie kéo tới!');
   sound.wave();
-  WEAPONS.forEach((w, i) => {
-    if (w.unlock === wave && !player.guns[i].owned) {
-      player.guns[i].owned = true; player.guns[i].reserve = w.mag * 3;
-      setTimeout(() => showMsg('VŨ KHÍ MỚI', `${w.name} — bấm ${i + 1}${isTouch ? ' hoặc ⇄' : ''}`), 2600);
-    }
-  });
   hud.dirty = true;
 }
 function startDawn() {
   phase = 'dawn'; phaseT = 0; hourFrom = atmos.hour;
-  showMsg('TRỜI SÁNG', `Đã sống sót đêm ${wave} · +25 máu`);
-  player.hp = Math.min(player.maxHp, player.hp + 25);
+  if (Q.called && !Q.heli) setTimeout(() => { if (state.mode === 'play') heliArrive(); }, 3500);
+  showMsg('TRỜI SÁNG', `Đã sống sót đêm ${wave}`);
   score += wave * 100; hud.dirty = true;
   atmos.setWeather('clear');
 }
-function startDay() {
-  phase = 'day'; phaseT = 0; dayNo++; strayT = 6;
+function startDay(first = false) {
+  phase = 'day'; phaseT = 0; strayT = 4;
+  if (!first) dayNo++;
   const r = Math.random();
-  atmos.setWeather(r < 0.25 ? 'rain' : r < 0.35 ? 'fog' : 'clear');
-  showMsg(`NGÀY ${dayNo}`, atmos.kind === 'rain' ? 'Mưa rào · nhặt đồ tiếp tế' : 'Nghỉ ngơi · nhặt đồ tiếp tế');
-  // thùng tiếp tế rơi gần người chơi
-  for (let i = 0; i < 3; i++) addPickup(clamp(player.x + rand(-7, 7), BOUNDS.x0 + 1, BOUNDS.x1 - 1), rand(BOUNDS.z0 + 0.6, BOUNDS.z1 - 0.6), i === 0 ? 'med' : 'ammo', 45);
+  atmos.setWeather(first ? 'clear' : r < 0.25 ? 'rain' : r < 0.35 ? 'fog' : 'clear');
+  showMsg(`NGÀY ${dayNo}`, first ? 'Lục soát thị trấn · tìm cách gọi cứu hộ' : atmos.kind === 'rain' ? 'Mưa rào · tranh thủ lục soát' : 'Trời sáng · tranh thủ lục soát');
+}
+// zombie nấp sẵn trong các toà nhà (chỉ lao ra khi thấy người hoặc nghe tiếng súng)
+const LURKERS = { kiosk: 1, garage: 1, houseA: 1, grocery: 2, pharmacy: 1, houseB: 1, radio: 1, police: 3 };
+function spawnLurkers() {
+  for (const b of world.buildings) {
+    for (let i = 0; i < (LURKERS[b.id] || 0); i++) {
+      for (let k = 0; k < 16; k++) {
+        const x = rand(b.x0 + 0.7, b.x1 - 0.7), z = rand(ZB + 0.9, WALL_Z - 0.9);
+        if (insideSolid(x, z, 0.45) || Math.abs(x - b.door) < 0.8) continue;
+        newZombie(b.id !== 'police' && Math.random() < 0.25 ? 'runner' : 'walker', x, 0, z, 'walk', { aggro: false, variant: b.id === 'police' ? 'cop' : null });
+        break;
+      }
+    }
+  }
+  for (let i = 0; i < 2; i++) newZombie('walker', rand(19.5, 26), 0, rand(-1.0, 1.6), 'walk', { aggro: false, variant: 'soldier' });
+}
+// zombie lang thang ban ngày (chưa phát hiện người chơi)
+function spawnStray() {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  let x = player.x + side * rand(16, 24);
+  if (x < BOUNDS.x0 + 1 || x > BOUNDS.x1 - 1) x = player.x - side * rand(16, 24);
+  x = clamp(x, BOUNDS.x0 + 1, BOUNDS.x1 - 1);
+  let z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
+  for (let k = 0; k < 8 && insideSolid(x, z, 0.5); k++) z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
+  const zz = newZombie(Math.random() < 0.2 ? 'runner' : 'walker', x, 0, z, 'walk', { aggro: false, variant: Math.random() < 0.12 ? 'cop' : null });
+  zz.home = { x: clamp(x + side * -6, BOUNDS.x0 + 1, BOUNDS.x1 - 1), z, roam: true };
 }
 function startDusk() {
   phase = 'dusk'; phaseT = 0; hourFrom = atmos.hour;
@@ -586,13 +660,13 @@ function updatePhase(dt) {
   } else if (phase === 'dawn') {
     const k = Math.min(1, phaseT / DAWN_LEN);
     atmos.hour = hourFrom + (30.9 - hourFrom) * k;
-    if (k >= 1) { atmos.hour = 6.9; startDay(); }
+    if (k >= 1) { atmos.hour = 6.9; dayStartHour = 6.9; startDay(); }
   } else if (phase === 'day') {
-    atmos.hour = 6.9 + (16.4 - 6.9) * Math.min(1, phaseT / DAY_LEN);
+    atmos.hour = dayStartHour + (16.4 - dayStartHour) * Math.min(1, phaseT / DAY_LEN);
     strayT -= dt;
     if (strayT <= 0) {
-      strayT = rand(9, 14);
-      if (zombies.filter((z) => z.state !== 'dead').length < 2) spawnZombie(true);
+      strayT = rand(8, 13);
+      if (zombies.filter((z) => z.state !== 'dead' && !z.aggro).length < 5 + Math.min(4, dayNo)) spawnStray();
     }
     if (phaseT >= DAY_LEN) startDusk();
   } else if (phase === 'dusk') {
@@ -608,12 +682,370 @@ function showMsg(title, sub) {
   msgTimer = 3;
 }
 
+function openLobby() { toast('Co-op: đang hoàn thiện'); }
+// ================= NHIỆM VỤ: GỌI CỨU HỘ =================
+// đến đồn cảnh sát → đổ xăng máy phát → lắp 2 linh kiện bộ đàm → gọi cứu hộ
+// → cầm cự tới bình minh → lên trực thăng ở bãi đáp
+const net = { active: false, host: true };
+const Q = { found: false, parts: 0, called: false, heli: null, evac: false, won: false };
+function questReset() { Object.assign(Q, { found: false, parts: 0, called: false, heli: null, evac: false, won: false }); power = false; if (heli) heli.group.visible = false; hud.dirty = true; }
+function questDone(it) {
+  if (it === 'fuel') return power || player.bag.fuel > 0;
+  if (it === 'part') return Q.parts + (player.bag.part || 0) >= 2;
+  if (it === 'key') return world.pois.armory.open || player.bag.key > 0;
+  return false;
+}
+function questDescribe(key) {
+  if (key === 'radio') {
+    if (!Q.found) return { label: 'Kiểm tra bộ đàm', can: true, time: 0.7 };
+    if (player.bag.part > 0 && Q.parts < 2) return { label: 'Lắp linh kiện vào bộ đàm', can: true, time: 1.6 };
+    if (!power) return { label: 'Bộ đàm: chưa có điện', can: false };
+    if (Q.parts < 2) return { label: `Bộ đàm: thiếu linh kiện (${Q.parts}/2)`, can: false };
+    if (!Q.called) return { label: 'GỌI TRỰC THĂNG CỨU HỘ', can: true, time: 2.0 };
+    return { label: 'Đã gọi cứu hộ · chờ bình minh', can: false };
+  }
+  if (key === 'generator') {
+    if (power) return { label: 'Máy phát đang chạy', can: false };
+    if (player.bag.fuel > 0) return { label: 'Đổ xăng, khởi động máy phát', can: true, time: 2.2 };
+    return { label: 'Máy phát điện · cần can xăng', can: false };
+  }
+  return { label: world.pois[key].label, can: false };
+}
+function questInteract(key) {
+  if (key === 'radio') {
+    if (!Q.found) { Q.found = true; showMsg('BỘ ĐÀM HỎNG', 'Cần xăng cho máy phát & 2 linh kiện để gọi cứu hộ'); sound.radio(); }
+    else if (player.bag.part > 0 && Q.parts < 2) {
+      const n = Math.min(2 - Q.parts, player.bag.part);
+      Q.parts += n; player.bag.part -= n; sound.unlock();
+      lootFeed('part', `Đã lắp linh kiện (${Q.parts}/2)`);
+      if (Q.parts >= 2 && power) showMsg('BỘ ĐÀM ĐÃ SẴN SÀNG', 'Gọi trực thăng cứu hộ ngay!');
+    } else if (power && Q.parts >= 2 && !Q.called) {
+      Q.called = true; sound.radio();
+      showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh · tín hiệu đang kéo zombie tới!');
+      makeNoise(player.x, player.z, 40);
+    }
+  } else if (key === 'generator' && player.bag.fuel > 0 && !power) {
+    player.bag.fuel--; power = true; Q.found = Q.found || false;
+    sound.generator(true);
+    const g = world.pois.generator; g.e.base = 4;
+    world.smokeSources.push({ x: g.exhaust.x, y: g.exhaust.y, z: g.exhaust.z, rate: 2.5 });
+    showMsg('CÓ ĐIỆN', 'Máy phát đã chạy · đồn cảnh sát sáng đèn');
+    makeNoise(g.x, g.z, 16);
+  }
+  hud.dirty = true;
+}
+function questText() {
+  if (Q.won) return ['ĐÃ ĐƯỢC GIẢI CỨU', ''];
+  if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · phía đông thị trấn →`];
+  if (Q.heli) return ['Trực thăng đang tới…', 'Chạy về bãi đáp phía đông'];
+  if (Q.called) return ['Cầm cự tới bình minh', 'Trực thăng cứu hộ sẽ tới lúc 6:00'];
+  if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', 'Đi về phía đông → · lục soát dọc đường'];
+  if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', 'Bàn bộ đàm trong đồn cảnh sát'];
+  const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (phía tây)');
+  const b = `• Linh kiện bộ đàm ${Q.parts}/2` + (player.bag.part ? ` (đang mang ${player.bag.part})` : ' · nhà ông Tư, xe quân sự');
+  return ['Sửa bộ đàm để gọi cứu hộ', a + '\n' + b];
+}
+function questListHtml() {
+  const it = (done, cur, text) => `<div class="${done ? 'done' : cur ? 'cur' : ''}">${done ? '✓' : '•'} ${text}</div>`;
+  const ready = power && Q.parts >= 2;
+  return '<b style="color:var(--gold);font-weight:400">NHIỆM VỤ</b>'
+    + it(Q.found, !Q.found, 'Tìm bộ đàm ở đồn cảnh sát (phía đông)')
+    + it(power, Q.found && !power, 'Can xăng ở gara phía tây → đổ vào máy phát cạnh đồn')
+    + it(Q.parts >= 2, Q.found && Q.parts < 2, `Linh kiện bộ đàm ${Q.parts}/2 · nhà ông Tư, xe quân sự ở chốt kiểm soát`)
+    + it(Q.called, ready && !Q.called, 'Gọi trực thăng cứu hộ')
+    + it(!!Q.heli, Q.called && !Q.heli, 'Cầm cự tới bình minh')
+    + it(Q.won, !!Q.heli, 'Lên trực thăng ở bãi đáp')
+    + '<div style="margin-top:6px;color:var(--ink-dim)">Kho súng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
+}
+
+// ---------- trực thăng cứu hộ ----------
+let heli = null;
+function makeHeli() {
+  const g = new THREE.Group();
+  const M = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e ? new THREE.Color(e) : undefined });
+  const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+  const body = M('#e8e4dc'), dark = M('#26262a'), glass = M('#2a3a48', '#0a1820'), red = M('#c8281e');
+  box(3.6, 1.6, 1.9, body, 0, 1.3, 0);
+  box(1.3, 1.2, 1.7, glass, 1.9, 1.35, 0);
+  box(4.2, 0.45, 0.45, body, -3.6, 1.7, 0);
+  box(0.9, 1.0, 0.12, red, -5.5, 2.1, 0);
+  box(3.62, 0.3, 1.92, red, 0, 0.95, 0);
+  box(4.22, 0.12, 0.47, red, -3.6, 1.7, 0);
+  box(3.6, 0.1, 0.1, dark, 0, 0.18, 0.75); box(3.6, 0.1, 0.1, dark, 0, 0.18, -0.75);
+  for (const x of [-1, 1]) { box(0.08, 0.5, 0.08, dark, x, 0.42, 0.75); box(0.08, 0.5, 0.08, dark, x, 0.42, -0.75); }
+  box(0.3, 0.35, 0.3, dark, 0, 2.25, 0);
+  box(0.9, 0.7, 0.05, M('#e8e0d0'), 0.2, 1.4, 0.98);
+  const cross = M('#c8281e');
+  box(0.5, 0.14, 0.06, cross, 0.2, 1.4, 1.0); box(0.14, 0.5, 0.07, cross, 0.2, 1.4, 1.0);
+  const rotor = new THREE.Group(); rotor.position.set(0, 2.45, 0); g.add(rotor);
+  for (let i = 0; i < 2; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.05, 0.32), dark); b.rotation.y = i * Math.PI / 2; rotor.add(b); }
+  const tail = new THREE.Group(); tail.position.set(-5.55, 2.1, 0.12); g.add(tail);
+  const tb = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, 0.03), dark); tail.add(tb);
+  const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.16), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.4, 0.3) }));
+  beacon.position.set(-1.2, 2.2, 0); g.add(beacon);
+  const lamp = new THREE.PointLight('#fff2d0', 0, 16, 1.6); lamp.position.set(2.4, 0.4, 0.6); g.add(lamp);
+  g.visible = false;
+  scene.add(g);
+  return { group: g, rotor, tail, beacon, lamp };
+}
+function heliArrive() {
+  if (!heli) heli = makeHeli();
+  Q.heli = { stage: 'in', t: 0, left: 75 };
+  heli.group.visible = true;
+  showMsg('TRỰC THĂNG ĐÃ TỚI', 'Chạy tới BÃI ĐÁP phía đông!');
+  sound.heli(true);
+}
+function updateHeli(dt) {
+  if (!Q.heli || !heli) return;
+  const h = Q.heli, g = heli.group;
+  h.t += dt;
+  heli.rotor.rotation.y += dt * 26; heli.tail.rotation.z += dt * 30;
+  heli.beacon.visible = Math.floor(gtime * 2.5) % 2 === 0;
+  heli.lamp.intensity = 30 * (0.4 + 0.6 * (1 - Math.min(1, atmos.hour > 5 && atmos.hour < 18 ? 0.6 : 0)));
+  const hx = HELIPAD.x, hz = HELIPAD.z;
+  if (h.stage === 'in') {
+    const k = Math.min(1, h.t / 9), e = 1 - Math.pow(1 - k, 3);
+    g.position.set(hx + 34 * (1 - e), 0.15 + 16 * Math.pow(1 - e, 1.4), hz - 1.2 * (1 - e));
+    g.rotation.z = 0.12 * (1 - e); g.rotation.y = Math.PI;
+    if (k >= 1) h.stage = 'wait';
+  } else if (h.stage === 'wait') {
+    h.left -= dt;
+    g.position.set(hx, 0.15 + Math.sin(gtime * 6) * 0.02, hz);
+    if (state.mode === 'play' && Math.hypot(player.x - hx, player.z - hz) < HELIPAD.r + 0.3) { h.board = (h.board || 0) + dt; if (h.board > 1.2) { Q.won = true; h.stage = 'out'; h.t = 0; player.sprite.group.visible = false; sound.pickup(); } }
+    else h.board = 0;
+    if (h.left <= 0) { h.stage = 'out'; h.t = 0; showMsg('TRỰC THĂNG ĐÃ BỎ ĐI', 'Gọi lại bằng bộ đàm vào ban ngày…'); Q.called = false; }
+  } else if (h.stage === 'out') {
+    const k = Math.min(1, h.t / 7);
+    g.position.set(hx - 40 * k * k, 0.15 + 18 * k * k, hz - 3 * k);
+    g.rotation.z = -0.15 * Math.min(1, k * 3);
+    if (k >= 1) { g.visible = false; Q.heli = null; sound.heli(false); if (Q.won) winGame(); }
+  }
+  if (g.visible && g.position.y < 4 && Math.random() < 0.6) {
+    const a = Math.random() * TAU, r = rand(1.5, 4);
+    fx.lit.spawn(g.position.x + Math.cos(a) * r, 0.1, g.position.z + Math.sin(a) * r * 0.6, Math.cos(a) * 3, rand(0.3, 1), Math.sin(a) * 2, 0.8, 0.12, '#8a7a62', { grav: 1, drag: 1.5 });
+  }
+  hud.dirty = true;
+}
+function winGame() {
+  state.mode = 'won';
+  const best = Math.max(bestScore(), dayNo);
+  store.set('deadnight_days', String(best));
+  document.body.classList.remove('playing');
+  $('win-stats').innerHTML = `Sống sót <b>${dayNo} ngày</b> · hạ gục <b>${kills}</b> zombie<br>Lục soát <b>${player.lootCount}</b> chỗ · thời gian <b>${Math.floor((gtime - playStart) / 60)} phút</b>`;
+  setTimeout(() => $('win').classList.remove('hidden'), 400);
+}
+
+// ================= LỤC SOÁT, TÚI ĐỒ =================
+const interact = { target: null, t: 0, touchHold: false };
+let bagOpen = false;
+const ICON = {};
+const CORPSE_NAMES = { z_walker: 'Lục xác zombie', z_runner: 'Lục xác zombie', z_brute: 'Lục xác zombie to xác', z_cop: 'Lục xác cảnh sát', z_soldier: 'Lục xác lính' };
+const lc = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+function interactTargets() {
+  const out = [];
+  for (const c of world.containers) { const d = Math.hypot(c.x - player.x, c.z - player.z); if (d < 1.3) out.push({ type: 'c', id: c.id, c, d, x: c.x, z: c.z }); }
+  for (const z of zombies) if (z.state === 'dead' && z.t > 0.4 && z.t < CORPSE_LIFE - 2) { const d = Math.hypot(z.x - player.x, z.z - player.z); if (d < 1.3) out.push({ type: 'z', id: 'z' + z.id, zo: z, d, x: z.x, z: z.z }); }
+  for (const k in world.pois) {
+    const p = world.pois[k];
+    if (k === 'helipad' || (k === 'armory' && p.open)) continue;
+    const d = Math.hypot(p.x - player.x, p.z - player.z);
+    if (d < 1.5) out.push({ type: 'p', id: 'p' + k, key: k, p, d, x: p.x, z: p.z });
+  }
+  return out;
+}
+function describe(tg) {
+  if (tg.type === 'c') {
+    const c = tg.c;
+    if (c.locked === 'armory' && !world.pois.armory.open) return { label: c.label + ' · bị khoá', can: false };
+    if (player.looted.has(c.id)) return { label: c.label + ' · đã lục', can: false, done: true };
+    return { label: 'Lục ' + lc(c.label), can: true, time: searchTime(c.kind) };
+  }
+  if (tg.type === 'z') {
+    if (tg.zo.looted) return { label: 'Xác đã lục', can: false, done: true };
+    return { label: CORPSE_NAMES[tg.zo.lootKind] || 'Lục xác', can: true, time: searchTime('corpse') };
+  }
+  if (tg.key === 'armory') return player.bag.key > 0 ? { label: 'Mở kho súng bằng chìa khoá', can: true, time: 1.2 } : { label: 'Kho súng bị khoá · cần chìa khoá', can: false };
+  return questDescribe(tg.key);
+}
+function updateInteract(dt) {
+  const list = state.mode === 'play' && !player.action ? interactTargets() : [];
+  let best = null, bestS = 1e9;
+  for (const tg of list) { tg.info = describe(tg); const sc = tg.d + (tg.info.can ? 0 : 1.1); if (sc < bestS) { bestS = sc; best = tg; } }
+  if (best && best.info.done && best.d > 0.95) best = null;
+  if (!best || !interact.target || best.id !== interact.target.id) interact.t = 0;
+  interact.target = best;
+  const holding = (keys.KeyE || interact.touchHold) && !bagOpen;
+  player.searching = !!(best && best.info.can && holding);
+  if (player.searching) {
+    interact.t += dt;
+    if (Math.random() < dt * 9) fx.lit.spawn(best.x + rand(-0.3, 0.3), rand(0.4, 1.2), best.z + rand(-0.2, 0.2), rand(-0.6, 0.6), rand(0.4, 1.2), rand(-0.3, 0.3), 0.6, 0.06, '#c8b898', { grav: 3, drag: 2 });
+    sound.rustle(dt);
+    if (interact.t >= best.info.time) { interact.t = 0; player.searching = false; doInteract(best); }
+  } else interact.t = Math.max(0, interact.t - dt * 3);
+  $('t-use').classList.toggle('off', !(best && best.info.can));
+}
+function doInteract(tg) {
+  if (tg.type === 'c') {
+    const c = tg.c;
+    player.looted.add(c.id);
+    giveItems(rollLoot(c.kind, Math.random, questDone));
+  } else if (tg.type === 'z') {
+    tg.zo.looted = true;
+    tg.zo.sprite.mat.color.setScalar(0.62);
+    giveItems(rollLoot(tg.zo.lootKind));
+  } else if (tg.key === 'armory') unlockArmory();
+  else questInteract(tg.key);
+  hud.dirty = true; renderBagIfOpen();
+}
+function giveItems(list) {
+  player.lootCount++;
+  if (!list.length) { lootFeed(null, 'Không có gì…', true); sound.empty(); return; }
+  for (const [it, n] of list) {
+    const got = addItem(it, n);
+    lootFeed(it, got > 0 ? `+${ITEMS[it].weapon !== undefined ? '' : got + ' '}${ITEMS[it].name}` : `${ITEMS[it].name}: túi đầy`, got <= 0);
+  }
+  sound.pickup();
+}
+function addItem(it, n) {
+  const def = ITEMS[it];
+  if (def.weapon !== undefined) {
+    const g = player.guns[def.weapon], w = WEAPONS[def.weapon];
+    if (!g.owned) {
+      g.owned = true; g.ammo = w.mag;
+      showMsg('VŨ KHÍ MỚI', `${w.name} — bấm ${def.weapon + 1}${isTouch ? ' hoặc ⇄' : ''}`);
+      switchWeapon(def.weapon);
+      return 1;
+    }
+    return addItem(w.ammo, w.mag) > 0 ? 1 : 0;
+  }
+  const before = player.bag[it] || 0;
+  player.bag[it] = Math.min(def.max, before + n);
+  return player.bag[it] - before;
+}
+const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…' };
+function useItem(it) {
+  const def = ITEMS[it];
+  if (!def.use || player.action || !(player.bag[it] > 0) || state.mode !== 'play') return false;
+  if (def.use === 'heal' && player.hp >= player.maxHp) { lootFeed(it, 'Máu đang đầy', true); return false; }
+  if (def.use === 'eat' && player.food > 96) { lootFeed(it, 'Chưa đói', true); return false; }
+  if (def.use === 'drink' && player.water > 96) { lootFeed(it, 'Chưa khát', true); return false; }
+  player.action = { item: it, t: 0, dur: def.time };
+  player.reloading = 0;
+  sound.use(def.use);
+  return true;
+}
+function finishAction() {
+  const it = player.action.item, def = ITEMS[it];
+  player.action = null;
+  if (!(player.bag[it] > 0)) return;
+  player.bag[it]--;
+  if (def.heal) { player.hp = Math.min(player.maxHp, player.hp + def.heal); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${def.heal} MÁU`, t: 1.2, color: '#7fe07f' }); }
+  if (def.food) { player.food = Math.min(100, player.food + def.food); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NO BỤNG', t: 1.0, color: '#e8a860' }); }
+  if (def.water) { player.water = Math.min(100, player.water + def.water); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'HẾT KHÁT', t: 1.0, color: '#7ac8f0' }); }
+  sound.pickup(); hud.dirty = true; renderBagIfOpen();
+}
+function quickHeal() {
+  const it = player.hp < 50 && player.bag.medkit > 0 ? 'medkit' : player.bag.bandage > 0 ? 'bandage' : player.bag.medkit > 0 ? 'medkit' : null;
+  if (it) useItem(it); else lootFeed(null, 'Không có đồ y tế', true);
+}
+function quickEat() {
+  const order = player.water <= player.food ? ['water', 'food'] : ['food', 'water'];
+  for (const it of order) if (player.bag[it] > 0) { useItem(it); return; }
+  lootFeed(null, 'Không có đồ ăn uống', true);
+}
+function lootFeed(it, text, bad = false) {
+  const feed = $('loot-feed');
+  const el = document.createElement('div');
+  el.className = 'lf' + (bad ? ' bad' : '');
+  if (it && ICON[it]) { const im = document.createElement('img'); im.src = ICON[it]; im.alt = ''; el.appendChild(im); }
+  el.appendChild(document.createTextNode(text));
+  feed.appendChild(el);
+  while (feed.children.length > 5) feed.firstChild.remove();
+  setTimeout(() => el.remove(), 3300);
+}
+function buildIcons() {
+  const cv = makeItemIcons();
+  for (const it in ITEMS) {
+    const c = document.createElement('canvas'); c.width = c.height = 16;
+    c.getContext('2d').drawImage(cv, ITEMS[it].icon * 16, 0, 16, 16, 0, 0, 16, 16);
+    ICON[it] = c.toDataURL();
+  }
+}
+const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C']];
+function buildQuickBar() {
+  const q = $('quick');
+  q.innerHTML = '';
+  for (const [it, key] of QUICK) {
+    const d = document.createElement('div');
+    d.className = 'qi'; d.dataset.it = it; d.title = ITEMS[it].name;
+    d.innerHTML = `<img alt="" src="${ICON[it]}"><b>0</b><i>${key}</i>`;
+    d.addEventListener('click', () => useItem(it));
+    d.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); useItem(it); }, { passive: false });
+    q.appendChild(d);
+  }
+}
+function toggleBag(force) {
+  if (state.mode !== 'play') return;
+  bagOpen = force !== undefined ? force : !bagOpen;
+  $('bag').classList.toggle('hidden', !bagOpen);
+  if (!net.active) state.paused = bagOpen;
+  if (bagOpen) renderBag();
+}
+function renderBagIfOpen() { if (bagOpen) renderBag(); }
+function renderBag() {
+  const grid = $('bag-grid');
+  grid.innerHTML = '';
+  for (const it of ITEM_ORDER) {
+    const n = player.bag[it] || 0;
+    if (ITEMS[it].quest && !n) continue;
+    const d = document.createElement('div');
+    d.className = 'bi' + (n ? '' : ' zero');
+    d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${ITEMS[it].name}<br><span class="n">×${n}</span></span>`;
+    if (ITEMS[it].use && n) {
+      const b = document.createElement('button'); b.textContent = 'Dùng';
+      b.addEventListener('click', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
+      d.appendChild(b);
+    }
+    grid.appendChild(d);
+  }
+  WEAPONS.forEach((w, i) => {
+    if (!player.guns[i].owned || w.melee) return;
+    const d = document.createElement('div'); d.className = 'bi';
+    const ic = i === 2 ? ICON.shotgun : i === 3 ? ICON.smg : ICON.ammo9;
+    d.innerHTML = `<img alt="" src="${ic}"><span>${w.name}<br><span class="n">${player.guns[i].ammo}/${w.mag}</span></span>`;
+    grid.appendChild(d);
+  });
+  $('bag-quest').innerHTML = questListHtml();
+}
+function unlockArmory() {
+  const a = world.pois.armory;
+  if (a.open) return;
+  a.open = true;
+  a.door.rotation.y = -1.75;
+  const i = world.colliders.boxes.indexOf(a.box);
+  if (i >= 0) world.colliders.boxes.splice(i, 1);
+  navBuild();
+  sound.unlock();
+  lootFeed('key', 'Đã mở kho vũ khí!');
+}
+function resetWorldState() {
+  const a = world.pois.armory;
+  a.open = false; a.door.rotation.y = 0;
+  if (!world.colliders.boxes.includes(a.box)) world.colliders.boxes.push(a.box);
+  power = false;
+  if (NAV.block) navBuild();
+}
+
 // ================= HUD =================
 const hud = { dirty: true, last: {} };
 function setText(id, v) { if (hud.last[id] !== v) { hud.last[id] = v; $(id).textContent = v; } }
 function updateHud() {
   $('hp-fill').style.width = (Math.max(0, player.hp) / player.maxHp * 100).toFixed(1) + '%';
   $('st-fill').style.width = (player.stamina * 100).toFixed(1) + '%';
+  $('fd-fill').style.width = player.food.toFixed(1) + '%';
+  $('wt-fill').style.width = player.water.toFixed(1) + '%';
+  $('fd-bar').classList.toggle('low', player.food < 20);
+  $('wt-bar').classList.toggle('low', player.water < 20);
   $('hp-box').classList.toggle('low', player.hp < 30);
   $('reload-tag').classList.toggle('show', player.reloading > 0);
   const hh = ((atmos.hour % 24) + 24) % 24, clock = String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0');
@@ -623,18 +1055,24 @@ function updateHud() {
   if (!hud.dirty) return;
   hud.dirty = false;
   const w = WEAPONS[player.weapon], g = curGun();
-
-  setText('score', String(score));
-  setText('kills', `${kills} hạ gục`);
-  const alive = zombies.filter((z) => z.state !== 'dead').length;
-  setText('left', phase === 'night' ? `Zombie còn lại: ${toSpawn + alive}` : phase === 'dawn' ? 'Trời sáng rồi!' : phase === 'day' ? `Nghỉ ngơi · còn ${Math.ceil(DAY_LEN - phaseT)} giây` : 'Màn đêm sắp buông…');
+  const alive = zombies.filter((z) => z.state !== 'dead' && z.aggro).length;
+  setText('left', phase === 'night' ? `Zombie đang kéo tới: ${toSpawn + alive}` : phase === 'dawn' ? 'Trời sáng rồi!' : phase === 'day' ? `Trời tối sau ~${Math.ceil((DAY_LEN - phaseT) / 10) * 10} giây` : 'Màn đêm sắp buông…');
+  const [qt, qs] = questText();
+  setText('q-text', qt);
+  const qsub = $('q-sub');
+  if (hud.last.qsub !== qs) { hud.last.qsub = qs; qsub.innerHTML = ''; qs.split('\n').forEach((l, i) => { if (i) qsub.appendChild(document.createElement('br')); qsub.appendChild(document.createTextNode(l)); }); }
   setText('wname', w.name);
-  setText('ammo', String(g.ammo));
-  setText('reserve', g.reserve === Infinity ? '∞' : String(g.reserve));
-  $('ammo').classList.toggle('empty', g.ammo === 0);
+  setText('ammo', w.melee ? '∞' : String(g.ammo));
+  setText('reserve', w.melee ? 'cận chiến' : String(reserveOf(player.weapon)));
+  $('ammo').classList.toggle('empty', !w.melee && g.ammo === 0);
   document.querySelectorAll('#slots .slot').forEach((el, i) => {
     el.classList.toggle('on', i === player.weapon);
     el.classList.toggle('owned', player.guns[i].owned);
+  });
+  document.querySelectorAll('#quick .qi').forEach((el) => {
+    const n = player.bag[el.dataset.it] || 0;
+    el.querySelector('b').textContent = n;
+    el.classList.toggle('zero', !n);
   });
 }
 
@@ -731,6 +1169,8 @@ function applyAtmos(dt, t) {
     crickets: (1 - A.rain) * A.night * (A.ash > 0 ? 0.2 : 1), birds: A.birds,
     fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: state.mode === 'view' ? 0.6 : 1,
     water: Math.max(0, 1 - Math.abs(camTarget.x - (world.waterfalls[1].x0 + world.waterfalls[1].x1) / 2) / 16),
+    gen: Math.max(0, 1 - Math.hypot(player.x - world.pois.generator.x, player.z - world.pois.generator.z) / 14),
+    heli: heli && heli.group.visible ? Math.max(0.15, 1 - Math.abs(player.x - heli.group.position.x) / 40) : 0,
   });
   return A;
 }
@@ -841,10 +1281,20 @@ function updatePlayer(dt) {
   if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
   const sprint = (keys.ShiftLeft || keys.ShiftRight || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
   player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22) * dt, 0, 1);
-  const spd = player.speed * (sprint ? 1.55 : 1) * mag;
+  const spd = player.speed * (sprint ? 1.55 : 1) * mag * (player.action || player.searching ? 0.45 : 1);
   player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
   collide(player);
   player.moving = mag > 0.1;
+  // đói, khát: cạn thì mất máu dần
+  player.water = Math.max(0, player.water - dt * (100 / 420) * (sprint ? 1.7 : 1));
+  player.food = Math.max(0, player.food - dt * (100 / 640));
+  if (player.water <= 0 || player.food <= 0) {
+    player.starve += dt;
+    if (player.starve > 1.6) {
+      player.starve = 0; player.hp -= player.water <= 0 && player.food <= 0 ? 3 : 2; hurtFlash = Math.max(hurtFlash, 0.18); hud.dirty = true;
+      if (player.hp <= 0) { gameOver(); return; }
+    }
+  }
   if (player.moving) {
     player.walk += dt * spd * 1.6;
     player.stepT -= dt * spd;
@@ -860,21 +1310,28 @@ function updatePlayer(dt) {
     firing = mouse.down;
   } else if (player.moving) player.aim = Math.atan2(mz, mx);
   if (keys.Space) firing = true;
+  if (bagOpen || player.searching) firing = false;
   player.cooldown -= dt;
+  player.swing = Math.max(0, player.swing - dt);
+  if (player.action) {
+    player.action.t += dt;
+    if (player.action.t >= player.action.dur) finishAction();
+  }
+  updateInteract(dt);
   player.recoil = Math.max(0, player.recoil - dt * 1.2);
   player.inv -= dt;
   if (player.reloading > 0) {
     player.reloading -= dt;
     if (player.reloading <= 0) {
-      const g = curGun(), w = WEAPONS[player.weapon], take = Math.min(w.mag - g.ammo, g.reserve);
-      g.ammo += take; if (g.reserve !== Infinity) g.reserve -= take;
+      const g = curGun(), w = WEAPONS[player.weapon], take = Math.min(w.mag - g.ammo, player.bag[w.ammo] || 0);
+      g.ammo += take; player.bag[w.ammo] -= take;
       player.reloading = 0; hud.dirty = true;
     }
   }
   if (firing) shoot();
   const sp = player.sprite;
-  player.dir = dirFromAngle(player.aim);
-  setFrame(sp, player.dir, player.moving ? Math.floor(player.walk) % 4 : 0);
+  player.dir = player.searching ? 'up' : dirFromAngle(player.aim);
+  setFrame(sp, player.dir, player.moving || player.searching ? Math.floor(player.searching ? gtime * 7 : player.walk) % 4 : 0);
   sp.group.position.set(player.x - Math.cos(player.aim) * player.recoil, 0, player.z - Math.sin(player.aim) * player.recoil);
   sp.mat.color.setScalar(player.inv > 0 && Math.floor(player.inv * 20) % 2 ? 2.2 : 1);
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
@@ -933,8 +1390,8 @@ function updateZombies(dt) {
     if (z.state === 'dead') {
       const k = Math.min(1, z.t / 0.35);
       s.mesh.rotation.x = -k * k * Math.PI / 2;
-      if (z.t > 7) s.group.position.y = -(z.t - 7) * 0.4;
-      if (z.t > 9) { releaseSprite(z); zombies.splice(i, 1); i--; }
+      if (z.t > CORPSE_LIFE - 2) s.group.position.y = -(z.t - (CORPSE_LIFE - 2)) * 0.4;
+      if (z.t > CORPSE_LIFE) { releaseSprite(z); zombies.splice(i, 1); i--; }
       continue;
     }
     if (z.state === 'rise') {
@@ -953,6 +1410,24 @@ function updateZombies(dt) {
       continue;
     }
     if (z.state !== 'walk') { zombieTerrace(z, dt); s.mat.color.setScalar(1); continue; }
+    if (!z.aggro) {
+      // chưa phát hiện: đứng lắc lư / đi lang thang quanh chỗ cũ; tỉnh khi người chơi lại gần
+      const pd = Math.hypot(player.x - z.x, player.z - z.z);
+      const same = buildingAt(z.x, z.z) === curBuilding;
+      if (state.mode === 'play' && (pd < (same ? 6.5 : 3.2) || (same && !curBuilding && pd < 8.5))) wake(z);
+      else {
+        z.wt = (z.wt || 0) - dt;
+        const H = z.home;
+        if (z.wt <= 0) { z.wt = rand(2.5, 6); z.wx = H.x + (H.roam ? rand(-5, 5) : rand(-1.4, 1.4)); z.wz = clamp(H.z + rand(-1.0, 1.0), BOUNDS.z0 + 0.3, BOUNDS.z1 - 0.3); }
+        const ex = z.wx - z.x, ez = z.wz - z.z, el = Math.hypot(ex, ez);
+        if (el > 0.15) { const sp2 = z.speed * 0.32 * dt; z.x += ex / el * sp2; z.z += ez / el * sp2; collide(z); z.walk += dt * z.speed * 0.9; z.dir = dirFromAngle(Math.atan2(ez, ex)); }
+        z.hitT -= dt;
+        setFrame(s, z.dir, el > 0.15 ? Math.floor(z.walk) % 4 : 0);
+        s.group.position.set(z.x, 0, z.z);
+        s.mat.color.setScalar(1);
+        continue;
+      }
+    }
     let dx = player.x - z.x, dz = player.z - z.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
@@ -985,6 +1460,7 @@ function updateZombies(dt) {
       z.atkT = z.atkCd;
       if (player.inv <= 0) {
         player.hp -= z.dmg; player.inv = 0.35; hurtFlash = 0.5;
+        player.action = null; interact.t = 0;
         shake = Math.max(shake, z.type === 'brute' ? 0.6 : 0.3);
         sound.hurt();
         fx.decals.add(player.x + rand(-0.3, 0.3), player.z + rand(-0.3, 0.3), 0.7);
@@ -1018,17 +1494,7 @@ function updateBullets(dt) {
         const t = clamp(((z.x - b.px) * sx + (z.z - b.pz) * sz) / sl, 0, 1);
         const cx = b.px + sx * t, cz = b.pz + sz * t;
         if ((z.x - cx) ** 2 + (z.z - cz) ** 2 < (z.r + 0.14) ** 2) {
-          const a = Math.atan2(b.vz, b.vx);
-          z.hp -= b.dmg; z.hitT = 0.1;
-          const kb = z.type === 'brute' ? 0.04 : 0.16;
-          if (z.state === 'walk') { z.x += Math.cos(a) * kb; z.z += Math.sin(a) * kb; }
-          for (let k = 0; k < 7; k++) {
-            const aa = a + rand(-0.8, 0.8), s = rand(1, 4.5);
-            fx.blood.spawn(cx, rand(0.7, 1.3), cz, Math.cos(aa) * s, rand(0, 2.5), Math.sin(aa) * s, 1.6, rand(0.05, 0.1), Math.random() < 0.5 ? '#7a0e0c' : '#a51c16', { grav: 11, drag: 0.8 });
-          }
-          sound.hit(cx, cz);
-          floaters.push({ x: z.x + rand(-0.3, 0.3), y: 2.2, z: z.z, text: String(b.dmg), t: 0.55, color: '#ffffff' });
-          if (z.hp <= 0) killZombie(z, a);
+          damageZombie(z, b.dmg, Math.atan2(b.vz, b.vx), 0.16, cx, cz);
           if (b.pierce-- <= 0) { dead = true; break; }
         }
       }
@@ -1098,7 +1564,7 @@ function updateCamera(dt) {
   U.seeRadius.value = post.h * 0.13;
   tmpV.set(player.x, 1.0, player.z).applyMatrix4(camera.matrixWorldInverse);
   U.seeDepth.value = -tmpV.z - 1.0;
-  U.seeZ.value = state.mode === 'title' ? 999 : player.z;
+  U.seeZ.value = state.mode === 'title' || curBuilding ? 999 : player.z;
   post.params.focus = -tmpV.z;
   U.push.value[0].set(player.x, 0, player.z, 1.1);
   const near = zombies.filter((z) => z.state === 'walk').map((z) => ({ z, d: Math.abs(z.x - camTarget.x) })).sort((a, b) => a.d - b.d);
@@ -1129,6 +1595,31 @@ function draw2D() {
     const w = z.type === 'brute' ? 44 : 30;
     g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - w / 2 - 1, y - 1, w + 2, 6);
     g.fillStyle = '#c9261b'; g.fillRect(x - w / 2, y, w * Math.max(0, z.hp / z.maxHp), 4);
+  }
+  if (state.mode === 'play' && interact.target && !bagOpen) {
+    const tg = interact.target, inf = tg.info;
+    tmpV.set(tg.x, 1.7, tg.z).project(camera);
+    const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    const text = inf.can ? (isTouch ? inf.label : '[E] ' + inf.label) : inf.label;
+    g.font = '20px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(text).width) + 20;
+    g.fillStyle = 'rgba(10,8,14,.8)'; g.fillRect(x - tw / 2, y - 17, tw, 25);
+    g.strokeStyle = inf.can ? '#f2c14e' : '#5a5060'; g.lineWidth = 2; g.strokeRect(x - tw / 2, y - 17, tw, 25);
+    g.fillStyle = inf.can ? '#fff6dc' : '#a8a0a8'; g.fillText(text, x, y + 1);
+    if (inf.can && interact.t > 0) {
+      g.fillStyle = '#000'; g.fillRect(x - tw / 2, y + 9, tw, 5);
+      g.fillStyle = '#f2c14e'; g.fillRect(x - tw / 2, y + 9, tw * Math.min(1, interact.t / inf.time), 5);
+    }
+  }
+  if (state.mode === 'play' && player.action) {
+    tmpV.set(player.x, 2.35, player.z).project(camera);
+    const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    const k = Math.min(1, player.action.t / player.action.dur);
+    g.font = '18px "VT323", monospace';
+    g.fillStyle = '#000'; g.fillText(ACTION_TEXT[player.action.item] || '', x + 1, y - 7);
+    g.fillStyle = '#e8f0d8'; g.fillText(ACTION_TEXT[player.action.item] || '', x, y - 8);
+    g.fillStyle = 'rgba(0,0,0,.75)'; g.fillRect(x - 31, y - 2, 62, 7);
+    g.fillStyle = '#7fe07f'; g.fillRect(x - 30, y - 1, 60 * k, 5);
   }
   if (state.mode === 'play' && !state.paused) {
     if (!isTouch && mouse.has) {
@@ -1164,7 +1655,7 @@ function togglePause() {
   state.paused = !state.paused;
   $('pause').classList.toggle('hidden', !state.paused);
 }
-function bestScore() { return +store.get('deadnight_best', '0') || 0; }
+function bestScore() { return +store.get('deadnight_days', '0') || 0; }
 function startGame() {
   sound.init();
   for (const z of zombies) releaseSprite(z);
@@ -1172,16 +1663,23 @@ function startGame() {
   for (const p of pickups) scene.remove(p.mesh);
   pickups = []; floaters = [];
   fx.decals.clear();
+  for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9);
   player = newPlayer();
-  setSpriteMap(player.sprite, 0);
+  player.sprite.group.visible = true;
+  setSpriteMap(player.sprite, player.weapon);
   wave = 0; kills = 0; score = 0; shake = 0; hurtFlash = 0;
   state.mode = 'play'; state.paused = false; playStart = gtime;
-  $('title').classList.add('hidden'); $('over').classList.add('hidden'); $('pause').classList.add('hidden');
+  for (const id of ['title', 'over', 'pause', 'win', 'bag']) $(id).classList.add('hidden');
+  bagOpen = false;
   document.body.classList.add('playing');
   hud.dirty = true;
-  dayNo = 0;
-  atmos.hour = 16.4; atmos.setWeather('clear', true); atmos.rate = 0.12;
-  startDusk();
+  resetWorldState(); questReset();
+  dayNo = 1;
+  atmos.hour = 7.4; dayStartHour = 7.4; atmos.setWeather('clear', true); atmos.rate = 0.12;
+  startDay(true);
+  spawnLurkers();
+  for (let i = 0; i < 3; i++) spawnStray();
+  sound.generator(false); sound.heli(false);
   // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<giờ>&w=<rain|storm|fog|blood>&px=..
   if (QS.has('shot')) {
     phase = 'shot';
@@ -1202,12 +1700,25 @@ function spawnAt(type, x, z) {
 }
 function gameOver() {
   state.mode = 'over';
-  player.hp = 0;
-  const best = Math.max(bestScore(), score);
-  store.set('deadnight_best', String(best));
+  player.hp = 0; player.action = null; player.searching = false;
+  if (bagOpen) { bagOpen = false; $('bag').classList.add('hidden'); }
+  const best = Math.max(bestScore(), dayNo);
+  store.set('deadnight_days', String(best));
   document.body.classList.remove('playing');
-  $('ov-night').textContent = wave; $('ov-kills').textContent = kills; $('ov-score').textContent = score; $('ov-best').textContent = best;
+  $('ov-night').textContent = dayNo; $('ov-kills').textContent = kills; $('ov-loot').textContent = player.lootCount; $('ov-best').textContent = best;
   setTimeout(() => $('over').classList.remove('hidden'), 900);
+}
+function toMenu() {
+  for (const z of zombies) releaseSprite(z);
+  zombies = []; bullets = []; floaters = [];
+  for (const id of ['over', 'win', 'pause', 'bag']) $(id).classList.add('hidden');
+  document.body.classList.remove('playing');
+  state.mode = 'title'; state.paused = false; phase = 'title';
+  player.sprite.group.visible = true;
+  sound.generator(false); sound.heli(false);
+  if (heli) heli.group.visible = false;
+  $('best').textContent = bestScore();
+  $('title').classList.remove('hidden');
 }
 function setQualityLabel() {
   $('q-btn').textContent = 'Đồ hoạ: ' + (quality === 'high' ? 'Cao' : 'Nhẹ');
@@ -1234,6 +1745,14 @@ function init() {
   navBuild();
   SPR = makeCharacterSprites();
   pickupAtlas = makePickupAtlas();
+  buildIcons(); buildQuickBar();
+  for (const c of world.containers) if (c.corpse) {
+    const sp = makeSprite([SPR.zombies[c.label === 'Xác lính' ? 'soldier' : 'walker'][c.x > 0 ? 1 : 0]], '#ff4a4a');
+    setFrame(sp, 'down', 0);
+    sp.mesh.rotation.x = -Math.PI / 2; sp.xr.visible = false; sp.blob.visible = false;
+    sp.mat.color.setRGB(0.75, 0.7, 0.7);
+    sp.group.position.set(c.x, 0.03, c.z + sp.h / 2);
+  }
   glowTex = softDisc(64, 0, 2.2);
   fx.sky = new Sky(scene);
   fx.lit = new Particles(scene, 500, { camQuat });
@@ -1295,7 +1814,15 @@ function init() {
   requestAnimationFrame(frame);
   if (QS.has('shot')) setTimeout(startGame, 50);
   if (QS.has('debug')) window.__dbgKill = () => { toSpawn = 0; zombies.forEach((z) => { if (z.state !== 'dead') killZombie(z, 0); }); };
-  if (QS.has('debug')) window.__dbg = () => ({ phase, hour: +atmos.hour.toFixed(2), weather: atmos.kind, hud: [$('night').textContent, $('atmo').textContent, $('left').textContent, $('msg-title').textContent], mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2)]), player: [+player.x.toFixed(1), +player.z.toFixed(1), player.hp] });
+  if (QS.has('debug')) window.__dbg = () => ({ phase, hour: +atmos.hour.toFixed(2), weather: atmos.kind, hud: [$('night').textContent, $('atmo').textContent, $('left').textContent, $('msg-title').textContent, $('q-text').textContent], mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2), z.aggro ? 1 : 0]), player: [+player.x.toFixed(1), +player.z.toFixed(1), Math.round(player.hp), Math.round(player.food), Math.round(player.water)], bag: { ...player.bag }, weapon: player.weapon, guns: player.guns.map((g) => [g.owned, g.ammo]), target: interact.target ? [interact.target.id, interact.target.info.label, interact.target.info.can] : null, quest: { ...Q, heli: Q.heli ? Q.heli.stage : null }, power, looted: player.looted.size });
+  if (QS.has('debug')) window.__dbgTp = (x, z) => { player.x = x; player.z = z; };
+  if (QS.has('debug')) window.__dbgGive = (it, n) => addItem(it, n);
+  if (QS.has('debug')) window.__dbgGod = () => { player.hp = player.maxHp = 1e5; };
+  if (QS.has('debug')) window.__dbgSpawn = (x, z, variant, aggro = true) => { newZombie('walker', x, 0, z, 'walk', { variant, aggro }); };
+  if (QS.has('debug')) window.__dbgAimAt = (x, z) => { tmpV.set(x, 1, z).project(camera); mouse.x = (tmpV.x * 0.5 + 0.5) * W; mouse.y = (-tmpV.y * 0.5 + 0.5) * H; mouse.has = true; };
+  if (QS.has('debug')) window.__dbgQuest = (o, pw) => { Object.assign(Q, o); if (pw !== undefined) power = pw; hud.dirty = true; };
+  if (QS.has('debug')) window.__dbgClear = () => { for (const z of zombies) releaseSprite(z); zombies = []; toSpawn = 0; strayT = 999; };
+  if (QS.has('debug')) window.__dbgPhase = (ph) => { if (ph === 'dawn') startDawn(); if (ph === 'night') { atmos.hour = 19.6; nextWave(); } };
 }
 
 // ================= KHÓI & TÀN LỬA =================
@@ -1331,7 +1858,7 @@ function frame(now) {
       if (k) { gtime += dt; U.time.value = gtime; }
       updatePlayer(dt);
       if (state.mode === 'play') updateZombies(dt);
-      if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); if (phase !== 'shot') updatePhase(dt); }
+      if (state.mode === 'play') { updateBullets(dt); updatePickups(dt); updateWaves(dt); if (phase !== 'shot') updatePhase(dt); updateHeli(dt); }
     }
   } else if (state.mode === 'title') {
     // màn hình tiêu đề: tua nhanh một vòng ngày đêm, có mưa và sương để khoe hiệu ứng
@@ -1405,6 +1932,16 @@ $('px-btn').addEventListener('click', cyclePixel);
 document.querySelectorAll('#view-bar .vb').forEach((b) => b.addEventListener('click', () => viewAction(b.dataset.v)));
 $('view-show').addEventListener('click', () => viewAction('hud'));
 $('again-btn').addEventListener('click', startGame);
+$('win-again').addEventListener('click', startGame);
+$('menu-btn').addEventListener('click', toMenu);
+$('win-menu').addEventListener('click', toMenu);
+$('coop-btn').addEventListener('click', () => openLobby());
+$('bag-close').addEventListener('click', () => toggleBag(false));
+$('t-bag').addEventListener('touchstart', (e) => { e.preventDefault(); toggleBag(); }, { passive: false });
+$('t-bag').addEventListener('click', () => toggleBag());
+$('t-use').addEventListener('touchstart', (e) => { e.preventDefault(); interact.touchHold = true; }, { passive: false });
+$('t-use').addEventListener('touchend', (e) => { e.preventDefault(); interact.touchHold = false; }, { passive: false });
+$('t-use').addEventListener('touchcancel', () => { interact.touchHold = false; });
 $('resume-btn').addEventListener('click', togglePause);
 $('q-btn').addEventListener('click', () => {
   quality = quality === 'high' ? 'low' : 'high';
@@ -1419,8 +1956,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
 $('help').innerHTML = isTouch
-  ? 'Ngón trái: di chuyển (kéo hết cỡ để chạy) · Ngón phải: ngắm &amp; bắn<br>R: nạp đạn · ⇄: đổi súng · ❚❚: tạm dừng · Nên xoay ngang màn hình'
-  : 'A/D: đi dọc phố · W/S: tiến/lùi · Shift: chạy · Chuột: ngắm &amp; bắn<br>R: nạp đạn · 1/2/3, Q, lăn chuột: đổi súng · P: tạm dừng · M: tắt tiếng';
+  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn · Giữ LỤC: lục soát<br>R: nạp đạn · ⇄: đổi vũ khí · TÚI: túi đồ · Nên xoay ngang màn hình'
+  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát<br>R: nạp đạn · 1-4/Q: đổi vũ khí · F: băng bó · C: ăn/uống · I: túi đồ · P: tạm dừng';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

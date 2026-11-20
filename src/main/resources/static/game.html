@@ -225,14 +225,15 @@
 <div id="title" class="screen hidden">
   <div class="card">
     <h1>DEAD NIGHT</h1>
-    <div class="tag">SINH TỒN QUA TỪNG ĐÊM</div>
+    <div class="tag">LỤC SOÁT · SỐNG SÓT · CHỜ GIẢI CỨU</div>
     <div class="btns">
-      <button class="btn" id="start-btn">BẮT ĐẦU</button>
-      <button class="btn alt" id="view-btn">NGẮM CẢNH</button>
+      <button class="btn" id="start-btn">CHƠI ĐƠN</button>
+      <button class="btn alt" id="coop-btn">CO-OP</button>
+      <button class="btn ghost" id="view-btn">Ngắm cảnh</button>
       <button class="btn ghost" id="q-btn">Đồ hoạ: Cao</button>
       <button class="btn ghost" id="px-btn">Pixel: 1x</button>
     </div>
-    <div class="help"><span id="help"></span><br>Kỷ lục: <b style="color:var(--gold);font-weight:400" id="best">0</b></div>
+    <div class="help"><span id="help"></span><br>Kỷ lục: sống sót <b style="color:var(--gold);font-weight:400" id="best">0</b> ngày</div>
   </div>
 </div>
 <div id="pause" class="screen hidden">
@@ -244,8 +245,15 @@
 <div id="over" class="screen hidden">
   <div class="card win">
     <h1 style="font-size:clamp(52px,10vw,84px)">BẠN ĐÃ CHẾT</h1>
-    <div class="stats">Sống sót đến <b>đêm <span id="ov-night">1</span></b><br>Hạ gục <b id="ov-kills">0</b> zombie<br>Điểm <b id="ov-score">0</b> · Kỷ lục <b id="ov-best">0</b></div>
-    <div class="btns"><button class="btn" id="again-btn">CHƠI LẠI</button></div>
+    <div class="stats">Sống sót <b><span id="ov-night">1</span> ngày</b><br>Hạ gục <b id="ov-kills">0</b> zombie · Lục được <b id="ov-loot">0</b> món<br>Kỷ lục <b id="ov-best">0</b> ngày</div>
+    <div class="btns"><button class="btn" id="again-btn">CHƠI LẠI</button><button class="btn ghost" id="menu-btn">Về menu</button></div>
+  </div>
+</div>
+<div id="win" class="screen hidden">
+  <div class="card win">
+    <h1 style="font-size:clamp(36px,6.5vw,62px);color:#7fe07f;text-shadow:0 0 26px rgba(127,224,127,.5),0 6px 0 #0a2a0a,0 7px 0 #000">ĐÃ ĐƯỢC GIẢI CỨU!</h1>
+    <div class="stats" id="win-stats"></div>
+    <div class="btns"><button class="btn" id="win-again">CHƠI LẠI</button><button class="btn ghost" id="win-menu">Về menu</button></div>
   </div>
 </div>
 <div id="view-ui" class="hidden">

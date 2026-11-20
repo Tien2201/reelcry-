@@ -100,6 +100,62 @@ export class Sound {
   }
   rise(x, z) { this.noise(0.7, 'lowpass', 260, 0.35, x, z); }
   step() { this.noise(0.05, 'lowpass', 900, 0.05); }
+  swing(hit) {
+    if (!this.ac) return;
+    const ac = this.ac, t = ac.currentTime;
+    const s = ac.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.2;
+    f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(3200, t + 0.12);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.16);
+    s.connect(f); f.connect(g); g.connect(this.out()); s.start(t, Math.random()); s.stop(t + 0.2);
+    if (hit) { this.noise(0.12, 'lowpass', 600, 0.4); this.tone('square', 140, 60, 0.08, 0.08); }
+  }
+  // tiếng lục lọi khi đang lục soát
+  rustle(dt) {
+    this.rustT = (this.rustT || 0) - dt;
+    if (this.rustT > 0) return;
+    this.rustT = 0.07 + Math.random() * 0.12;
+    this.noise(0.05 + Math.random() * 0.06, 'bandpass', 1500 + Math.random() * 2500, 0.07, undefined, undefined, 1.2);
+  }
+  use(kind) {
+    if (kind === 'heal') { this.noise(0.5, 'highpass', 3000, 0.08); this.noise(0.3, 'bandpass', 1200, 0.05); }
+    else if (kind === 'drink') { for (let i = 0; i < 4; i++) this.tone('sine', 380 + i * 30, 260, 0.08, 0.05, undefined, undefined, i * 0.16); }
+    else { for (let i = 0; i < 3; i++) this.noise(0.06, 'lowpass', 700, 0.12, undefined, undefined, 1); }
+  }
+  unlock() { this.tone('square', 1800, 1500, 0.04, 0.08); this.tone('square', 900, 600, 0.06, 0.1, undefined, undefined, 0.08); this.noise(0.15, 'bandpass', 2500, 0.1); }
+  radio() {
+    if (!this.ac) return;
+    this.noise(0.9, 'bandpass', 1800, 0.16, undefined, undefined, 0.8);
+    for (let i = 0; i < 3; i++) this.tone('sine', 1000, 1000, 0.12, 0.08, undefined, undefined, 0.3 + i * 0.22);
+  }
+  // máy phát (tiếng ù đều) và trực thăng (cánh quạt đập) chạy nền
+  generator(on) {
+    if (!this.ac) return;
+    if (!this.gen) {
+      const ac = this.ac;
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 52;
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
+      const g = ac.createGain(); g.gain.value = 0;
+      const lfo = ac.createOscillator(); lfo.frequency.value = 17; const lg = ac.createGain(); lg.gain.value = 0.012; lfo.connect(lg); lg.connect(g.gain);
+      o.connect(f); f.connect(g); g.connect(this.master); o.start(); lfo.start();
+      this.gen = { g };
+    }
+    this.genOn = on;
+  }
+  heli(on) {
+    if (!this.ac) return;
+    if (!this.hel) {
+      const ac = this.ac;
+      const s = ac.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380;
+      const g = ac.createGain(); g.gain.value = 0;
+      const am = ac.createGain(); am.gain.value = 0.5;
+      const lfo = ac.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 13; const lg = ac.createGain(); lg.gain.value = 0.5; lfo.connect(lg); lg.connect(am.gain);
+      s.connect(f); f.connect(am); am.connect(g); g.connect(this.master); s.start(); lfo.start();
+      this.hel = { g };
+    }
+    this.heliOn = on;
+  }
   wave() { this.tone('triangle', 220, 220, 0.9, 0.08); this.tone('triangle', 261.6, 261.6, 0.9, 0.06, undefined, undefined, 0.25); this.tone('triangle', 329.6, 329.6, 1.2, 0.06, undefined, undefined, 0.5); }
   update(dt, amb) {
     if (!this.ac) return;
@@ -110,6 +166,8 @@ export class Sound {
     this.rain2.g.gain.setTargetAtTime(this.muted ? 0 : amb.rain * 0.06, t, 0.8);
     this.water.g.gain.setTargetAtTime(this.muted ? 0 : (amb.water || 0) * 0.08, t, 0.5);
     this.pad.gain.setTargetAtTime(this.muted ? 0 : 0.02 * amb.music, t, 1.5);
+    if (this.gen) this.gen.g.gain.setTargetAtTime(this.muted || !this.genOn ? 0 : 0.03 * (amb.gen || 0), t, 0.4);
+    if (this.hel) this.hel.g.gain.setTargetAtTime(this.muted || !this.heliOn ? 0 : 0.22 * (amb.heli || 0), t, 0.4);
     this.cricketT -= dt;
     if (this.cricketT <= 0 && amb.crickets > 0.05) {
       this.cricketT = 0.25 + Math.random() * 1.1 / amb.crickets;

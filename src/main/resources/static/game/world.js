@@ -17,15 +17,11 @@ export const BLD_D = 5.6;       // chiều sâu toà nhà
 export const ZB = WALL_Z - BLD_D;
 export const BOUNDS = { x0: -58, x1: 58, z0: ZB + 0.2, z1: 4.6 };
 export const STREET_FRONT = 3.25;
-export const STAIRS = [{ x: -24.4, w: 1.9 }, { x: 26.4, w: 1.9 }, { x: 47.2, w: 1.9 }];
 export const STAIR_DEPTH = 1.9;
-export const POND = { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 };
-export const STREAM = { x0: -29.0, x1: -27.0 };
-export const HELIPAD = { x: 52.4, z: 1.2, r: 2.5 };
 const XMIN = -72, XMAX = 72;
 
-// các toà nhà vào được (mặt tiền tại WALL_Z, lòng nhà lùi vào BLD_D)
-export const BUILDINGS = [
+// ======================= CÁC KHU (mỗi khu là một con phố, đi hết đường thì sang khu kế) =======================
+const DOWNTOWN_BUILDINGS = [
   { id: 'kiosk', name: 'Cửa hàng xăng dầu', kind: 'kiosk', x0: -56, x1: -50.5, floors: 1, h: 3.7, door: -53.0, doorW: 1.4, floor: 'tile', wall: 'plaster', plaster: ['#a8a090', '#bcb4a2', '#d0c8b6'], shop: true, sign: { text: 'MINI MART', bg: '#c8281e' }, roof: 'flat', light: 'flicker', seed: 41 },
   { id: 'garage', name: 'Gara sửa xe', kind: 'garage', x0: -49.5, x1: -43, floors: 1, h: 3.9, door: -46.25, doorW: 3.4, doorH: 2.7, floor: 'concrete', wall: 'brick', sign: { text: 'GARA', bg: '#2e2e30', y: 0.12 }, roof: 'flat', light: 'flicker', seed: 42 },
   { id: 'houseA', name: 'Nhà dân', kind: 'house', x0: -40.5, x1: -33.5, floors: 2, h: 6.2, door: -38.5, doorW: 1.2, floor: 'wood', wall: 'plaster', plaster: ['#b8a888', '#ccbc9c', '#ded0b4'], roof: 'red', light: 'candle', seed: 43, posters: 1, graffiti: [{ text: 'X', x: 4.6, y: 0.9, col: '#d83a2a', scale: 3 }] },
@@ -35,10 +31,235 @@ export const BUILDINGS = [
   { id: 'radio', name: 'Nhà ông Tư', kind: 'workshop', x0: 7, x1: 13, floors: 1, h: 3.8, door: 8.6, doorW: 1.2, floor: 'wood', wall: 'plank', roof: 'wood', light: 'candle', seed: 47, antenna: true },
   { id: 'police', name: 'Đồn cảnh sát', kind: 'police', x0: 29, x1: 43, floors: 2, h: 6.6, door: 35.2, doorW: 1.8, doorH: 2.3, floor: 'lino', wall: 'concrete', plaster: ['#8a8c90', '#a0a2a6', '#b4b6ba'], sign: { text: 'ĐỒN CẢNH SÁT', bg: '#1a3a7a', y: 2.05 }, roof: 'flat', light: 'power', seed: 48, posters: 3, blood: 0.18, graffiti: [{ text: 'HELP', x: 1.0, y: 4.3 }] },
 ];
+export const ZONES = {
+  // Trung tâm: bản đồ gốc (đồn cảnh sát, bộ đàm, máy phát, bãi đáp trực thăng)
+  downtown: {
+    id: 'downtown', name: 'Trung tâm thành phố', seed: 20261120,
+    buildings: DOWNTOWN_BUILDINGS,
+    stairs: [{ x: -24.4, w: 1.9 }, { x: 26.4, w: 1.9 }, { x: 47.2, w: 1.9 }],
+    pond: { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 },
+    stream: { x0: -29.0, x1: -27.0 },
+    helipad: { x: 52.4, z: 1.2, r: 2.5 },
+    gas: true, generator: true, checkpoint: true, windmill: true, camp: { x0: 18, x1: 31 }, campfire: { x: 24.5, z: 1.3 },
+    cemetery: { x0: 45.5, x1: 57.5, z0: -13.2, z1: -2.6 }, field: { x0: 38, x1: 51, z0: 8.5, z1: 15 },
+    paths: [[[-6, STREET_FRONT], [-5, 9], [-7, 26]], [[44, STREET_FRONT], [44.5, 8.5]]],
+    terrace: [
+      { x: -31.6, zf: -3.0, w: 4.4, d: 4.0, floors: 1, ridge: 'z', roof: 'moss', style: 'stone', shutter: '#4a3a2a', door: 0.5, seed: 21, lit: false, by: TY },
+      { x: 19.0, zf: -3.0, w: 6.0, d: 4.5, floors: 2, ridge: 'x', roof: 'slate', style: 'timber', shutter: '#3a4a5a', door: 0.4, seed: 18, ivy: 3, lit: false, by: TY },
+      { x: -34, zf: -16.4, w: 6.5, d: 5, floors: 2, ridge: 'x', roof: 'slate', style: 'timber', shutter: '#3a5a7a', door: 0.5, seed: 31, by: BY, lit: false },
+      { x: -1, zf: -16.6, w: 7, d: 5, floors: 1, ridge: 'z', roof: 'red', style: 'stone', shutter: '#3a6a44', door: 0.5, seed: 32, by: BY },
+      { x: 30, zf: -16.4, w: 6, d: 5, floors: 2, ridge: 'x', roof: 'moss', style: 'timber', shutter: '#7a2a2a', door: 0.4, seed: 33, by: BY, lit: false },
+    ],
+    trees: [[-23.4, -8.8, 1.3, 'oak'], [-58.5, -7, 1.2, 'oak2'], [-37.2, -9.2, 1.0, 'autumn'], [10.8, -9.5, 0.95, 'dead'], [31.5, -9, 1.0, 'pine'], [40, -11.5, 0.9, 'dead'], [57.2, -11.8, 1.0, 'dead'], [-6.5, -9.6, 1.0, 'dead']],
+    lamps: [-52, -42, -9.5, 2.5, 14.5, 27.5, 41, 53],
+    terraceLamps: [-21.5, 23.4, 44.6],
+    wallLamps: [-57.2, -42.0, -32.6, -22.2, 14.2, 21.5, 28.4, 44.2, 50.2, 55.4],
+    barrels: [[-41.8, -1.25], [13.8, -1.2], [45.6, 3.0], [-23.0, -1.3]],
+    cars: [
+      [-47.6, 2.5, 0.12, 'sedan', { paint: '#4a5a6a', loot: 'trunk', flat: true }],
+      [-36.0, 2.7, -0.08, 'sedan', { paint: '#8a2a22', loot: 'trunk' }],
+      [-21.6, 2.4, 0.22, 'burnt'],
+      [-8.4, 2.75, 0.06, 'sedan', { paint: '#c8c0a8', loot: 'trunk' }],
+      [3.2, 2.65, -0.1, 'van', { paint: '#d8d4c8', loot: 'trunk', label: 'Thùng xe tải nhỏ', flat: true }],
+      [11.8, 2.9, 0.42, 'sedan', { paint: '#2a4a2a', flat: true }],
+      [18.0, 0.35, 0, 'truck', { loot: 'truck', label: 'Thùng xe quân sự', lootDz: 1.6 }],
+      [37.8, 2.65, 0.05, 'police', { siren: true, loot: 'trunk', label: 'Cốp xe cảnh sát' }],
+      [46.2, -0.65, Math.PI + 0.1, 'police', {}],
+      [57.6, 3.0, 0, 'ambulance', { loot: 'ambulance', label: 'Xe cứu thương' }],
+    ],
+    fences: [[-60, -38, 7.2], [-19, -1, 7.6], [54, 64, 7]],
+    bodies: [[-17.2, 1.5, 'Xác người'], [24.0, 2.8, 'Xác lính'], [33.6, 1.0, 'Xác người']],
+    blood: [[-3.5, 0.2, 1.0]],
+    flowers: [[-55.4, 0.2], [-47.6, -2.7], [-37.0, -4.0], [-31.2, -1.6], [-26.6, 2.6], [-16.5, -2.7], [-6.0, -5.6], [2.6, -4.6], [9.4, -5.2], [15.9, 2.1], [22.4, 3.7], [31.0, -5.0], [44.8, 3.7], [49.2, -1.6], [55.4, -0.5]],
+    lurkers: { kiosk: 1, garage: 1, houseA: 1, grocery: 2, pharmacy: 1, houseB: 1, radio: 1, police: 3 },
+  },
+};
+
+// ---------- mẫu toà nhà: dùng lại cho mọi khu ----------
+const SCHOOL_WALL = ['#c8b070', '#d8c080', '#e8d090'];
+const TPL = {
+  house: { kind: 'house', name: 'Nhà dân', w: 7, floors: 2, h: 6.2, doorDx: 2.0, doorW: 1.2, floor: 'wood', wall: 'plaster', plaster: ['#b8a888', '#ccbc9c', '#ded0b4'], roof: 'red', light: 'candle', posters: 1 },
+  kiosk: { kind: 'kiosk', name: 'Cửa hàng tiện lợi', w: 5.5, floors: 1, h: 3.7, doorDx: 3.0, doorW: 1.4, floor: 'tile', wall: 'plaster', plaster: ['#a8a090', '#bcb4a2', '#d0c8b6'], shop: true, sign: { text: 'MINI MART', bg: '#c8281e' }, roof: 'flat', light: 'flicker' },
+  garage: { kind: 'garage', name: 'Gara sửa xe', w: 6.5, floors: 1, h: 3.9, doorDx: 3.25, doorW: 3.4, doorH: 2.7, floor: 'concrete', wall: 'brick', sign: { text: 'GARA', bg: '#2e2e30', y: 0.12 }, roof: 'flat', light: 'flicker' },
+  grocery: { kind: 'grocery', name: 'Tạp hoá', w: 9, floors: 1, h: 3.8, doorDx: 4.5, doorW: 1.4, floor: 'tile', wall: 'plaster', plaster: ['#8a9a8a', '#a4b4a2', '#bccab8'], shop: true, sign: { text: 'TẠP HOÁ', bg: '#b8281e', w: 4 }, roof: 'flat', light: 'flicker', posters: 2 },
+  pharmacy: { kind: 'pharmacy', name: 'Nhà thuốc', w: 6, floors: 1, h: 3.8, doorDx: 3.0, doorW: 1.3, floor: 'tile', wall: 'plaster', plaster: ['#c8c8c0', '#dcdcd4', '#ececE4'], shop: true, sign: { text: 'NHÀ THUỐC', bg: '#1e7a3e', cross: true }, roof: 'flat', light: 'flicker' },
+  guardroom: { kind: 'guardroom', name: 'Phòng bảo vệ', w: 5, floors: 1, h: 3.6, doorDx: 3.7, doorW: 1.2, floor: 'lino', wall: 'plaster', plaster: SCHOOL_WALL, stripe: ['#3a8a5a', '#2a6a44'], roof: 'flat', light: 'flicker', room: 'shop', sign: { text: 'BẢO VỆ', bg: '#2a4a8a' } },
+  classroom: { kind: 'classroom', name: 'Lớp học', w: 10, floors: 2, h: 6.4, doorDx: 8.6, doorW: 1.3, floor: 'tile', wall: 'plaster', plaster: SCHOOL_WALL, stripe: ['#3a8a5a', '#2a6a44'], roof: 'flat', light: 'flicker', room: 'class', posters: 1 },
+  infirmary: { kind: 'infirmary', name: 'Phòng y tế', w: 7, floors: 1, h: 3.8, doorDx: 5.4, doorW: 1.2, floor: 'tile', wall: 'plaster', plaster: ['#d8d8d0', '#e4e4dc', '#f0f0e8'], stripe: ['#3a8a5a', '#2a6a44'], sign: { text: 'Y TẾ', bg: '#1e7a3e', cross: true }, roof: 'flat', light: 'flicker', room: 'pharmacy' },
+  canteen: { kind: 'canteen', name: 'Căng tin', w: 10, floors: 1, h: 3.8, doorDx: 5.0, doorW: 1.4, floor: 'tile', wall: 'plaster', plaster: SCHOOL_WALL, shopLike: true, shop: true, sign: { text: 'CĂNG TIN', bg: '#c86a1a' }, roof: 'flat', light: 'flicker', room: 'shop', posters: 2 },
+  club: { kind: 'club', name: 'CLB bắn cung', w: 8, floors: 1, h: 4.2, doorDx: 4.0, doorW: 1.6, floor: 'wood', wall: 'brick', sign: { text: 'CLB BẮN CUNG', bg: '#2a4a8a' }, roof: 'flat', light: 'flicker', room: 'garage' },
+  mall: { kind: 'mall', name: 'Trung tâm thương mại', w: 20, floors: 2, h: 7.0, doorDx: 10, doorW: 2.4, floor: 'tile', wall: 'concrete', plaster: ['#9aa0a8', '#b0b6be', '#c4cad2'], shopLike: true, shop: true, sign: { text: 'TTTM VÂN LÂM', bg: '#1e4a8a' }, roof: 'flat', light: 'flicker', room: 'shop', posters: 3 },
+  plantshop: { kind: 'plantshop', name: 'Tiệm cây Vườn Xanh', w: 8, floors: 1, h: 3.8, doorDx: 4.0, doorW: 1.4, floor: 'concrete', wall: 'plank', shopLike: true, shop: true, sign: { text: 'VƯỜN XANH', bg: '#2a7a3a' }, roof: 'flat', light: 'candle', room: 'house' },
+};
+function B(t, x0, o = {}) {
+  const T0 = TPL[t];
+  const w = o.w || T0.w;
+  const b = { ...T0, id: o.id || t + '_' + Math.round((x0 + 60) * 10), x0, x1: x0 + w, seed: Math.round(Math.abs(x0 * 7.3)) + 60, ...o };
+  delete b.w;
+  if (b.door === undefined) b.door = x0 + (o.doorDx ?? T0.doorDx ?? w / 2);
+  return b;
+}
+const ROOFS = ['red', 'slate', 'moss', 'wood'], WALLS = ['plaster', 'brick', 'plaster', 'plank'];
+const PLASTERS = [['#b8a888', '#ccbc9c', '#ded0b4'], ['#a8b0b8', '#bcc4cc', '#d0d8de'], ['#c0a890', '#d0b8a0', '#e0ccb4'], ['#a8b498', '#bcc8aa', '#d0dabe']];
+const bgHouses = (xs, seed) => xs.map((x, i) => ({ x, zf: -16.4 - (i % 2) * 0.3, w: 6 + (i % 3) * 0.5, d: 5, floors: 1 + ((i + seed) % 2), ridge: i % 2 ? 'x' : 'z', roof: ROOFS[(i + seed) % 4], style: i % 2 ? 'timber' : 'stone', shutter: ['#3a5a7a', '#7a2a2a', '#3a6a44'][i % 3], door: 0.5, seed: seed + i, by: BY, lit: false }));
+
+ZONES.school = {
+  id: 'school', name: 'Trường Quốc tế Vân Lâm', seed: 3301, decor: 'school',
+  buildings: [
+    B('guardroom', -55),
+    B('classroom', -48, { id: 'class11a', name: 'Lớp 11A', board: 'SINH HỌC', sign: { text: 'TRƯỜNG QUỐC TẾ VÂN LÂM', bg: '#1e4a8a' } }),
+    B('classroom', -36, { id: 'class11b', name: 'Lớp 11B', board: 'TOÁN' }),
+    B('infirmary', -22),
+    B('canteen', -6),
+    B('club', 9),
+    B('classroom', 27, { id: 'class10a', name: 'Lớp 10A', board: 'VĂN' }),
+    B('classroom', 39, { id: 'labold', name: 'Phòng thí nghiệm cũ', board: 'HOÁ HỌC', floors: 1, h: 4.2 }),
+  ],
+  alley: -10.3, cross: -10.3,
+  stairs: [{ x: -24.4, w: 1.9 }, { x: 24.4, w: 1.9 }],
+  flagX: 6.6, hoops: [[19.2, 1], [22.6, -1]], bikesX: 4.6,
+  terrace: bgHouses([-34, -1, 30], 41),
+  trees: [[-58, -7, 1.2, 'oak2'], [-30, -9, 1.3, 'oak'], [2, -9.4, 1.1, 'autumn'], [20.6, -8.6, 1.2, 'oak'], [52, -9.5, 1.0, 'pine']],
+  lamps: [-44, -30, -18, 0, 12, 30, 44],
+  wallLamps: [-49, -37, -13.6, 6.5, 20.5, 38, 53],
+  barrels: [[-37, -1.25], [17.8, -1.25]],
+  cars: [[51, 2.45, 0.03, 'bus', { loot: 'trunk', label: 'Xe buýt trường' }], [-30, 2.7, -0.1, 'sedan', { paint: '#c8c0a8', loot: 'trunk' }], [14, 2.6, 0.3, 'burnt']],
+  fences: [[-60, -40, 7.2], [30, 64, 7.4]],
+  bodies: [[-33, 1.2, 'Xác học sinh'], [2, 2.5, 'Xác giáo viên'], [31, 0.8, 'Xác học sinh']],
+  blood: [[-44, 0.4, 1.2], [-16, 1.8, 0.9]],
+  flowers: [[-53, -1.6], [-42, 3.4], [-31, -1.7], [-19, 3.5], [-3, -1.6], [13, 3.4], [26, -1.6], [34, 3.3], [46, -1.6], [56.5, 0.5]],
+  start: { x: -43, z: 0.6 },
+};
+ZONES.residential = {
+  id: 'residential', name: 'Khu dân cư', seed: 4402,
+  buildings: [
+    B('house', -56, { roof: 'red' }), B('house', -47.5, { roof: 'slate', wall: 'brick' }), B('house', -38.5, { roof: 'moss', plaster: PLASTERS[1] }),
+    B('grocery', -22), B('house', -11, { roof: 'slate', plaster: PLASTERS[2] }),
+    B('house', 3, { roof: 'wood', wall: 'brick' }), B('house', 12, { floors: 1, h: 4.2, roof: 'red', plaster: PLASTERS[3] }),
+    B('house', 25, { roof: 'slate', plaster: PLASTERS[1] }), B('kiosk', 34), B('house', 42, { roof: 'moss', wall: 'brick' }), B('house', 50.5, { roof: 'red', plaster: PLASTERS[2] }),
+  ],
+  alley: -0.5, cross: -0.5,
+  stairs: [{ x: -24.4, w: 1.9 }, { x: 22, w: 1.9 }],
+  pond: { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 },
+  stream: { x0: -29.0, x1: -27.0 },
+  terrace: [{ x: -31.6, zf: -3.0, w: 4.4, d: 4.0, floors: 1, ridge: 'z', roof: 'moss', style: 'stone', shutter: '#4a3a2a', door: 0.5, seed: 21, lit: false, by: TY }, ...bgHouses([-40, -6, 18, 40], 51)],
+  trees: [[-58, -7, 1.2, 'oak2'], [-24.0, -8.8, 1.3, 'oak'], [8, -9.5, 1.0, 'autumn'], [30, -9, 1.0, 'oak'], [55, -10, 1.0, 'pine']],
+  lamps: [-52, -40, -10, 6, 18, 30, 44, 54],
+  wallLamps: [-48.6, -39.4, -12, 24, 33, 49.6],
+  barrels: [[-48.7, -1.25], [33.1, -1.25]],
+  cars: [[-45, 2.6, 0.1, 'sedan', { paint: '#6a2a2a', loot: 'trunk' }], [-8, 2.7, -0.05, 'van', { paint: '#d8d4c8', loot: 'trunk', label: 'Xe tải nhỏ' }], [16, 2.5, 0.2, 'burnt'], [37, 2.8, 0.05, 'sedan', { paint: '#3a5a8a', loot: 'trunk', flat: true }], [47, 2.6, -0.3, 'sedan', { paint: '#c8c0a8' }]],
+  fences: [[-60, -36, 7.2], [8, 30, 7.6], [50, 64, 7]],
+  bodies: [[-41, 1.6, 'Xác người'], [7, 2.0, 'Xác người'], [40, 1.0, 'Xác người']],
+  flowers: [[-54, -1.6], [-44, 3.4], [-34, -1.7], [-26.6, 2.6], [-15, -1.6], [-6, 3.4], [9, -1.6], [20, 3.5], [31, -1.7], [46, 3.3], [56.5, 0.4]],
+};
+ZONES.market = {
+  id: 'market', name: 'Phố chợ', seed: 5503, decor: 'market',
+  buildings: [
+    B('pharmacy', -56), B('plantshop', -48), B('mall', -37), B('grocery', -9), B('kiosk', 17),
+    B('garage', 27), B('house', 36, { roof: 'slate', plaster: PLASTERS[2] }), B('house', 45.5, { roof: 'red', wall: 'brick' }),
+  ],
+  alley: -13.3, cross: -13.3,
+  stairs: [{ x: 25, w: 1.9 }, { x: 54.5, w: 1.9 }],
+  stalls: [3.2, 6.6, 10.0, 13.4],
+  terrace: bgHouses([-44, -10, 14, 44], 61),
+  trees: [[-58, -7, 1.1, 'oak'], [12, -9, 1.2, 'oak2'], [44, -10, 1.0, 'autumn']],
+  lamps: [-52, -40, -28, -6, 8, 20, 36, 50],
+  wallLamps: [-38.5, -16, 15.5, 34.5, 44.2, 53],
+  barrels: [[34.7, -1.25]],
+  cars: [[-30, 2.7, 0.05, 'van', { paint: '#8a8a8a', loot: 'trunk', label: 'Xe giao hàng' }], [-3, 2.6, -0.1, 'sedan', { loot: 'trunk' }], [20, 2.8, 0.25, 'burnt'], [40, 2.6, 0, 'sedan', { paint: '#2a4a6a', loot: 'trunk' }]],
+  fences: [[-60, -45, 7.2], [30, 64, 7.2]],
+  bodies: [[-44, 1.8, 'Xác người'], [8, 1.0, 'Xác người'], [30, 2.2, 'Xác người']],
+  flowers: [[-53, 3.4], [-45, -1.6], [-25, 3.4], [-6, -1.6], [1, 3.5], [16, 3.4], [24, -1.6], [38, 3.3], [50, -1.6], [56.5, 0.4]],
+};
+ZONES.downtown.name = 'Trung tâm thành phố';
+
+// ---------- 8 con phố ở dãy trên và dãy dưới: sinh tự động từ seed ----------
+const GEN = {
+  n0: { name: 'Đường Hoa Sữa', type: 'res' }, n1: { name: 'Phố Cây Gạo', type: 'res' }, n2: { name: 'Đường Ga Cũ', type: 'com' }, n3: { name: 'Phố Nhà Thờ', type: 'com' },
+  s0: { name: 'Đường Ven Sông', type: 'res' }, s1: { name: 'Phố Lò Gốm', type: 'com' }, s2: { name: 'Đường Bờ Kè', type: 'res' }, s3: { name: 'Khu Bệnh Viện', type: 'hos' },
+};
+export const GRID = [['n0', 'n1', 'n2', 'n3'], ['school', 'residential', 'market', 'downtown'], ['s0', 's1', 's2', 's3']];
+const hashStr = (t) => { let h = 2166136261; for (const ch of t) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+function genericZone(id) {
+  const g = GEN[id], r = makeRng(hashStr(id) % 100000 + 7);
+  const north = id[0] === 'n';
+  const cross = Math.round((r() * 30 - 15) * 2) / 2;
+  const Z = { id, name: g.name, seed: hashStr(id) % 99991 + 11, generic: true };
+  if (north) Z.cross = cross; else Z.alley = cross;
+  const pool = g.type === 'com' ? ['grocery', 'kiosk', 'pharmacy', 'house', 'garage', 'house', 'kiosk'] : g.type === 'hos' ? ['pharmacy', 'house', 'pharmacy', 'kiosk', 'house'] : ['house', 'house', 'house', 'kiosk', 'house', 'grocery', 'house'];
+  const buildings = [];
+  const reserved = [[cross - 2.4, cross + 2.4]];
+  let x = -57;
+  while (x < 56) {
+    const t = pool[Math.floor(r() * pool.length)], w = TPL[t].w;
+    if (x + w > 57.5) break;
+    const res = reserved.find(([a, b]) => x < b && x + w > a);
+    if (res) { x = res[1] + 0.3; continue; }
+    if (r() < 0.16) { x += 2.5 + r() * 3; continue; }
+    const k = Math.floor(r() * 4);
+    buildings.push(B(t, x, t === 'house' ? { roof: ROOFS[k], wall: WALLS[(k + 1) % 4], plaster: PLASTERS[k], floors: r() < 0.3 ? 1 : 2, h: undefined } : {}));
+    const last = buildings[buildings.length - 1];
+    if (last.h === undefined) last.h = last.floors === 1 ? 4.2 : 6.2;
+    x += w + 0.6 + r() * 1.8;
+  }
+  Z.buildings = buildings;
+  // cầu thang ở các khoảng trống đủ rộng
+  const gaps = [];
+  const sorted = [...buildings].sort((a, b) => a.x0 - b.x0);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i].x1, b = sorted[i + 1].x0;
+    if (b - a > 2.8 && !(a < cross + 2.6 && b > cross - 2.6)) gaps.push((a + b) / 2);
+  }
+  Z.stairs = gaps.slice(0, 2).map((gx) => ({ x: gx, w: 1.9 }));
+  const freeX = (pad) => { for (let k = 0; k < 30; k++) { const xx = -52 + r() * 104; if (Math.abs(xx - cross) > pad) return xx; } return 0; };
+  Z.lamps = []; for (let lx = -52 + r() * 4; lx < 54; lx += 10 + r() * 5) if (Math.abs(lx - cross) > 2.6) Z.lamps.push(lx);
+  Z.wallLamps = Array.from({ length: 6 }, () => freeX(3));
+  Z.cars = Array.from({ length: 4 }, (_, i) => {
+    const st = g.type === 'hos' && i === 0 ? 'ambulance' : ['sedan', 'sedan', 'van', 'burnt'][Math.floor(r() * 4)];
+    return [freeX(4.5), 2.4 + r() * 0.5, (r() - 0.5) * 0.5, st, st === 'burnt' ? {} : { loot: st === 'ambulance' ? 'ambulance' : 'trunk', label: st === 'ambulance' ? 'Xe cứu thương' : st === 'van' ? 'Thùng xe tải nhỏ' : 'Cốp xe', paint: ['#4a5a6a', '#8a2a22', '#c8c0a8', '#2a4a2a', '#3a5a8a'][Math.floor(r() * 5)], flat: r() < 0.3 }];
+  });
+  Z.barrels = [[freeX(3), -1.25]];
+  Z.bodies = Array.from({ length: 2 + Math.floor(r() * 2) }, () => [freeX(3), -0.8 + r() * 3.4, 'Xác người']);
+  Z.fences = [[-60, -60 + 12 + r() * 14, 7.2], [40 - r() * 10, 64, 7.4]];
+  Z.terrace = bgHouses([-40 + r() * 6, -6 + r() * 6, 24 + r() * 8], hashStr(id) % 50);
+  Z.trees = Array.from({ length: 4 }, (_, i) => [-50 + i * 30 + r() * 8, -8.6 - r() * 2.5, 1.0 + r() * 0.3, ['oak', 'oak2', 'autumn', 'dead', 'pine'][Math.floor(r() * 5)]]);
+  Z.flowers = Array.from({ length: 10 }, () => [freeX(2.5), r() < 0.5 ? -1.6 : 3.4]);
+  return Z;
+}
+for (const id in GEN) ZONES[id] = genericZone(id);
+export function zoneCell(id) { for (let rr = 0; rr < GRID.length; rr++) { const c = GRID[rr].indexOf(id); if (c >= 0) return [c, rr]; } return [3, 1]; }
+// các lối ra của một khu: w/e = hai đầu phố, n = hẻm phía sau, s = ngã rẽ phía trước
+export function zoneLinks(id) {
+  const [c, r] = zoneCell(id), Z = ZONES[id], L = {};
+  if (c > 0) L.w = GRID[r][c - 1];
+  if (c < GRID[r].length - 1) L.e = GRID[r][c + 1];
+  if (r > 0 && Z.alley !== undefined && ZONES[GRID[r - 1][c]].cross !== undefined) L.n = GRID[r - 1][c];
+  if (r < GRID.length - 1 && Z.cross !== undefined && ZONES[GRID[r + 1][c]].alley !== undefined) L.s = GRID[r + 1][c];
+  return L;
+}
+export let ZONE = ZONES.downtown;
+export let BUILDINGS = ZONE.buildings;
+export let STAIRS = ZONE.stairs;
+export let POND = ZONE.pond;
+export let STREAM = ZONE.stream;
+export let HELIPAD = ZONE.helipad;
+// chuyển sang khu khác (giá trị export là "live binding": nơi import thấy ngay giá trị mới)
+export function setZone(id) {
+  const def = ZONES[id] || ZONES.downtown;
+  const linkIds = zoneLinks(def.id);
+  const links = {};
+  for (const k in linkIds) links[k] = ZONES[linkIds[k]].name;
+  ZONE = { ...def, linkIds, links, cross: linkIds.s ? def.cross : undefined, alley: linkIds.n ? def.alley : undefined };
+  BUILDINGS = def.buildings.map((b) => ({ ...b }));
+  if (ZONE.alley !== undefined) BUILDINGS.push({ kind: 'alley', id: 'alley', name: 'Hẻm', x0: ZONE.alley - 1.7, x1: ZONE.alley + 1.7, sign: '↑ ' + links.n.toUpperCase(), seed: 9 });
+  STAIRS = def.stairs || []; POND = def.pond || null; STREAM = def.stream || null; HELIPAD = def.helipad || null;
+  return ZONE;
+}
+
 // toà nhà chứa điểm (x, z) (null nếu ở ngoài đường)
 export function buildingAt(x, z) {
   if (z > WALL_Z - 0.02) return null;
-  for (const b of BUILDINGS) if (x > b.x0 && x < b.x1 && z > ZB - 0.3) return b;
+  for (const b of BUILDINGS) if (!b.alley && x > b.x0 && x < b.x1 && z > ZB - 0.3) return b;
   return null;
 }
 
@@ -154,6 +375,7 @@ class Batch {
     for (const n of Object.keys(gg.attributes)) if (n !== 'position' && n !== 'normal' && n !== 'uv') gg.deleteAttribute(n);
     if (!gg.attributes.normal) gg.computeVertexNormals();
     gg.applyMatrix4(matrix);
+    if (this.dx) gg.translate(this.dx, 0, 0);
     gg.computeBoundingBox();
     const cx = (gg.boundingBox.min.x + gg.boundingBox.max.x) / 2;
     const key = mat.uuid + (cast ? 'c' : '') + (receive ? 'r' : '') + chunkOf(cx);
@@ -228,7 +450,8 @@ class Voxels {
 
 // ======================================================================
 export function buildWorld(scene, quality) {
-  const rng = makeRng(20261120);
+  const Z = ZONE;
+  const rng = makeRng(Z.seed);
   const hi = quality === 'high';
   const root = new THREE.Group();
   scene.add(root);
@@ -240,7 +463,7 @@ export function buildWorld(scene, quality) {
   const addCircle = (x, z, r, low = false) => { const c = { x, z, r, low }; colliders.circles.push(c); return c; };
   const addBox = (x0, z0, x1, z1, low = false) => { const b = { x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), low }; colliders.boxes.push(b); return b; };
   let cid = 0;
-  const container = (kind, x, z, label, b = null, extra = {}) => { const c = { id: 'c' + (cid++), kind, x, z, label, b: b ? b.id : null, ...extra }; containers.push(c); return c; };
+  const container = (kind, x, z, label, b = null, extra = {}) => { const c = { id: Z.id + ':c' + (cid++), kind, x, z, label, b: b ? b.id : null, ...extra }; containers.push(c); return c; };
   const emit = (x, y, z, color, intensity, distance, kind, flicker = 'none') => {
     const e = { pos: new THREE.Vector3(x, y, z), color: new THREE.Color(color), base: intensity, dist: distance, kind, flicker, phase: rng() * 100, cur: 0, w: 0 };
     emitters.push(e); return e;
@@ -300,8 +523,8 @@ export function buildWorld(scene, quality) {
     pts.push([c0, join(c0)]);
     return pts;
   }
-  const holePts = pondPoly(STREET_FRONT);
-  const waterPts = pondPoly(WALL_Z);
+  const holePts = POND ? pondPoly(STREET_FRONT) : [];
+  const waterPts = POND ? pondPoly(WALL_Z) : [];
   const inPoly = (pts, x, z) => {
     let c = false;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -324,29 +547,40 @@ export function buildWorld(scene, quality) {
   const L_ST = { x0: XMIN, z0: WALL_Z, w: XMAX - XMIN, h: 26, ppu: 16 };
   const L_TE = { x0: XMIN, z0: BACK_Z, w: XMAX - XMIN, h: WALL_Z - BACK_Z, ppu: 12 };
   const L_BA = { x0: XMIN, z0: -48, w: XMAX - XMIN, h: 48 + BACK_Z, ppu: 8 };
-  const cemetery = { x0: 45.5, x1: 57.5, z0: -13.2, z1: -2.6 };
-  const field = { x0: 38, x1: 51, z0: 8.5, z1: 15 };
-  const camp = { x0: 18, x1: 31 };
+  const cemetery = Z.cemetery || null;
+  const camp = Z.camp || null;
   const stShapes = [
     { type: 'rect', kind: 7, x: XMIN, z: WALL_Z - 1, w: XMAX - XMIN, h: STREET_FRONT - WALL_Z + 1 },
     { type: 'rect', kind: 8, x: XMIN, z: WALL_Z - 1, w: XMAX - XMIN, h: 1.1 },
     { type: 'rect', kind: 8, x: XMIN, z: STREET_FRONT - 0.5, w: XMAX - XMIN, h: 0.5 },
-    { type: 'rect', kind: 8, x: -57.5, z: -0.9, w: 9, h: 3.6 },
-    { type: 'rect', kind: 1, x: camp.x0, z: STREET_FRONT - 0.2, w: camp.x1 - camp.x0, h: 6 },
-    { type: 'disc', kind: 3, x: POND.cx, z: POND.cz, rx: POND.rx + 1.2, rz: POND.rz + 1 },
-    { type: 'path', kind: 1, width: 1.6, pts: [[-6, STREET_FRONT], [-5, 9], [-7, 26]] },
-    { type: 'path', kind: 1, width: 1.4, pts: [[44, STREET_FRONT], [44.5, field.z0]] },
   ];
-  for (let x = XMIN + 1; x < XMAX - 2; x += 3.2) if (x < -57.5 || x > -48.5) if (Math.abs(x + 0.6 - HELIPAD.x) > HELIPAD.r + 0.6) stShapes.push({ type: 'rect', kind: 9, x, z: 0.95, w: 1.5, h: 0.13 });
+  if (Z.gas) stShapes.push({ type: 'rect', kind: 8, x: -57.5, z: -0.9, w: 9, h: 3.6 });
+  if (camp) stShapes.push({ type: 'rect', kind: 1, x: camp.x0, z: STREET_FRONT - 0.2, w: camp.x1 - camp.x0, h: 6 });
+  if (POND) stShapes.push({ type: 'disc', kind: 3, x: POND.cx, z: POND.cz, rx: POND.rx + 1.2, rz: POND.rz + 1 });
+  for (const pts of Z.paths || []) stShapes.push({ type: 'path', kind: 1, width: 1.5, pts });
+  for (const sh of Z.ground || []) stShapes.push(sh);
+  if (Z.cross !== undefined) {
+    stShapes.push({ type: 'rect', kind: 8, x: Z.cross - 2.1, z: STREET_FRONT - 0.5, w: 4.2, h: 23 });
+    stShapes.push({ type: 'rect', kind: 7, x: Z.cross - 1.7, z: STREET_FRONT - 0.6, w: 3.4, h: 23 });
+    for (let z = STREET_FRONT + 0.6; z < 24; z += 1.6) stShapes.push({ type: 'rect', kind: 9, x: Z.cross - 0.07, z, w: 0.14, h: 0.8 });
+  }
+  for (let x = XMIN + 1; x < XMAX - 2; x += 3.2) {
+    if (Z.gas && x > -57.5 && x < -48.5) continue;
+    if (HELIPAD && Math.abs(x + 0.6 - HELIPAD.x) < HELIPAD.r + 0.6) continue;
+    if ((Z.noPaint || []).some(([a, b]) => x > a && x < b)) continue;
+    stShapes.push({ type: 'rect', kind: 9, x, z: 0.95, w: 1.5, h: 0.13 });
+  }
   // bãi đáp: vòng tròn + chữ H sơn trắng
-  stShapes.push({ type: 'disc', kind: 9, x: HELIPAD.x, z: HELIPAD.z, rx: HELIPAD.r }, { type: 'disc', kind: 7, x: HELIPAD.x, z: HELIPAD.z, rx: HELIPAD.r - 0.25 });
-  stShapes.push({ type: 'rect', kind: 9, x: HELIPAD.x - 0.95, z: HELIPAD.z - 1.2, w: 0.38, h: 2.4 }, { type: 'rect', kind: 9, x: HELIPAD.x + 0.57, z: HELIPAD.z - 1.2, w: 0.38, h: 2.4 }, { type: 'rect', kind: 9, x: HELIPAD.x - 0.6, z: HELIPAD.z - 0.17, w: 1.2, h: 0.34 });
+  if (HELIPAD) {
+    stShapes.push({ type: 'disc', kind: 9, x: HELIPAD.x, z: HELIPAD.z, rx: HELIPAD.r }, { type: 'disc', kind: 7, x: HELIPAD.x, z: HELIPAD.z, rx: HELIPAD.r - 0.25 });
+    stShapes.push({ type: 'rect', kind: 9, x: HELIPAD.x - 0.95, z: HELIPAD.z - 1.2, w: 0.38, h: 2.4 }, { type: 'rect', kind: 9, x: HELIPAD.x + 0.57, z: HELIPAD.z - 1.2, w: 0.38, h: 2.4 }, { type: 'rect', kind: 9, x: HELIPAD.x - 0.6, z: HELIPAD.z - 0.17, w: 1.2, h: 0.34 });
+  }
   const teShapes = [
     { type: 'rect', kind: 1, x: XMIN, z: WALL_Z - 2.3, w: XMAX - XMIN, h: 2.3 },
     { type: 'rect', kind: 5, x: XMIN, z: BACK_Z, w: XMAX - XMIN, h: 3 },
   ];
   const graveSpots = [];
-  for (let gx = 0; gx < 4; gx++) for (let gz = 0; gz < 2; gz++) {
+  if (cemetery) for (let gx = 0; gx < 4; gx++) for (let gz = 0; gz < 2; gz++) {
     const x = cemetery.x0 + 1.8 + gx * 2.8 + (gz & 1) * 1.1, z = -6.4 - gz * 3.4;
     graveSpots.push({ x, z });
     teShapes.push({ type: 'rect', kind: 6, x: x - 0.45, z: z + 0.25, w: 0.9, h: 1.6 });
@@ -382,10 +616,12 @@ export function buildWorld(scene, quality) {
   {
     const shape = new THREE.Shape();
     shape.moveTo(XMIN, -WALL_Z); shape.lineTo(XMIN, -(WALL_Z + L_ST.h)); shape.lineTo(XMAX, -(WALL_Z + L_ST.h)); shape.lineTo(XMAX, -WALL_Z); shape.closePath();
-    const hole = new THREE.Path();
-    holePts.forEach(([x, z], i) => (i ? hole.lineTo(x, -z) : hole.moveTo(x, -z)));
-    hole.closePath();
-    shape.holes.push(hole);
+    if (holePts.length) {
+      const hole = new THREE.Path();
+      holePts.forEach(([x, z], i) => (i ? hole.lineTo(x, -z) : hole.moveTo(x, -z)));
+      hole.closePath();
+      shape.holes.push(hole);
+    }
     const g = new THREE.ShapeGeometry(shape, 4);
     g.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(worldUV(g, L_ST), groundMat(gST));
@@ -430,13 +666,15 @@ export function buildWorld(scene, quality) {
   for (let i = 0; i < 46; i++) {
     const x = XMIN + 4 + rng() * (XMAX - XMIN - 8);
     if (!wallSegs.some(([a, b]) => x > a + 0.3 && x < b - 0.3)) continue;
-    if (x > STREAM.x0 - 0.5 && x < STREAM.x1 + 0.5) continue;
+    if (STREAM && x > STREAM.x0 - 0.5 && x < STREAM.x1 + 0.5) continue;
     const len = 1 + Math.floor(rng() * 4);
     for (let k = 0; k < len; k++) leaves.add(x + (rng() - 0.5) * 0.3, TY - 0.05 - k * 0.32, WALL_Z + 0.06, 0.34, 0.34, 0.2, k === 0 ? '#4e7a2e' : '#3e6a26');
   }
 
   // ======================= CẦU ĐÁ VÒM + AO =======================
   const BED = -1.6, WATER_Y = -0.85, ARCH_R = 1.45;
+  let water = { material: {}, isReflector: false };
+  if (POND) {
   {
     const s = new THREE.Shape();
     const x0 = POND.cx - 2.9, x1 = POND.cx + 2.9;
@@ -487,7 +725,7 @@ export function buildWorld(scene, quality) {
   waterPts.forEach(([x, z], i) => (i ? waterShape.lineTo(x, -z) : waterShape.moveTo(x, -z)));
   waterShape.closePath();
   const waterGeo = new THREE.ShapeGeometry(waterShape, 4);
-  const water = hi ? new Reflector(waterGeo, {
+  water = hi ? new Reflector(waterGeo, {
     clipBias: 0.003, textureWidth: 960, textureHeight: 540, color: 0x9aaab0, multisample: 0,
     shader: {
       name: 'PondShader',
@@ -543,6 +781,7 @@ export function buildWorld(scene, quality) {
     lilies.setMatrixAt(i, mat4(x, WATER_Y + 0.02, z, -Math.PI / 2, 0, rng() * 6.28));
   }
   root.add(lilies); hideInReflection.push(lilies);
+  }
 
   // ======================= SUỐI & THÁC NƯỚC =======================
   // suối chảy từ thềm sau → đổ thác xuống thềm → chảy ra mép tường kè → đổ thác
@@ -616,14 +855,16 @@ export function buildWorld(scene, quality) {
     root.add(mesh); waterMats.push(m);
     waterfalls.push({ x0, x1, y: Math.max(yBot, 0.05), z: z + 0.15, top: yTop });
   }
-  streamStrip(STREAM.x0, STREAM.x1, -27, BACK_Z - 0.62, BY + 0.05);
-  waterfall(STREAM.x0, STREAM.x1, BY + 0.2, TY + 0.02, BACK_Z + 0.14);
-  streamStrip(STREAM.x0, STREAM.x1, BACK_Z + 0.05, WALL_Z - 0.32, TY + 0.05);
-  waterfall(STREAM.x0, STREAM.x1, TY + 0.2, -0.35, WALL_Z + 0.14);
-  waterfalls[1].y = 0.05;
-  // song chắn nước dưới chân thác (ngoài phần đi được của phố)
-  misc.add((STREAM.x0 + STREAM.x1) / 2, 0.012, WALL_Z + 0.4, STREAM.x1 - STREAM.x0 + 0.5, 0.025, 0.62, '#121418');
-  for (let i = 0; i < 7; i++) misc.add(STREAM.x0 - 0.15 + i * (STREAM.x1 - STREAM.x0 + 0.3) / 6, 0.03, WALL_Z + 0.4, 0.05, 0.03, 0.6, '#3a3c42');
+  if (STREAM) {
+    streamStrip(STREAM.x0, STREAM.x1, -27, BACK_Z - 0.62, BY + 0.05);
+    waterfall(STREAM.x0, STREAM.x1, BY + 0.2, TY + 0.02, BACK_Z + 0.14);
+    streamStrip(STREAM.x0, STREAM.x1, BACK_Z + 0.05, WALL_Z - 0.32, TY + 0.05);
+    waterfall(STREAM.x0, STREAM.x1, TY + 0.2, -0.35, WALL_Z + 0.14);
+    waterfalls[1].y = 0.05;
+    // song chắn nước dưới chân thác (ngoài phần đi được của phố)
+    misc.add((STREAM.x0 + STREAM.x1) / 2, 0.012, WALL_Z + 0.4, STREAM.x1 - STREAM.x0 + 0.5, 0.025, 0.62, '#121418');
+    for (let i = 0; i < 7; i++) misc.add(STREAM.x0 - 0.15 + i * (STREAM.x1 - STREAM.x0 + 0.3) / 6, 0.03, WALL_Z + 0.4, 0.05, 0.03, 0.6, '#3a3c42');
+  }
 
 
   // ======================= MÁI NHÀ (dùng chung) =======================
@@ -698,13 +939,7 @@ export function buildWorld(scene, quality) {
     }
   }
   const mChimney = lamb({ map: wallTex.map, normalMap: wallTex.normalMap }); seeThrough(mChimney);
-  const TERRACE_HOUSES = [
-    { x: -31.6, zf: -3.0, w: 4.4, d: 4.0, floors: 1, ridge: 'z', roof: 'moss', style: 'stone', shutter: '#4a3a2a', door: 0.5, seed: 21, lit: false, by: TY },
-    { x: 19.0, zf: -3.0, w: 6.0, d: 4.5, floors: 2, ridge: 'x', roof: 'slate', style: 'timber', shutter: '#3a4a5a', door: 0.4, seed: 18, ivy: 3, lit: false, by: TY },
-    { x: -34, zf: -16.4, w: 6.5, d: 5, floors: 2, ridge: 'x', roof: 'slate', style: 'timber', shutter: '#3a5a7a', door: 0.5, seed: 31, by: BY, lit: false },
-    { x: -1, zf: -16.6, w: 7, d: 5, floors: 1, ridge: 'z', roof: 'red', style: 'stone', shutter: '#3a6a44', door: 0.5, seed: 32, by: BY },
-    { x: 30, zf: -16.4, w: 6, d: 5, floors: 2, ridge: 'x', roof: 'moss', style: 'timber', shutter: '#7a2a2a', door: 0.4, seed: 33, by: BY, lit: false },
-  ];
+  const TERRACE_HOUSES = Z.terrace || [];
   TERRACE_HOUSES.forEach(buildHouse);
 
   // ======================= ĐỒ NỘI THẤT (khối voxel) =======================
@@ -796,15 +1031,50 @@ export function buildWorld(scene, quality) {
     }
   }
 
-  // ======================= CÁC TOÀ NHÀ VÀO ĐƯỢC =======================
+  const TREE_COLORS = {
+    oak: ['#3f6a28', '#4e7c2e', '#5d8a34', '#6c9a3c'],
+    oak2: ['#365e26', '#447026', '#557e2c', '#668e36'],
+    autumn: ['#a8481e', '#c0602a', '#d88a34', '#e8a83e'],
+    gold: ['#8a7a22', '#a8922a', '#c0aa36', '#d6c04a'],
+    pine: ['#1e3a26', '#25462c', '#2e5434', '#38623c'],
+  };  // ======================= CÁC TOÀ NHÀ VÀO ĐƯỢC =======================
   const floorCache = {};
   const powerMats = [];
+  // hẻm dẫn sang dãy phố phía sau (lối ra phía bắc của khu)
+  function buildAlley(b) {
+    const w = b.x1 - b.x0, cx = (b.x0 + b.x1) / 2, zf = WALL_Z, zb = ZB, zm = (zf + zb) / 2;
+    Object.assign(b, { cut: { value: 0 }, cx, zf, zb, w, door: cx, doorW: w, doorX0: b.x0, doorX1: b.x1, alley: true, cutY: 3, ceil: 3, h: 3 });
+    const ft = T.floorTex('concrete', 77);
+    const mF = lamb({ map: ft.map, normalMap: ft.normalMap, color: '#7a7a78' });
+    const fg = new THREE.PlaneGeometry(w, BLD_D + 0.1);
+    const fuv = fg.attributes.uv; for (let i = 0; i < fuv.count; i++) fuv.setXY(i, fuv.getX(i) * w / 2, fuv.getY(i) * (BLD_D + 0.1) / 2);
+    fg.rotateX(-Math.PI / 2);
+    batch.add(fg, mF, mat4(cx, 0.008, zm));
+    for (const sx of [b.x0 + 0.15, b.x1 - 0.15]) batch.add(boxGeo(0.3, TY, BLD_D, 2, 1), mWall, mat4(sx, TY / 2, zm));
+    for (const sx of [b.x0 + 0.15, b.x1 - 0.15]) batch.add(boxGeo(0.4, 0.16, BLD_D + 0.1, 2, 1), mWallDark, mat4(sx, TY + 0.08, zm));
+    // vòm hầm chui dưới thềm sau: lối đi tiếp sang phố khác
+    batch.add(boxGeo(w, TY + 0.3, 0.5, 2, 1), mWall, mat4(cx, (TY + 0.3) / 2, zb - 0.25));
+    const hole = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(w - 0.9, 2.6), 1.55), new THREE.MeshBasicMaterial({ color: '#050506' }));
+    hole.position.set(cx, 0.78, zb + 0.02); root.add(hole);
+    for (let i = 0; i < 5; i++) misc.add(cx - 1.2 + i * 0.6, 0.012, zb + 0.6 + (i % 2) * 0.3, 0.3, 0.01, 0.2, '#c8b830', i * 0.4);
+    if (b.sign) {
+      const sg = T.signTex(b.sign, { bg: '#1e5a2e', edge: '#e8f0e0' });
+      const sm = new THREE.Mesh(new THREE.PlaneGeometry(sg.w * 1.15, sg.h * 1.15), lamb({ map: sg.map, transparent: true, alphaTest: 0.5 }));
+      sm.position.set(cx, TY - 0.05, zb + 0.03); root.add(sm);
+    }
+    b.emitter = emit(cx, 1.6, zb + 0.6, '#ffb85e', 4, 6, 'lamp', 'broken');
+    addBox(b.x0 - 0.05, zb - 0.4, b.x0 + 0.3, zf + 0.02);
+    addBox(b.x1 - 0.3, zb - 0.4, b.x1 + 0.05, zf + 0.02);
+    addBox(b.x0, zb - 0.6, b.x1, zb);
+    perches.push({ x: cx, y: TY + 0.3, z: zb });
+  }
   function buildBuilding(b) {
+    if (b.kind === 'alley') { buildAlley(b); return; }
     const w = b.x1 - b.x0, h = b.h, cx = (b.x0 + b.x1) / 2, zf = WALL_Z, zb = ZB, zm = (zf + zb) / 2;
     Object.assign(b, { cut: { value: 0 }, cx, zf, zb, w, doorX0: b.door - b.doorW / 2, doorX1: b.door + b.doorW / 2 });
-    const shopLike = b.kind === 'kiosk' || b.kind === 'grocery' || b.kind === 'pharmacy';
+    const shopLike = b.kind === 'kiosk' || b.kind === 'grocery' || b.kind === 'pharmacy' || !!b.shopLike;
     const fac = T.townFacadeTex({
-      w, h, floors: b.floors, kind: shopLike ? 'shop' : b.kind, wall: b.wall, plaster: b.plaster,
+      w, h, floors: b.floors, kind: b.facade || (shopLike ? 'shop' : b.kind), wall: b.wall, plaster: b.plaster, stripe: b.stripe,
       door: { x: b.door - b.x0, w: b.doorW, h: b.doorH || 2.1 }, shop: b.shop ? [0.3, w - 0.3] : null,
       sign: b.sign ? { ...b.sign, lit: b.kind === 'police' } : null, seed: b.seed, posters: b.posters || 0, graffiti: b.graffiti, blood: b.blood,
       litChance: b.kind === 'house' ? 0.1 : 0.0,
@@ -835,9 +1105,9 @@ export function buildWorld(scene, quality) {
     batch.add(new THREE.PlaneGeometry(BLD_D, h), mSide, mat4(b.x0, h / 2, zm, 0, -Math.PI / 2, 0));
     batch.add(new THREE.PlaneGeometry(BLD_D, h), mSide, mat4(b.x1, h / 2, zm, 0, Math.PI / 2, 0));
     // bên trong: tường sau, hai tường hông, sàn
-    const rk = shopLike ? (b.kind === 'pharmacy' ? 'pharmacy' : 'shop') : b.kind === 'workshop' ? 'house' : b.kind;
+    const rk = b.room || (shopLike ? (b.kind === 'pharmacy' ? 'pharmacy' : 'shop') : b.kind === 'workshop' ? 'house' : b.kind);
     const ceil = b.ceil;
-    const back = T.roomWallTex({ w: w - 0.24, h: ceil, kind: rk, seed: b.seed + 7 });
+    const back = T.roomWallTex({ w: w - 0.24, h: ceil, kind: rk, seed: b.seed + 7, board: b.board });
     const inT = T.roomWallTex({ w: BLD_D, h: ceil, kind: rk, seed: b.seed + 8 });
     const mBack = lamb({ map: back.map, normalMap: back.normalMap, color: '#c8c0b8' });
     const mIn = lamb({ map: inT.map, normalMap: inT.normalMap, color: '#b0a8a0' });
@@ -886,7 +1156,27 @@ export function buildWorld(scene, quality) {
     addBox(b.x0, zb - 0.4, b.x1, zb + t);
     addBox(b.x0, zf - t, b.doorX0, zf + 0.04);
     addBox(b.doorX1, zf - t, b.x1, zf + 0.04);
+    furnishAt(b);
+  }
+  // nội thất của các toà nhà bản đồ gốc được viết theo toạ độ tuyệt đối: dời cả cụm sang vị trí mới
+  const TPL_X0 = { kiosk: -56, garage: -49.5, grocery: -20, pharmacy: -10, workshop: 7, police: 29 };
+  function furnishAt(b) {
+    const dx = TPL_X0[b.kind] !== undefined ? b.x0 - TPL_X0[b.kind] : 0;
+    if (!dx) { FURNISH[b.kind](b); return; }
+    const vox = [leaves, trunks, stones, planks, crates, misc, hay, soil, bulbs, metals];
+    const vl = vox.map((v) => v.items.length);
+    const nb = colliders.boxes.length, nc = colliders.circles.length, nk = containers.length, ne = emitters.length, nr = root.children.length;
+    const pk = new Set(Object.keys(pois));
+    batch.dx = dx;
     FURNISH[b.kind](b);
+    batch.dx = 0;
+    vox.forEach((v, i) => { for (let k = vl[i]; k < v.items.length; k += 8) v.items[k] += dx; });
+    for (let i = nb; i < colliders.boxes.length; i++) { colliders.boxes[i].x0 += dx; colliders.boxes[i].x1 += dx; }
+    for (let i = nc; i < colliders.circles.length; i++) colliders.circles[i].x += dx;
+    for (let i = nk; i < containers.length; i++) containers[i].x += dx;
+    for (let i = ne; i < emitters.length; i++) emitters[i].pos.x += dx;
+    for (let i = nr; i < root.children.length; i++) root.children[i].position.x += dx;
+    for (const k in pois) if (!pk.has(k)) pois[k].x += dx;
   }
   const mRoofFlat = lamb({ map: tx.stone, color: '#5e5c58' }); seeThrough(mRoofFlat);
   const mCanopy = lamb({ map: tx.plain, color: '#d8d8d0' }); seeThrough(mCanopy);
@@ -1057,17 +1347,161 @@ export function buildWorld(scene, quality) {
       papers(29.5, 42.5, -6.5, -2.4, 16); bloodPool(34.2, -4.4, 1.4); bloodPool(37.6, -6.2, 0.9);
       chair(33.0, -4.6, true); debris(30.6, -5.2, 6, 0.9);
     },
+    // ---------- trường học ----------
+    classroom(b) {
+      const L = b.x0, R = b.x1;
+      // bàn giáo viên trước bảng đen (tường sau)
+      desk(L + 1.0, L + 2.6, -7.0, -6.35, false); chair(L + 1.8, -6.0, false);
+      addBox(L + 0.95, -7.05, L + 2.65, -6.3, true);
+      container('teacher_desk', L + 1.8, -5.75, 'Bàn giáo viên', b);
+      // các dãy bàn học sinh, chừa lối đi
+      const cols = [];
+      for (let x = L + 3.4; x < R - 1.0; x += 1.75) cols.push(x);
+      cols.forEach((x, i) => {
+        for (const [k, z] of [[0, -5.5], [1, -4.15]]) {
+          if ((i + k) % 5 === 3) { chair(x, z + 0.35, true); debris(x, z, 3, 0.5); continue; }
+          table(x - 0.45, x + 0.45, z - 0.25, z + 0.25, 0.72, '#9a8462');
+          chair(x, z + 0.45, rng() < 0.25, '#4a6a8a');
+          addBox(x - 0.5, z - 0.3, x + 0.5, z + 0.3, true);
+        }
+      });
+      container('school_bag', cols[0] || L + 3.4, -3.35, 'Cặp sách', b);
+      container('school_bag', cols[Math.floor(cols.length / 2)] || L + 4, -3.35, 'Cặp sách', b);
+      // tủ đồ dọc tường hông phải
+      lockers(R - 1.3, R - 0.2, -7.45, -7.0, 1.7);
+      addBox(R - 1.35, -7.5, R - 0.15, -6.95);
+      container('locker_school', R - 0.75, -6.55, 'Tủ đồ học sinh', b);
+      papers(L + 0.5, R - 0.5, -6.8, -2.5, 16); bloodPool(L + 4.2, -4.6, 1.2);
+    },
+    infirmary(b) {
+      const L = b.x0, R = b.x1;
+      for (let i = 0; i < 2; i++) {
+        const x = L + 0.4 + i * 2.1;
+        bed(x, x + 1.7, -7.4, -6.3);
+        fb(misc, x - 0.05, x + 1.75, -6.2, -6.15, 0.1, 2.0, '#c8d8d4');
+        addBox(x - 0.05, -7.45, x + 1.75, -6.15, true);
+      }
+      container('med_bed', L + 1.25, -5.85, 'Giường bệnh', b);
+      fb(misc, R - 1.6, R - 0.3, -7.45, -7.0, 0, 1.9, '#e8e8e0');
+      fb(misc, R - 1.0, R - 0.99, -7.0, -6.98, 1.2, 1.5, '#c8281e');
+      addBox(R - 1.65, -7.5, R - 0.25, -6.95);
+      container('med_cabinet', R - 0.95, -6.55, 'Tủ thuốc y tế', b);
+      counterBox(R - 2.6, R - 0.4, -4.4, -3.8, 0.85, '#d8d8d0', '#e8e8e0');
+      addBox(R - 2.65, -4.45, R - 0.35, -3.75);
+      container('counter_med', R - 1.5, -3.4, 'Bàn y tá', b);
+      papers(L + 0.5, R - 0.5, -6.6, -2.5, 8); bloodPool(L + 2.4, -4.8, 1.0);
+    },
+    guardroom(b) {
+      const L = b.x0, R = b.x1;
+      counterBox(L + 0.3, R - 0.4, -7.45, -6.8, 0.85, '#4a4a50', '#6a6a70');
+      const n = Math.max(2, Math.floor((R - L - 1) / 0.75));
+      for (let i = 0; i < n; i++) {
+        const x = L + 0.7 + i * 0.75;
+        fb(misc, x - 0.32, x + 0.32, -7.4, -7.1, 0.85, 1.35, '#2a2a2e');
+        fb(bulbs, x - 0.27, x + 0.27, -7.1, -7.09, 0.9, 1.3, i % 3 === 1 ? '#6a7a6a' : '#9ab8a8');
+        if (i < n - 1) { fb(misc, x - 0.32, x + 0.32, -7.4, -7.1, 1.4, 1.9, '#2a2a2e'); fb(bulbs, x - 0.27, x + 0.27, -7.1, -7.09, 1.45, 1.85, '#8aa898'); }
+      }
+      addBox(L + 0.25, -7.5, R - 0.35, -6.75);
+      container('guard_desk', (L + R) / 2, -6.4, 'Bàn bảo vệ', b);
+      pois.cctv = { x: (L + R) / 2 - 0.6, z: -6.3, b: b.id, label: 'Màn hình camera' };
+      chair((L + R) / 2 - 0.6, -6.0, false, '#2a2a2e');
+      fb(planks, L + 0.15, L + 0.2, -5.2, -4.2, 1.1, 1.7, '#6a4a30');
+      for (let i = 0; i < 6; i++) fb(metals, L + 0.2, L + 0.24, -5.1 + i * 0.16, -5.04 + i * 0.16, 1.3 - (i % 2) * 0.12, 1.42 - (i % 2) * 0.12, '#c8a040');
+      lockers(R - 1.2, R - 0.2, -4.0, -3.55, 1.8);
+      addBox(R - 1.25, -4.05, R - 0.15, -3.5);
+      container('locker', R - 0.7, -3.1, 'Tủ bảo vệ', b);
+      papers(L + 0.4, R - 0.4, -6.4, -2.6, 6);
+    },
+    canteen(b) {
+      const L = b.x0, R = b.x1;
+      counterBox(L + 0.3, L + 3.8, -7.45, -6.8, 1.0, '#8a6a4a', '#c8c0b0');
+      for (let i = 0; i < 3; i++) fb(misc, L + 0.6 + i * 1.1, L + 1.3 + i * 1.1, -7.3, -6.95, 1.0, 1.25, '#9a9ca0');
+      addBox(L + 0.25, -7.5, L + 3.85, -6.75);
+      container('canteen_counter', L + 2.0, -6.4, 'Quầy căng tin', b);
+      shelfUnit(L + 4.3, L + 6.8, -7.45, -6.95, 1.6, 3, GOODS, 0.5);
+      addBox(L + 4.25, -7.5, L + 6.85, -6.9);
+      container('shelf_food', L + 5.5, -6.5, 'Kệ đồ ăn vặt', b);
+      fridge(R - 0.85, R - 0.2, -7.4, -5.6, 1.9, '#a8e0ff');
+      addBox(R - 0.9, -7.45, R - 0.15, -5.55);
+      container('drinks', R - 1.3, -6.5, 'Tủ nước', b);
+      for (let x = L + 1.4; x < R - 1.6; x += 2.4) {
+        table(x - 0.8, x + 0.8, -4.9, -4.2, 0.74, '#b8a888');
+        fb(planks, x - 0.8, x + 0.8, -5.35, -5.15, 0.4, 0.46, '#7a6a5a'); fb(planks, x - 0.8, x + 0.8, -3.95, -3.75, 0.4, 0.46, '#7a6a5a');
+        addBox(x - 0.85, -4.95, x + 0.85, -4.15, true);
+      }
+      papers(L + 0.4, R - 0.4, -6.4, -2.5, 10); bloodPool(L + 3, -3.4, 1.0);
+    },
+    club(b) {
+      const L = b.x0, R = b.x1;
+      // bia tập bắn cung dọc tường sau
+      for (let i = 0; i < 2; i++) {
+        const x = L + 1.4 + i * 2.2;
+        fb(planks, x - 0.05, x + 0.05, -7.3, -7.2, 0, 1.0, '#6a4a30');
+        for (const [r, col] of [[0.55, '#e8e0d0'], [0.42, '#2a2a2e'], [0.3, '#3a6ac8'], [0.18, '#c8281e'], [0.08, '#e8c040']]) fb(misc, x - r, x + r, -7.22 + (0.55 - r) * 0.02, -7.2 + (0.55 - r) * 0.02, 1.4 - r, 1.4 + r, col);
+      }
+      fb(planks, R - 2.4, R - 0.3, -7.45, -7.1, 0, 1.6, '#6a4a30');
+      for (let i = 0; i < 5; i++) fb(planks, R - 2.3 + i * 0.42, R - 2.26 + i * 0.42, -7.15, -7.1, 0.2, 1.5, '#b08a5a');
+      addBox(R - 2.45, -7.5, R - 0.25, -7.05);
+      container('sports_rack', R - 1.35, -6.65, 'Giá dụng cụ', b);
+      crateStack(L + 0.6, -3.2, 2); addBox(L + 0.25, -3.55, L + 0.95, -2.85);
+      container('storage_club', L + 1.4, -3.2, 'Thùng đồ CLB', b);
+      for (let i = 0; i < 4; i++) fb(misc, L + 2.4 + i * 0.7, L + 2.9 + i * 0.7, -4.6, -4.1, 0, 0.12, '#3a5a8a');
+      papers(L + 0.4, R - 0.4, -6.4, -2.5, 6);
+    },
+    // ---------- phố chợ ----------
+    mall(b) {
+      const L = b.x0, R = b.x1;
+      // phòng giám sát camera ở góc trái
+      fb(misc, L + 2.8, L + 2.9, -7.45, -5.0, 0, b.ceil - 0.1, '#7a7c80');
+      fb(misc, L + 0.1, L + 2.9, -5.05, -4.95, 0, b.ceil - 0.1, '#7a7c80');
+      addBox(L + 2.75, -7.5, L + 2.95, -5.0); addBox(L, -5.1, L + 1.7, -4.9);
+      counterBox(L + 0.25, L + 2.6, -7.45, -6.9, 0.85, '#3a3a40', '#5a5a60');
+      for (let i = 0; i < 3; i++) { fb(misc, L + 0.45 + i * 0.7, L + 1.05 + i * 0.7, -7.4, -7.12, 0.85, 1.3, '#2a2a2e'); fb(bulbs, L + 0.5 + i * 0.7, L + 1.0 + i * 0.7, -7.12, -7.11, 0.9, 1.25, '#9ab8a8'); }
+      addBox(L + 0.2, -7.5, L + 2.65, -6.85);
+      container('mall_guard', L + 1.4, -6.5, 'Phòng giám sát', b);
+      pois.cctv = { x: L + 1.0, z: -6.35, b: b.id, label: 'Màn hình camera' };
+      // các dãy kệ hàng
+      for (let x = L + 4.0; x < R - 3.0; x += 3.6) {
+        for (const z of [-6.9, -4.6]) {
+          shelfUnit(x, x + 2.6, z - 0.3, z + 0.3, 1.55, 3, GOODS, 0.4);
+          addBox(x - 0.05, z - 0.35, x + 2.65, z + 0.35);
+        }
+        container(rng() < 0.5 ? 'shelf_food' : 'mall_shelf', x + 1.3, -6.25, 'Kệ hàng', b);
+        container(rng() < 0.4 ? 'electronics' : 'mall_shelf', x + 1.3, -3.95, rng() < 0.4 ? 'Kệ điện máy' : 'Kệ hàng', b);
+      }
+      // quầy thời trang + quầy thu ngân gần cửa
+      for (let i = 0; i < 3; i++) { const x = R - 2.6 + i * 0.8; fb(metals, x - 0.02, x + 0.02, -7.2, -7.1, 0, 1.5, '#8a8c90'); fb(misc, x - 0.3, x + 0.3, -7.3, -6.9, 0.6, 1.4, ['#c83a6a', '#3a6ac8', '#e8c040'][i]); }
+      addBox(R - 3.0, -7.5, R - 0.3, -6.85);
+      container('clothes', R - 1.8, -6.45, 'Quầy quần áo', b);
+      counterBox(R - 2.8, R - 0.6, -3.6, -3.0, 1.0, '#7a3a2a', '#9a8a7a');
+      addBox(R - 2.85, -3.65, R - 0.55, -2.95);
+      container('register', R - 1.7, -2.6, 'Quầy thu ngân', b);
+      papers(L + 0.5, R - 0.5, -6.8, -2.4, 24); debris(L + 8, -3.0, 6, 1.0); bloodPool(L + 10, -5.6, 1.4);
+    },
+    plantshop(b) {
+      const L = b.x0, R = b.x1;
+      shelfUnit(L + 0.3, L + 3.2, -7.45, -6.95, 1.5, 3, ['#8a5a3a', '#a8703a', '#c8a060', '#5a8a3a'], 0.7);
+      addBox(L + 0.25, -7.5, L + 3.25, -6.9);
+      container('seed_shelf', L + 1.7, -6.5, 'Kệ hạt giống', b);
+      for (let i = 0; i < 7; i++) {
+        const x = L + 3.8 + (i % 4) * 0.9, z = -7.0 + Math.floor(i / 4) * 1.2;
+        fb(soil, x - 0.22, x + 0.22, z - 0.22, z + 0.22, 0, 0.36, '#a8603a');
+        bush(x, z, 0.32, 0.3, i % 3 ? TREE_COLORS.oak : TREE_COLORS.oak2, i % 2 ? '#c8281e' : null);
+      }
+      addBox(L + 3.5, -7.4, L + 7.0, -5.5, true);
+      container('pots', L + 5.2, -5.2, 'Chậu cây', b);
+      counterBox(R - 2.4, R - 0.4, -3.9, -3.3, 0.95, '#6a5a3a', '#8a7a5a');
+      addBox(R - 2.45, -3.95, R - 0.35, -3.25);
+      container('register', R - 1.4, -2.9, 'Quầy tiệm cây', b);
+      for (let i = 0; i < 5; i++) fb(planks, L + 0.6 + i * 0.25, L + 0.68 + i * 0.25, -4.0, -3.92, 0, 1.4, '#9a7a4a');
+      container('wood_pile', L + 1.1, -3.4, 'Bó cọc gỗ', b);
+      papers(L + 0.4, R - 0.4, -6.4, -2.5, 6); debris(L + 4, -3.2, 5, 0.8);
+    },
   };
   const fireBarrelGeoS = new THREE.CylinderGeometry(0.34, 0.31, 0.9, 10), mDrum = lamb({ map: tx.metal, color: '#3a5a8a' });
   for (const b of BUILDINGS) buildBuilding(b);
   // ======================= CÂY, BỤI =======================
-  const TREE_COLORS = {
-    oak: ['#3f6a28', '#4e7c2e', '#5d8a34', '#6c9a3c'],
-    oak2: ['#365e26', '#447026', '#557e2c', '#668e36'],
-    autumn: ['#a8481e', '#c0602a', '#d88a34', '#e8a83e'],
-    gold: ['#8a7a22', '#a8922a', '#c0aa36', '#d6c04a'],
-    pine: ['#1e3a26', '#25462c', '#2e5434', '#38623c'],
-  };
+
   function canopy(cx, cy, cz, clusters, palette, rr, VS = 0.5, record = true) {
     const cells = new Map();
     const key = (i, j, k) => i + ',' + j + ',' + k;
@@ -1133,33 +1567,29 @@ export function buildWorld(scene, quality) {
     if (flowers) for (let i = 0; i < 6; i++) misc.add(x + (rr() - 0.5) * 1.4 * s, y0 + 0.6 * s + rr() * 0.6 * s, z + 0.35 * s + rr() * 0.3, 0.16, 0.16, 0.16, flowers);
   }
   const VSfar = hi ? 0.62 : 0.75;
-  tree(-23.4, -8.8, 1.3, 'oak', TY);
-  tree(-58.5, -7, 1.2, 'oak2', TY);
-  tree(-37.2, -9.2, 1.0, 'autumn', TY);
-  tree(10.8, -9.5, 0.95, 'dead', TY);
-  tree(31.5, -9, 1.0, 'pine', TY);
-  tree(40, -11.5, 0.9, 'dead', TY);
-  tree(57.2, -11.8, 1.0, 'dead', TY);
-  tree(-6.5, -9.6, 1.0, 'dead', TY);
+  for (const [x, z, sc, type] of Z.trees || []) tree(x, z, sc, type, TY);
   for (let i = 0; i < 22; i++) {
     const x = XMIN + 3 + i * 6.4 + rng.range(-1.5, 1.5);
     if (TERRACE_HOUSES.some((h) => h.by === BY && Math.abs(h.x - x) < h.w / 2 + 1.5)) continue;
-    if (Math.abs(x - 12) < 3) continue;
+    if (Z.windmill && Math.abs(x - 12) < 3) continue;
     tree(x, -20 - rng.range(0, 6), 1.15 + rng() * 0.4, rng.chance(0.3) ? 'pine' : rng.chance(0.2) ? 'dead' : rng.chance(0.25) ? 'autumn' : rng.chance(0.5) ? 'oak' : 'oak2', BY, VSfar);
   }
   for (let i = 0; i < 16; i++) tree(XMIN + 6 + i * 9 + rng.range(-2, 2), -31 - rng.range(0, 8), 1.4 + rng() * 0.4, rng.chance(0.4) ? 'pine' : 'oak2', BY, 0.8);
   for (let x = XMIN + 3; x < XMAX - 3; x += rng.range(2.6, 5.5)) {
     if (STAIRS.some((s) => Math.abs(s.x - x) < 2.2)) continue;
-    if (x > cemetery.x0 - 1 && x < cemetery.x1) continue;
-    if (x > STREAM.x0 - 1.6 && x < STREAM.x1 + 1.6) continue;
+    if (cemetery && x > cemetery.x0 - 1 && x < cemetery.x1) continue;
+    if (STREAM && x > STREAM.x0 - 1.6 && x < STREAM.x1 + 1.6) continue;
+    if ((Z.noBush || []).some(([a, b]) => x > a && x < b)) continue;
     if (BUILDINGS.some((b) => x > b.x0 - 1.2 && x < b.x1 + 1.2)) continue;
     if (TERRACE_HOUSES.some((h) => h.by === TY && Math.abs(h.x - x) < h.w / 2 + 1)) continue;
     bush(x, -3.0 - rng() * 0.8, 0.8 + rng() * 0.45, TY, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, null);
   }
-  for (let x = XMIN + 2; x < XMAX - 2; x += rng.range(5, 10)) {
-    if (x > POND.cx - 9 && x < POND.cx + 9) continue;
-    if (x > camp.x0 - 1 && x < camp.x1 + 1) continue;
-    bush(x, 5.6 + rng() * 1.5, 0.85 + rng() * 0.4, 0, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, null);
+  for (let x = XMIN + 2; x < XMAX - 2; x += rng.range(8, 15)) {
+    if (POND && x > POND.cx - 9 && x < POND.cx + 9) continue;
+    if (camp && x > camp.x0 - 1 && x < camp.x1 + 1) continue;
+    if (Z.cross !== undefined && Math.abs(x - Z.cross) < 3) continue;
+    if ((Z.noBush || []).some(([a, b]) => x > a && x < b)) continue;
+    bush(x, 5.4 + rng() * 1.0, 0.6 + rng() * 0.3, 0, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, null);
   }
 
   // ======================= ĐÈN (đa số hỏng) =======================
@@ -1177,11 +1607,13 @@ export function buildWorld(scene, quality) {
     if (y0 === 0) addCircle(x, z, 0.2, true);
   }
   const lampStates = ['broken', 'lamp', 'dead', 'broken', 'lamp', 'broken', 'lamp', 'dead'];
-  [-52, -42, -9.5, 2.5, 14.5, 27.5, 41, 53].forEach((x, i) => lampPost(x, STREET_FRONT + 0.45, '#ffb85e', 0, 2.4, lampStates[i]));
-  lampPost(POND.cx - POND.rx - 0.6, STREET_FRONT + 0.9, '#ffb85e', 0, 2.4, 'broken');
-  lampPost(POND.cx + POND.rx + 0.7, STREET_FRONT + 0.6, '#ffb85e', 0, 2.4, 'lamp');
-  for (const x of [-21.5, 23.4, 44.6]) lampPost(x, -3.3, '#ffb85e', TY, 2.2, 'broken');
-  for (const x of [-57.2, -42.0, -32.6, -22.2, 14.2, 21.5, 28.4, 44.2, 50.2, 55.4]) {
+  (Z.lamps || []).forEach((x, i) => lampPost(x, STREET_FRONT + 0.45, '#ffb85e', 0, 2.4, lampStates[i % lampStates.length]));
+  if (POND) {
+    lampPost(POND.cx - POND.rx - 0.6, STREET_FRONT + 0.9, '#ffb85e', 0, 2.4, 'broken');
+    lampPost(POND.cx + POND.rx + 0.7, STREET_FRONT + 0.6, '#ffb85e', 0, 2.4, 'lamp');
+  }
+  for (const x of Z.terraceLamps || []) lampPost(x, -3.3, '#ffb85e', TY, 2.2, 'broken');
+  for (const x of Z.wallLamps || []) {
     if (!wallSegs.some(([a, b]) => x > a + 0.4 && x < b - 0.4)) continue;
     misc.add(x, 1.35, WALL_Z + 0.08, 0.06, 0.06, 0.18, '#26262c');
     const ln = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.2), lamb({ color: '#3a3026', emissive: new THREE.Color('#ffb050'), emissiveIntensity: 3.6 }));
@@ -1209,15 +1641,17 @@ export function buildWorld(scene, quality) {
     addGlow(x, base + h * 0.4, z + 0.1, '#ff7a2a', 2.6 * scale, 1.0, 'fire');
     smokeSources.push({ x, y: base + h * 0.9, z, rate: 3 * scale, fire: true });
   }
-  const campfire = { x: 24.5, z: 1.3 };
-  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; stones.add(campfire.x + Math.cos(a) * 0.85, 0.14, campfire.z + Math.sin(a) * 0.85, 0.36, 0.28, 0.36, i % 2 ? '#6e6c66' : '#5c5a56', a); }
-  trunks.add(campfire.x, 0.14, campfire.z, 1.2, 0.2, 0.22, '#8a6a4a', 0.6);
-  trunks.add(campfire.x, 0.2, campfire.z, 1.1, 0.2, 0.22, '#9a7652', -0.7);
-  fire(campfire.x, campfire.z, 1.2, 38, 0.1);
-  addCircle(campfire.x, campfire.z, 1.0, true);
-  trunks.add(campfire.x + 2.2, 0.22, campfire.z + 0.6, 1.5, 0.42, 0.45, '#b08a62', -0.25); addCircle(campfire.x + 2.2, campfire.z + 0.6, 0.55, true);
+  const campfire = Z.campfire || { x: 9999, z: 9999 };
+  if (Z.campfire) {
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; stones.add(campfire.x + Math.cos(a) * 0.85, 0.14, campfire.z + Math.sin(a) * 0.85, 0.36, 0.28, 0.36, i % 2 ? '#6e6c66' : '#5c5a56', a); }
+    trunks.add(campfire.x, 0.14, campfire.z, 1.2, 0.2, 0.22, '#8a6a4a', 0.6);
+    trunks.add(campfire.x, 0.2, campfire.z, 1.1, 0.2, 0.22, '#9a7652', -0.7);
+    fire(campfire.x, campfire.z, 1.2, 38, 0.1);
+    addCircle(campfire.x, campfire.z, 1.0, true);
+    trunks.add(campfire.x + 2.2, 0.22, campfire.z + 0.6, 1.5, 0.42, 0.45, '#b08a62', -0.25); addCircle(campfire.x + 2.2, campfire.z + 0.6, 0.55, true);
+  }
   const fireBarrelGeo = new THREE.CylinderGeometry(0.36, 0.33, 0.9, 10), mFireBarrel = lamb({ map: tx.metal, color: '#8a5a3a' });
-  for (const [x, z] of [[-41.8, -1.25], [13.8, -1.2], [45.6, 3.0], [-23.0, -1.3]]) {
+  for (const [x, z] of Z.barrels || []) {
     batch.add(fireBarrelGeo, mFireBarrel, mat4(x, 0.45, z));
     fire(x, z, 0.75, 15, 0.85);
     addCircle(x, z, 0.42, true);
@@ -1229,9 +1663,10 @@ export function buildWorld(scene, quality) {
     const c = Math.cos(ry), s = Math.sin(ry);
     const P = (dx, dz) => [x + dx * c + dz * s, z - dx * s + dz * c];
     const add = (v, dx, y, dz, sx, sy, sz, col) => { const [px, pz] = P(dx, dz); v.add(px, y, pz, sx, sy, sz, col, ry); };
-    const big = style === 'van' || style === 'ambulance';
-    const L = style === 'truck' ? 6.0 : big ? 4.6 : 3.9, Wd = style === 'truck' ? 2.3 : big ? 1.95 : 1.75;
-    const paint = o.paint || (style === 'police' ? '#e8e8e4' : style === 'ambulance' ? '#e8e4dc' : style === 'burnt' ? '#2a2422' : style === 'truck' ? '#4a5a3a' : '#5a6a7a');
+    const bus = style === 'bus';
+    const big = style === 'van' || style === 'ambulance' || bus;
+    const L = style === 'truck' ? 6.0 : bus ? 7.4 : big ? 4.6 : 3.9, Wd = style === 'truck' ? 2.3 : bus ? 2.2 : big ? 1.95 : 1.75;
+    const paint = o.paint || (style === 'police' ? '#e8e8e4' : style === 'ambulance' ? '#e8e4dc' : style === 'burnt' ? '#2a2422' : style === 'truck' ? '#4a5a3a' : bus ? '#e8b830' : '#5a6a7a');
     const glass = style === 'burnt' ? '#0a0a0c' : '#1e2836';
     const wheel = (dx, dz, flat = false) => add(misc, dx, flat ? 0.28 : 0.36, dz, 0.72, flat ? 0.56 : 0.72, 0.28, '#141416');
     if (style === 'truck') {
@@ -1243,8 +1678,12 @@ export function buildWorld(scene, quality) {
       for (const dx of [2.1, -0.2, -1.9]) { wheel(dx, Wd / 2); wheel(dx, -Wd / 2); }
       add(misc, 2.92, 0.7, 0, 0.06, 0.4, Wd * 0.8, '#2a2a2a');
     } else if (big) {
-      add(misc, 0, 1.15, 0, L, 1.65, Wd, paint);
-      add(misc, L * 0.36, 1.55, 0, L * 0.26, 0.5, Wd + 0.02, glass);
+      add(misc, 0, bus ? 1.35 : 1.15, 0, L, bus ? 2.1 : 1.65, Wd, paint);
+      if (bus) {
+        for (let i = 0; i < 6; i++) add(misc, -L / 2 + 0.75 + i * 1.08, 1.75, 0, 0.82, 0.6, Wd + 0.02, glass);
+        add(misc, L / 2 - 0.2, 1.7, 0, 0.42, 0.75, Wd + 0.02, glass);
+        add(misc, 0, 0.95, 0, L + 0.01, 0.14, Wd + 0.02, '#1a1a1e');
+      } else add(misc, L * 0.36, 1.55, 0, L * 0.26, 0.5, Wd + 0.02, glass);
       if (style === 'ambulance') {
         add(misc, -0.3, 1.1, 0, L * 0.7, 0.16, Wd + 0.02, '#c8281e');
         add(misc, -0.6, 1.6, Wd / 2 + 0.01, 0.6, 0.18, 0.02, '#c8281e'); add(misc, -0.6, 1.6, Wd / 2 + 0.01, 0.18, 0.6, 0.03, '#c8281e');
@@ -1261,7 +1700,7 @@ export function buildWorld(scene, quality) {
       add(misc, -L / 2 - 0.005, 0.74, Wd * 0.34, 0.02, 0.1, 0.22, '#8a1a14'); add(misc, -L / 2 - 0.005, 0.74, -Wd * 0.34, 0.02, 0.1, 0.22, '#8a1a14');
     }
     // gỉ sét, bụi bẩn
-    for (let i = 0; i < 5; i++) add(misc, (rng() - 0.5) * L * 0.8, big ? 1.99 : 0.94, (rng() - 0.5) * Wd * 0.6, 0.3 + rng() * 0.4, 0.012, 0.2 + rng() * 0.3, style === 'burnt' ? '#4a2a1a' : '#6a4a2e');
+    for (let i = 0; i < 5; i++) add(misc, (rng() - 0.5) * L * 0.8, bus ? 2.41 : big ? 1.99 : 0.94, (rng() - 0.5) * Wd * 0.6, 0.3 + rng() * 0.4, 0.012, 0.2 + rng() * 0.3, style === 'burnt' ? '#4a2a1a' : '#6a4a2e');
     if (style === 'police' && o.siren) {
       add(misc, -0.15, 1.46, 0, 0.3, 0.1, Wd * 0.72, '#202024');
       const mR = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.3, 0.2) }), mB = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.6, 5) });
@@ -1277,23 +1716,14 @@ export function buildWorld(scene, quality) {
     }
     const hx = Math.abs(c) * L / 2 + Math.abs(s) * Wd / 2, hz = Math.abs(s) * L / 2 + Math.abs(c) * Wd / 2;
     addBox(x - hx, z - hz, x + hx, z + hz, true);
-    perches.push({ x, y: big ? 2.05 : 1.5, z });
+    perches.push({ x, y: bus ? 2.45 : big ? 2.05 : 1.5, z });
     if (style === 'burnt') fire(x + 0.3, z, 0.7, 12, 0.95);
     if (o.loot) { const [tx2, tz2] = P(-L / 2 - 0.55, 0); container(o.loot, tx2, tz2 + (o.lootDz || 0), o.label || 'Cốp xe'); }
   }
-  car(-47.6, 2.5, 0.12, 'sedan', { paint: '#4a5a6a', loot: 'trunk', flat: true });
-  car(-36.0, 2.7, -0.08, 'sedan', { paint: '#8a2a22', loot: 'trunk' });
-  car(-21.6, 2.4, 0.22, 'burnt');
-  car(-8.4, 2.75, 0.06, 'sedan', { paint: '#c8c0a8', loot: 'trunk' });
-  car(3.2, 2.65, -0.1, 'van', { paint: '#d8d4c8', loot: 'trunk', label: 'Thùng xe tải nhỏ', flat: true });
-  car(11.8, 2.9, 0.42, 'sedan', { paint: '#2a4a2a', flat: true });
-  car(18.0, 0.35, 0, 'truck', { loot: 'truck', label: 'Thùng xe quân sự', lootDz: 1.6 });
-  car(37.8, 2.65, 0.05, 'police', { siren: true, loot: 'trunk', label: 'Cốp xe cảnh sát' });
-  car(46.2, -0.65, Math.PI + 0.1, 'police', {});
-  car(57.6, 3.0, 0, 'ambulance', { loot: 'ambulance', label: 'Xe cứu thương' });
+  for (const [x, z, ry, style, o] of Z.cars || []) car(x, z, ry, style, o || {});
 
   // ======================= TRẠM XĂNG =======================
-  {
+  if (Z.gas) {
     const x0 = -57.3, x1 = -49.6, z0 = -0.7, z1 = 2.9, y = 4.1;
     batch.add(boxGeo(x1 - x0, 0.3, z1 - z0, 2), mCanopy, mat4((x0 + x1) / 2, y, (z0 + z1) / 2));
     batch.add(boxGeo(x1 - x0 + 0.1, 0.6, 0.14, 2, 1), mFascia, mat4((x0 + x1) / 2, y - 0.05, z1 + 0.02));
@@ -1314,7 +1744,7 @@ export function buildWorld(scene, quality) {
     }
   }
   // ======================= MÁY PHÁT ĐIỆN (nhiệm vụ) =======================
-  {
+  if (Z.generator) {
     const gx = 44.4, gz = -1.25;
     misc.add(gx, 0.08, gz, 1.45, 0.16, 0.9, '#2a2a2e');
     misc.add(gx, 0.55, gz, 1.3, 0.8, 0.75, '#c8a028');
@@ -1328,7 +1758,7 @@ export function buildWorld(scene, quality) {
     pois.generator = { x: gx, z: gz + 1.0, exhaust: { x: gx + 0.45, y: 1.45, z: gz - 0.2 }, e, label: 'Máy phát điện' };
   }
   // ======================= BÃI ĐÁP TRỰC THĂNG =======================
-  {
+  if (HELIPAD) {
     for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; bulbs.add(HELIPAD.x + Math.cos(a) * (HELIPAD.r + 0.25), 0.05, HELIPAD.z + Math.sin(a) * (HELIPAD.r + 0.25), 0.14, 0.08, 0.14, i % 3 ? '#9aff7a' : '#ffd84a'); }
     misc.add(57.0, 1.6, -1.3, 0.08, 3.2, 0.08, '#4a4a50');
     for (let i = 0; i < 4; i++) misc.add(57.25 + i * 0.22, 3.0 - i * 0.03, -1.3, 0.22, 0.32 - i * 0.05, 0.32 - i * 0.05, i % 2 ? '#ffffff' : '#e86a1a');
@@ -1353,6 +1783,7 @@ export function buildWorld(scene, quality) {
     }
     addBox(Math.min(x0, x1) - 0.2, Math.min(z0, z1) - 0.2, Math.max(x0, x1) + 0.2, Math.max(z0, z1) + 0.2, true);
   }
+  if (Z.checkpoint) {
   sandbags(14.6, 14.6, -1.5, 0.4, 3);
   sandbags(28.4, 28.4, 1.6, 4.4, 3);
   sandbags(15.4, 17.6, 3.9, 3.9, 2);
@@ -1367,6 +1798,7 @@ export function buildWorld(scene, quality) {
     misc.add(17.25, 0.6, -1.25, 1.5, 0.05, 0.52, '#3a4a2a');
     addBox(16.5, -1.55, 18.0, -0.95);
     container('ammo_crate', 17.25, -0.55, 'Thùng đạn quân đội');
+  }
   }
   const clothMats = { a: lamb({ map: T.clothTile('#c8b896') }), b: lamb({ map: T.clothTile('#6a7a4a') }) };
   function tent(x, z, ry, mat) {
@@ -1389,12 +1821,14 @@ export function buildWorld(scene, quality) {
     door.position.set(x + Math.sin(ry) * (lv / 2 + 0.01), 0, z + Math.cos(ry) * (lv / 2 + 0.01)); door.rotation.y = ry;
     root.add(door);
   }
-  tent(21, 7.2, 0.25, clothMats.a);
-  tent(28.5, 7.6, -0.3, clothMats.b);
-  for (let i = 0; i < 9; i++) for (let row = 0; row < 2; row++) if (i < 9 - row) misc.add(camp.x0 + 1 + i * 0.66 + row * 0.33, 0.17 + row * 0.3, 5.2, 0.62, 0.32, 0.36, row ? '#a89670' : '#968460');
+  if (Z.checkpoint) {
+    tent(21, 7.2, 0.25, clothMats.a);
+    tent(28.5, 7.6, -0.3, clothMats.b);
+    for (let i = 0; i < 9; i++) for (let row = 0; row < 2; row++) if (i < 9 - row) misc.add(camp.x0 + 1 + i * 0.66 + row * 0.33, 0.17 + row * 0.3, 5.2, 0.62, 0.32, 0.36, row ? '#a89670' : '#968460');
+  }
 
   // ======================= CỐI XAY GIÓ (thềm sau) =======================
-  {
+  if (Z.windmill) {
     const x = 12, z = -21, base = BY;
     const mT = lamb({ map: wallTex.map, normalMap: wallTex.normalMap, color: '#d8ccb8' });
     for (let i = 0; i < 7; i++) { const w = 3.2 - i * 0.22; batch.add(boxGeo(w, 1.2, w, 2, 1), mT, mat4(x, base + 0.6 + i * 1.2, z)); }
@@ -1418,7 +1852,7 @@ export function buildWorld(scene, quality) {
   }
 
   // ======================= NGHĨA ĐỊA (trên thềm) =======================
-  {
+  if (cemetery) {
     for (let x = cemetery.x0; x <= cemetery.x1; x += 0.55) {
       if (STAIRS.some((s) => Math.abs(s.x - x) < s.w / 2 + 0.3)) continue;
       misc.add(x, TY + 0.55, -2.35, 0.06, 1.1, 0.06, '#1e1e24');
@@ -1459,7 +1893,63 @@ export function buildWorld(scene, quality) {
       if (i < n && rng() > broken) { const mx = x + (x1 - x0) / n / 2; planks.add(mx, 0.42, z, (x1 - x0) / n, 0.1, 0.07, '#b8a890'); planks.add(mx, 0.78, z, (x1 - x0) / n, 0.1, 0.07, '#b8a890'); }
     }
   }
-  fence(-60, -38, 7.2); fence(-19, -1, 7.6); fence(54, 64, 7);
+  for (const [a, b, z] of Z.fences || []) fence(a, b, z);
+
+  // ======================= BIỂN CHỈ ĐƯỜNG, RÀO CHẮN CUỐI PHỐ =======================
+  const links = Z.links || {};
+  // biển chỉ đường: nhỏ, cắm sát tường để không che nhân vật
+  function signPost(x, z, text, bg = '#1e5a2e', k = 0.6) {
+    const sg = T.signTex(text, { bg, edge: '#e8f0e0' });
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(sg.w * k, sg.h * k), lamb({ map: sg.map, transparent: true, alphaTest: 0.5 }));
+    const y = 2.3;
+    sm.position.set(x, y, z); root.add(sm);
+    misc.add(x, y / 2, z - 0.06, 0.08, y, 0.08, '#3a3a3e');
+    addCircle(x, z, 0.14, true);
+    perches.push({ x, y: y + sg.h * k * 0.55, z });
+  }
+  const zs = WALL_Z + 0.32;
+  for (const [side, x] of [['w', BOUNDS.x0 + 1.6], ['e', BOUNDS.x1 - 1.6]]) {
+    if (links[side]) signPost(x, zs, side === 'w' ? '← ' + links[side].toUpperCase() : links[side].toUpperCase() + ' →');
+    else {
+      // đường bị chặn: bao cát + rào + biển cấm
+      const xe = side === 'w' ? BOUNDS.x0 - 0.6 : BOUNDS.x1 + 0.6;
+      sandbags(xe, xe, WALL_Z + 0.2, STREET_FRONT + 1.2, 3);
+      signPost(side === 'w' ? BOUNDS.x0 + 1.2 : BOUNDS.x1 - 1.2, zs, 'ĐƯỜNG BỊ CHẶN', '#c8281e');
+    }
+  }
+  if (Z.cross !== undefined && links.s) signPost(Z.cross + 2.4, STREET_FRONT + 0.1, '↓ ' + links.s.toUpperCase(), '#1e5a2e', 0.5);
+  // ---------- trang trí riêng từng khu ----------
+  if (Z.decor === 'school') {
+    // cột cờ, giá để xe đạp, sân bóng rổ trước CLB
+    const fx0 = Z.flagX ?? 0;
+    misc.add(fx0, 2.6, STREET_FRONT + 0.6, 0.1, 5.2, 0.1, '#c8c8c0');
+    misc.add(fx0 + 0.55, 4.7, STREET_FRONT + 0.6, 1.0, 0.65, 0.03, '#c8281e'); misc.add(fx0 + 0.45, 4.72, STREET_FRONT + 0.62, 0.16, 0.16, 0.02, '#f0d040');
+    misc.add(fx0, 0.15, STREET_FRONT + 0.6, 0.7, 0.3, 0.7, '#8a8680'); addCircle(fx0, STREET_FRONT + 0.6, 0.35, true);
+    perches.push({ x: fx0, y: 5.3, z: STREET_FRONT + 0.6 });
+    for (const [hx, dir] of Z.hoops || []) {
+      misc.add(hx, 1.6, -1.0, 0.12, 3.2, 0.12, '#3a3a40');
+      misc.add(hx + dir * 0.35, 3.05, -1.0, 0.7, 0.05, 0.05, '#3a3a40');
+      misc.add(hx + dir * 0.7, 3.15, -1.0, 0.05, 0.9, 1.2, '#e8e8e0');
+      misc.add(hx + dir * 0.95, 2.95, -1.0, 0.45, 0.04, 0.45, '#e86a1a');
+      addCircle(hx, -1.0, 0.15);
+    }
+    for (let i = 0; i < 6; i++) { const bx = (Z.bikesX ?? -20) + i * 0.5; misc.add(bx, 0.42, -1.55, 0.05, 0.6, 1.1, '#2a4a8a', 0); misc.add(bx, 0.42, -1.55, 0.04, 0.5, 0.5, '#1a1a1e', 0); }
+    if (Z.bikesX !== undefined) addBox(Z.bikesX - 0.3, -2.0, Z.bikesX + 2.8, -1.0, true);
+  }
+  if (Z.decor === 'market') {
+    // các sạp chợ dựng bạt trên vỉa hè
+    const tarps = ['#c8281e', '#2a6ac8', '#e8a020', '#3a8a3a', '#c86a9a'];
+    (Z.stalls || []).forEach((sx, i) => {
+      const z0 = -1.7, z1 = -0.3, col = tarps[i % tarps.length];
+      for (const [px, pz] of [[sx - 1.1, z0], [sx + 1.1, z0], [sx - 1.1, z1], [sx + 1.1, z1]]) misc.add(px, 1.1, pz, 0.07, 2.2, 0.07, '#4a4a4e');
+      for (let k = 0; k < 4; k++) misc.add(sx - 0.9 + k * 0.6, 2.25 - (k % 2) * 0.04, (z0 + z1) / 2, 0.62, 0.05, 1.7, k % 2 ? '#e8e0d0' : col, 0);
+      planks.add(sx, 0.75, (z0 + z1) / 2, 2.1, 0.08, 1.2, '#8a6a4a');
+      for (const dx of [-0.9, 0.9]) planks.add(sx + dx, 0.37, (z0 + z1) / 2, 0.08, 0.74, 1.1, '#6a4a30');
+      for (let k = 0; k < 6; k++) misc.add(sx - 0.8 + (k % 3) * 0.6, 0.86, -1.3 + Math.floor(k / 3) * 0.6, 0.38, 0.14, 0.38, ['#c83a2a', '#e8c040', '#58a048', '#d86a2a'][(k + i) % 4], rng());
+      addBox(sx - 1.15, z0 - 0.05, sx + 1.15, z1 + 0.05, true);
+      container('stall', sx, z1 + 0.45, 'Sạp chợ');
+    });
+  }
 
   // ======================= RÁC, GIẤY, KÍNH VỠ TRÊN PHỐ =======================
   {
@@ -1476,8 +1966,8 @@ export function buildWorld(scene, quality) {
     }
     papers(XMIN + 14, XMAX - 14, -1.3, 2.9, hi ? 120 : 60);
     for (const b of BUILDINGS) if (b.shop) for (let i = 0; i < 14; i++) misc.add(b.x0 + 0.4 + rng() * (b.w - 0.8), 0.015, WALL_Z + 0.1 + rng() * 0.7, 0.08 + rng() * 0.1, 0.01, 0.06 + rng() * 0.08, rng() < 0.5 ? '#9ab0c0' : '#c8dae4', rng() * 3);
-    bloodPool(-17.2, 1.5, 1.4); bloodPool(24.0, 2.8, 1.2); bloodPool(33.6, 1.0, 1.6); bloodPool(-3.5, 0.2, 1.0);
-    for (const [x, z, lbl] of [[-17.2, 1.5, 'Xác người'], [24.0, 2.8, 'Xác lính'], [33.6, 1.0, 'Xác người']]) container('body', x, z, lbl, null, { corpse: true });
+    for (const [x, z, sz] of Z.blood || []) bloodPool(x, z, sz);
+    for (const [x, z, lbl] of Z.bodies || []) { bloodPool(x, z, 1.3); container('body', x, z, lbl, null, { corpse: true }); }
   }
   // ======================= CỎ, HOA, LAU SẬY =======================
   const grassMeshes = [];
@@ -1512,17 +2002,19 @@ export function buildWorld(scene, quality) {
     };
     const grassy = (k) => k === 0 || k === 5;
     const onTerraceFree = (x, z) => {
-      if (x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4) return false;
+      if (STREAM && x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4) return false;
       if (STAIRS.some((s) => Math.abs(s.x - x) < s.w / 2 + 0.2 && z > WALL_Z - STAIR_DEPTH - 0.2)) return false;
       if (BUILDINGS.some((b) => x > b.x0 - 0.3 && x < b.x1 + 0.3 && z > ZB - 0.3)) return false;
       return !TERRACE_HOUSES.some((h) => h.by === TY && Math.abs(h.x - x) < h.w / 2 + 0.4 && z < h.zf + 0.4 && z > h.zf - h.d - 0.4);
     };
+    const nearCross = (x) => Z.cross !== undefined && Math.abs(x - Z.cross) < 2.3;
     for (let v = 0; v < 3; v++) {
       const items = [];
-      for (let i = 0; i < 5200 * dens; i++) {
-        const x = XMIN + rng() * (XMAX - XMIN), z = STREET_FRONT - 0.4 + rng() * 22;
-        if (!grassy(gST.kindAt(x, z)) || blocked(x, z) || inPoly(holePts, x, z)) continue;
-        items.push([x, 0, z, 0.8 + rng() * 0.5 + Math.max(0, (z - 8) * 0.06), tint(x, z)]);
+      // chỉ một dải cỏ thấp sát mép phố: cỏ cao ở tiền cảnh che mất khung nhìn
+      for (let i = 0; i < 1100 * dens; i++) {
+        const x = XMIN + rng() * (XMAX - XMIN), z = STREET_FRONT - 0.4 + rng() * 2.8;
+        if (!grassy(gST.kindAt(x, z)) || blocked(x, z) || inPoly(holePts, x, z) || nearCross(x)) continue;
+        items.push([x, 0, z, 0.6 + rng() * 0.4, tint(x, z)]);
       }
       for (let i = 0; i < 2600 * dens; i++) {
         const x = XMIN + rng() * (XMAX - XMIN), z = BACK_Z + rng() * (WALL_Z - BACK_Z);
@@ -1531,18 +2023,9 @@ export function buildWorld(scene, quality) {
       }
       makeSet(tufts[v], items, 0.11);
     }
-    {
-      const items = [];
-      for (let i = 0; i < 1500 * dens; i++) {
-        const x = XMIN + rng() * (XMAX - XMIN), z = 8 + rng() * 14;
-        if (inPoly(holePts, x, z) || (Math.abs(x - POND.cx) < POND.rx + 2 && z < 14)) continue;
-        items.push([x, 0, z, 1.4 + rng() * 0.8, tint(x, z)]);
-      }
-      makeSet(tufts[2], items, 0.16);
-    }
     flowersT.forEach((ft) => {
       const items = [];
-      const centers = Array.from({ length: 16 }, () => [XMIN + rng() * (XMAX - XMIN), STREET_FRONT + 0.6 + rng() * 14, rng() < 0.3]);
+      const centers = Array.from({ length: 16 }, () => [XMIN + rng() * (XMAX - XMIN), STREET_FRONT + 0.6 + rng() * 2.4, rng() < 0.3]);
       for (let i = 0; i < 380 * dens; i++) {
         const c = centers[Math.floor(rng() * centers.length)];
         const x = c[0] + (rng() - 0.5) * 5;
@@ -1551,15 +2034,15 @@ export function buildWorld(scene, quality) {
           if (onTerraceFree(x, z) && !STAIRS.some((s) => Math.abs(s.x - x) < 1.5)) items.push([x, TY, z, 0.55 + rng() * 0.2, 0xffffff]);
           continue;
         }
-        const z = c[1] + (rng() - 0.5) * 3;
-        if (!grassy(gST.kindAt(x, z)) || blocked(x, z) || inPoly(holePts, x, z)) continue;
+        const z = c[1] + (rng() - 0.5) * 2;
+        if (!grassy(gST.kindAt(x, z)) || blocked(x, z) || inPoly(holePts, x, z) || nearCross(x)) continue;
         items.push([x, 0, z, 0.55 + rng() * 0.2, 0xffffff]);
       }
       makeSet(ft, items, 0.14);
     });
     {
       const items = [];
-      for (let i = 0; i < 260 * dens; i++) {
+      for (let i = 0; holePts.length && i < 260 * dens; i++) {
         const [x0, z0] = holePts[Math.floor(rng() * holePts.length)];
         if (z0 < STREET_FRONT + 0.6) continue;
         items.push([x0 + (rng() - 0.5) * 0.8, 0, z0 + (rng() - 0.5) * 0.8, 0.9 + rng() * 0.6, 0xffffff]);
@@ -1568,7 +2051,7 @@ export function buildWorld(scene, quality) {
     }
     {
       const items = [];
-      for (let i = 0; i < 900 * dens; i++) { const x = XMIN + rng() * (XMAX - XMIN), z = BACK_Z - 1 - rng() * 14; if (x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4 && z > -26) continue; items.push([x, BY, z, 1.0 + rng() * 0.6, tint(x, z)]); }
+      for (let i = 0; i < 900 * dens; i++) { const x = XMIN + rng() * (XMAX - XMIN), z = BACK_Z - 1 - rng() * 14; if (STREAM && x > STREAM.x0 - 0.4 && x < STREAM.x1 + 0.4 && z > -26) continue; items.push([x, BY, z, 1.0 + rng() * 0.6, tint(x, z)]); }
       makeSet(T.fernTex(), items, 0.08);
     }
   }
@@ -1580,8 +2063,8 @@ export function buildWorld(scene, quality) {
   return {
     root, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
     hideInReflection, grassMeshes, water, leafMeshes, animated,
-    campfire, cemetery, field, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, waterMats, waterfalls,
-    buildings: BUILDINGS, containers, pois, sirens, powerMats,
+    campfire, cemetery, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, waterMats, waterfalls,
+    buildings: BUILDINGS, containers, pois, sirens, powerMats, zone: Z,
     leafCount: leafMeshes.reduce((a, m) => a + m.count, 0),
   };
 }

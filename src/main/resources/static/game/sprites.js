@@ -7,6 +7,7 @@ const SPEC = {
   normal: { fw: 24, fh: 32, cx: 12, feet: 31, shoeH: 2, legTop: 26, legW: 3, legGap: 2, torsoTop: 16, torsoBot: 25, torsoHW: 5, belly: 0, headCy: 9.5, headRx: 7.5, headRy: 7, armW: 2 },
   thin: { fw: 24, fh: 32, cx: 12, feet: 31, shoeH: 2, legTop: 26, legW: 2, legGap: 2, torsoTop: 16, torsoBot: 25, torsoHW: 4, belly: 0, headCy: 10, headRx: 7, headRy: 6.5, armW: 2 },
   brute: { fw: 32, fh: 40, cx: 16, feet: 39, shoeH: 2, legTop: 33, legW: 5, legGap: 2, torsoTop: 17, torsoBot: 32, torsoHW: 9, belly: 2, headCy: 10.5, headRx: 7, headRy: 6.5, armW: 4 },
+  fat: { fw: 32, fh: 36, cx: 16, feet: 35, shoeH: 2, legTop: 30, legW: 4, legGap: 2, torsoTop: 15, torsoBot: 29, torsoHW: 10, belly: 5, headCy: 9, headRx: 6.5, headRy: 6, armW: 3 },
 };
 
 export const PAL_SURVIVOR = {
@@ -335,13 +336,19 @@ export function makeCharacterSprites() {
     brute: [21].map((s) => buildAtlas(SPEC.brute, zombiePalette(s, 'brute'), { zombie: true, kind: 'brute' })),
     cop: [31, 32].map((s) => buildAtlas(SPEC.normal, uni(s, ['#2a3a5a', '#1a2640', '#4a5a7a'], ['#1e2230', '#12141e']), { zombie: true, kind: 'walker' })),
     soldier: [41, 42].map((s) => buildAtlas(SPEC.normal, uni(s, ['#4a5a3a', '#34402a', '#66764e'], ['#3a4a2e', '#28321e']), { zombie: true, kind: 'walker' })),
+    // zombie đặc biệt
+    bloater: [buildAtlas(SPEC.fat, { ...zombiePalette(51, 'brute'), skin: '#a8b060', skinS: '#7a8240', skinL: '#c8d080', top: '#c8c0a0', topS: '#9a9478', topL: '#e0d8b8', glowEye: '#d8ff4a', blood: '#6a8a1a', bloodL: '#9ac83a' }, { zombie: true, kind: 'brute' })],
+    spitter: [buildAtlas(SPEC.thin, { ...zombiePalette(61, 'runner'), skin: '#8ab070', skinS: '#5a7a48', skinL: '#a8cc8a', top: '#3a4a3a', topS: '#28322a', topL: '#4e604e', glowEye: '#7aff4a', mouth: '#5aff3a', blood: '#3a8a1a', bloodL: '#6ad83a' }, { zombie: true, kind: 'runner' })],
+    pouncer: [buildAtlas(SPEC.thin, { ...zombiePalette(71, 'runner'), top: '#2a2a30', topS: '#1a1a1e', topL: '#3e3e46', pants: '#26262c', pantsS: '#18181c', hair: '#1a1a1e', glowEye: '#ff2a1a' }, { zombie: true, kind: 'runner' })],
+    charger: [buildAtlas(SPEC.brute, { ...zombiePalette(81, 'brute'), top: '#7a2a22', topS: '#5a1a16', topL: '#9a3a2e', glowEye: '#ff6a1a' }, { zombie: true, kind: 'brute' })],
+    weeper: [buildAtlas(SPEC.thin, { ...zombiePalette(91, 'runner'), skin: '#e8e4e0', skinS: '#b8b0b0', skinL: '#ffffff', hair: '#f0f0f0', hairS: '#c8c8c8', hairL: '#ffffff', top: '#d8d4d0', topS: '#a8a4a0', topL: '#f0ece8', pants: '#c8c4c0', pantsS: '#a8a4a0', glowEye: '#ff3a3a' }, { zombie: true, kind: 'runner' })],
   };
   return { player, zombies };
 }
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 15, P = new Pix(16 * N, 16);
+  const N = 22, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
   // 0 đạn 9mm
   { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
@@ -375,6 +382,20 @@ export function makeItemIcons() {
   { const r = at(14); r(7, 8, 2, 7, '#2a7a2a'); r(4, 11, 3, 1, '#3a8a3a'); const pet = '#e8242a', tip = '#ff6a5a';
     for (const [x, y] of [[3, 3], [11, 3], [2, 6], [12, 6], [5, 1], [9, 1], [4, 5], [10, 5]]) r(x, y, 2, 2, pet);
     r(6, 3, 4, 4, '#c81a20'); r(7, 4, 2, 2, '#ffd84a'); for (const [x, y] of [[2, 2], [13, 2], [1, 7], [14, 7]]) r(x, y, 1, 1, tip); }
+  // 15 thuốc súng (túi vải)
+  { const r = at(15); r(3, 5, 10, 9, '#6a5a4a'); r(3, 5, 10, 1, '#8a7a66'); r(6, 2, 4, 3, '#5a4a3a'); r(5, 4, 6, 1, '#3a2a1e'); r(5, 8, 6, 4, '#2a2a2e'); r(6, 9, 1, 1, '#8a8a8e'); r(9, 10, 1, 1, '#8a8a8e'); }
+  // 16 vỏ đạn
+  { const r = at(16); for (let i = 0; i < 3; i++) { r(2 + i * 4, 4 + (i % 2) * 2, 3, 8, '#c89a3a'); r(2 + i * 4, 4 + (i % 2) * 2, 1, 8, '#f0d070'); r(2 + i * 4, 11 + (i % 2) * 2, 3, 1, '#8a6a2a'); } }
+  // 17 thanh gỗ
+  { const r = at(17); for (let i = 0; i < 11; i++) { r(2 + i, 12 - i, 3, 3, i % 3 ? '#8a6a44' : '#a8845a'); } r(12, 1, 2, 2, '#c8a070'); r(2, 13, 2, 1, '#5a4028'); }
+  // 18 đuốc
+  { const r = at(18); for (let i = 0; i < 8; i++) r(4 + i, 14 - i, 2, 2, '#7a5634'); r(10, 4, 4, 4, '#4a3a2a'); r(11, 1, 3, 3, '#ff9a2a'); r(12, 0, 1, 2, '#ffd25a'); r(10, 2, 1, 2, '#e0561a'); }
+  // 19 đèn pin
+  { const r = at(19); r(2, 6, 9, 4, '#2a2a30'); r(2, 6, 9, 1, '#5a5a66'); r(11, 4, 3, 8, '#3a3a42'); r(14, 5, 1, 6, '#fff0b0'); r(5, 10, 2, 1, '#c8281e'); }
+  // 20 pin
+  { const r = at(20); for (let i = 0; i < 2; i++) { r(3 + i * 6, 3, 4, 11, '#2a6ac8'); r(3 + i * 6, 3, 1, 11, '#5a9ae8'); r(4 + i * 6, 1, 2, 2, '#c8c8c8'); r(3 + i * 6, 10, 4, 4, '#1a1a1e'); } }
+  // 21 súng lục
+  { const r = at(21); r(2, 5, 11, 3, '#2a2a30'); r(2, 5, 11, 1, '#6a6a7c'); r(9, 8, 4, 6, '#3a2a22'); r(9, 8, 1, 6, '#5a4232'); r(7, 8, 2, 2, '#2a2a30'); }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
 }

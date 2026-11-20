@@ -1,12 +1,12 @@
 // DEAD NIGHT — game sinh tồn zombie phong cách HD-2D: sprite pixel trong diorama 3D,
 // camera thấp nhìn ngang, cuộn theo nhân vật dọc con phố của ngôi làng.
 import * as THREE from 'three';
-import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND, ZB, BUILDINGS, buildingAt, HELIPAD } from './world.js';
+import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND, ZB, BUILDINGS, buildingAt, HELIPAD, setZone, ZONE, ZONES, GRID, zoneCell, zoneLinks } from './world.js';
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite } from './sprites.js';
-import { ITEMS, ITEM_ORDER, rollLoot, searchTime } from './items.js';
+import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME } from './items.js';
 import { openTransport, makeCode, roomName, cleanCode, cleanName } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
@@ -94,6 +94,9 @@ const sound = new Sound();
 const atmos = new Atmos();
 
 let world, fx = {}, SPR, camQuat = new THREE.Quaternion();
+// vật luôn ẩn khỏi ảnh phản chiếu mặt ao (giữ qua các lần dựng lại khu)
+const reflHide = [];
+function hideRefl(...ms) { for (const m of ms) { reflHide.push(m); if (world) world.hideInReflection.push(m); } }
 const camTarget = new THREE.Vector3(0, 1, 1);
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
@@ -132,7 +135,7 @@ function makeSprite(atlasList, xray) {
   const group = new THREE.Group();
   group.add(mesh, blob);
   scene.add(group);
-  if (world) world.hideInReflection.push(xr, blob);
+  hideRefl(xr, blob);
   return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, cur: 0, w: a0.w, h: a0.h };
 }
 function setFrame(s, dir, frame) {
@@ -165,7 +168,23 @@ const ZT = {
   walker: { r: 0.36, speed: [1.0, 1.5], hp: 60, dmg: 10, score: 10, atk: 0.9, hpW: 6 },
   runner: { r: 0.33, speed: [2.7, 3.2], hp: 40, dmg: 8, score: 15, atk: 0.75, hpW: 4 },
   brute: { r: 0.62, speed: [0.85, 1.05], hp: 320, dmg: 25, score: 50, atk: 1.2, hpW: 30 },
+  // zombie đặc biệt (cơ chế kiểu game co-op sinh tồn, thiết kế riêng)
+  bloater: { r: 0.55, speed: [0.75, 0.9], hp: 45, dmg: 6, score: 30, atk: 1.2, hpW: 3 },
+  spitter: { r: 0.34, speed: [1.1, 1.3], hp: 70, dmg: 6, score: 30, atk: 1.0, hpW: 4 },
+  pouncer: { r: 0.33, speed: [2.3, 2.7], hp: 90, dmg: 9, score: 35, atk: 0.5, hpW: 4 },
+  charger: { r: 0.6, speed: [1.15, 1.35], hp: 420, dmg: 22, score: 60, atk: 1.2, hpW: 20 },
+  weeper: { r: 0.34, speed: [4.4, 4.8], hp: 520, dmg: 40, score: 100, atk: 0.85, hpW: 20 },
 };
+const SPECIAL = {
+  bloater: { name: 'ZOMBIE PHÌNH', hint: 'Bị giết hay lại gần là nổ dịch xanh · dính dịch thì cả bầy kéo tới' },
+  spitter: { name: 'ZOMBIE PHUN', hint: 'Phun axit từ xa · tránh khỏi vũng axit xanh' },
+  pouncer: { name: 'ZOMBIE VỒ', hint: 'Vồ đè người · bấm E liên tục để vùng ra, đồng đội đánh nó để cứu' },
+  charger: { name: 'ZOMBIE HÚC', hint: 'Gầm rồi lao thẳng húc văng · né sang ngang' },
+  weeper: { name: 'ZOMBIE KHÓC', hint: 'Đang ngồi khóc · đừng lại gần, đừng rọi đèn, đừng nổ súng gần nó' },
+  brute: { name: 'ZOMBIE KHỔNG LỒ', hint: 'Rất trâu, đánh rất đau · giữ khoảng cách mà bắn' },
+};
+const seenSpecial = new Set();
+let lastFlash = 0;
 const state = { mode: 'loading', paused: false };
 let player, zombies = [], bullets = [], pickups = [], floaters = [];
 let wave = 0, toSpawn = 0, spawnTimer = 0, intermission = 0, kills = 0, score = 0, shake = 0, gtime = 0;
@@ -174,11 +193,12 @@ let hurtFlash = 0, lightning = 0, lightningT = 8, thunderQ = [], playStart = 0;
 let phase = 'title', phaseT = 0, dayNo = 0, nightKills = 0, nightTotal = 1, hourFrom = 0, strayT = 0, dayStartHour = 6.9;
 // độ dài một ván: ngày (lục soát) và đêm (cầm cự) tính bằng giây thực
 const DURATIONS = {
+  cycle: { name: 'Chuẩn', day: 600, night: 600, est: 'ngày 10 phút · đêm 10 phút' },
   short: { name: 'Ngắn', day: 100, night: 90, est: '~10 phút' },
   normal: { name: 'Vừa', day: 150, night: 120, est: '~15–20 phút' },
   long: { name: 'Dài', day: 240, night: 170, est: '~30 phút' },
 };
-let durKey = DURATIONS[store.get('deadnight_dur', 'normal')] ? store.get('deadnight_dur', 'normal') : 'normal';
+let durKey = DURATIONS[store.get('deadnight_dur2', 'cycle')] ? store.get('deadnight_dur2', 'cycle') : 'cycle';
 let DAY_LEN = DURATIONS[durKey].day, NIGHT_LEN = DURATIONS[durKey].night;
 const DUSK_LEN = 14, DAWN_LEN = 7;
 let nightCleared = false;
@@ -194,7 +214,9 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   if (state.mode === 'view') { viewKey(e.code); return; }
   if (state.mode !== 'play') return;
+  if (player.pinned && (e.code === 'KeyE' || e.code === 'Space') && !e.repeat) { player.struggle = (player.struggle || 0) + 1; return; }
   if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); toggleBag(); return; }
+  if (mapOpen) { if (e.code === 'KeyM' || e.code === 'Escape') toggleMap(false); return; }
   if (bagOpen) return;
   if (e.code === 'KeyR') reload();
   if (e.code === 'Digit1') switchWeapon(0);
@@ -205,7 +227,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') quickHeal();
   if (e.code === 'KeyC') quickEat();
   if (e.code === 'KeyV') quickAntidote();
-  if (e.code === 'KeyM') sound.muted = !sound.muted;
+  if (e.code === 'KeyL') toggleFlashlight();
+  if (e.code === 'KeyT') useItem('torch');
+  if (e.code === 'KeyM') toggleMap();
+  if (e.code === 'KeyN') sound.muted = !sound.muted;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -290,7 +315,8 @@ function collide(o) {
       hit = true;
     }
   }
-  o.x = clamp(o.x, BOUNDS.x0, BOUNDS.x1); o.z = clamp(o.z, BOUNDS.z0, BOUNDS.z1);
+  const zMax = ZONE.cross !== undefined && Math.abs(o.x - ZONE.cross) < 1.4 ? BOUNDS.z1 + 1.9 : BOUNDS.z1;
+  o.x = clamp(o.x, BOUNDS.x0, BOUNDS.x1); o.z = clamp(o.z, BOUNDS.z0, zMax);
   return hit;
 }
 function bulletBlocked(x, z) {
@@ -373,10 +399,11 @@ function navLOS(x0, z0, x1, z1) {
 function newPlayer() {
   const sp = player ? player.sprite : makeSprite([SPR.player.knife, SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
   return {
-    x: -1.5, z: 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3, food: 85, water: 85, starve: 0,
-    aim: 0, dir: 'right', weapon: 1, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
-    guns: WEAPONS.map((w, i) => ({ owned: i <= 1, ammo: i === 1 ? w.mag : 0 })),
-    bag: { ammo9: 24, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0, antibio: 0, syringe: 0, antidote: 0, flower: 0 },
+    x: (ZONE.start && ZONE.start.x) ?? 0, z: (ZONE.start && ZONE.start.z) ?? 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3, food: 85, water: 85, starve: 0,
+    aim: 0, dir: 'right', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
+    guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: 0 })),
+    bag: { ammo9: 0, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0, antibio: 0, syringe: 0, antidote: 0, flower: 0, powder: 0, casing: 0, wood: 1, torch: 0, flashlight: 0, battery: 0 },
+    flashOn: true, battery: 0, torchT: 0, exit: null,
     looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     infected: 0, zombie: false, picked: new Set(), groanT: 0, coughT: 12,
     sprite: sp,
@@ -467,6 +494,7 @@ function damageZombie(z, dmg, a, kb, cx = z.x, cz = z.z, remote = false) {
   z.hp -= dmg; z.hitT = 0.1;
   if (client) { z.predT = 0.6; const h = net.hits.get(z.id) || { dmg: 0, a }; h.dmg += dmg; h.a = a; net.hits.set(z.id, h); }
   else if (!z.aggro) wake(z);
+  if (!client && z.state === 'pin') { z.pinDmg += dmg; if (z.pinDmg >= 25) releasePin(z, 2.0); }
   if (z.state === 'walk' && !client) { const k = z.type === 'brute' ? kb * 0.25 : kb; z.x += Math.cos(a) * k; z.z += Math.sin(a) * k; }
   for (let k = 0; k < 7; k++) {
     const aa = a + rand(-0.8, 0.8), sp = rand(1, 4.5);
@@ -476,7 +504,7 @@ function damageZombie(z, dmg, a, kb, cx = z.x, cz = z.z, remote = false) {
   if (!remote) floaters.push({ x: z.x + rand(-0.3, 0.3), y: 2.2, z: z.z, text: String(dmg), t: 0.55, color: '#ffffff' });
   if (z.hp <= 0 && !client) killZombie(z, a);
 }
-function wake(z) { if (z.aggro) return; z.aggro = true; z.sprite.xr.visible = true; if (Math.random() < 0.7) sound.groan(z.x, z.z, z.type === 'brute'); }
+function wake(z) { if (z.aggro) return; if (z.type === 'weeper') { enrage(z, null); return; } z.aggro = true; z.sprite.xr.visible = true; if (Math.random() < 0.7) sound.groan(z.x, z.z, z.type === 'brute'); }
 function makeNoise(x, z, r, remote = false) {
   if (net.active && !net.host) { if (!remote) netEvent('n', Math.round(x * 10), Math.round(z * 10), Math.round(r)); return; }
   for (const zz of zombies) if (!zz.aggro && zz.state === 'walk' && Math.hypot(zz.x - x, zz.z - z) < r) wake(zz);
@@ -498,16 +526,39 @@ function releaseSprite(z) {
 }
 function pickType() {
   const r = Math.random();
+  if (phase === 'night' && r < Math.min(0.3, 0.1 + wave * 0.03)) {
+    const q = Math.random();
+    if (wave >= 3 && q < 0.12) return 'brute';
+    if (wave >= 2 && q < 0.3) return 'charger';
+    if (q < 0.55) return 'bloater';
+    if (q < 0.78) return 'spitter';
+    return 'pouncer';
+  }
   if (wave >= 4 && r < 0.06 + wave * 0.012) return 'brute';
   if (wave >= 2 && r < 0.36) return 'runner';
+  if (phase === 'night' && r < 0.5) return 'runner';
   return 'walker';
+}
+// zombie khóc: ngồi một chỗ, không lang thang; bị làm phiền thì nổi điên
+function spawnWeeper() {
+  for (let k = 0; k < 20; k++) {
+    const x = rand(BOUNDS.x0 + 6, BOUNDS.x1 - 6), z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.5);
+    if (insideSolid(x, z, 0.5) || TG.some((t) => Math.abs(t.x - x) < 14) || Math.abs(player.x - x) < 14) continue;
+    const w = newZombie('weeper', x, 0, z, 'walk', { aggro: false });
+    w.sprite.xr.visible = false;
+    return w;
+  }
+  return null;
 }
 function newZombie(type, x, y, z, st, o = {}) {
   const T = ZT[type];
-  const hp = T.hp + wave * T.hpW + (o.variant === 'soldier' ? 30 : 0);
+  // ban đêm zombie khoẻ, nhanh và cắn đau hơn
+  const night = phase === 'night' || phase === 'dusk';
+  const hp = Math.round((T.hp + wave * T.hpW + (o.variant === 'soldier' ? 30 : 0)) * (night ? 1.25 : 1));
   const skin = o.variant || type;
   const zz = {
-    id: ++zid, type, skin, x, y, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025), hp, maxHp: hp, dmg: T.dmg, score: T.score, atkT: 0, atkCd: T.atk,
+    id: ++zid, type, skin, x, y, z, r: T.r, speed: rand(T.speed[0], T.speed[1]) * (1 + Math.min(wave, 10) * 0.025) * (night && type !== 'weeper' ? 1.15 : 1), hp, maxHp: hp, dmg: Math.round(T.dmg * (night ? 1.3 : 1)), score: T.score, atkT: 0, atkCd: T.atk,
+    keep: type === 'spitter' ? 5.5 : 0,
     walk: rand(0, 4), dir: 'down', hitT: 0, stuck: 0, side: Math.random() < 0.5 ? 1 : -1, state: st, t: 0, sprite: spriteFor(skin),
     aggro: o.aggro !== false, home: { x, z }, lootKind: 'z_' + skin, looted: false,
   };
@@ -518,12 +569,13 @@ function newZombie(type, x, y, z, st, o = {}) {
 }
 // chọn điểm nhảy/bậc thang gần người chơi cho zombie đi trên thềm
 // các đoạn bậc thềm không có toà nhà (zombie đi trên thềm rồi nhảy xuống / xuống bậc thang)
-const TERRACE_SEGS = (() => {
+let TERRACE_SEGS = [];
+function computeTerraceSegs() {
   const out = []; let x = BOUNDS.x0;
-  for (const b of [...BUILDINGS].sort((a, c) => a.x0 - c.x0)) { if (b.x0 - x > 2.4) out.push([x + 0.6, b.x0 - 0.6]); x = b.x1; }
+  for (const b of [...BUILDINGS].sort((a, c) => a.x0 - c.x0)) { if (b.x0 - x > 2.4) out.push([x + 0.6, b.x0 - 0.6]); x = Math.max(x, b.x1); }
   if (BOUNDS.x1 - x > 2.4) out.push([x + 0.6, BOUNDS.x1 - 0.6]);
-  return out;
-})();
+  TERRACE_SEGS = out.length ? out : [[BOUNDS.x0 + 1, BOUNDS.x1 - 1]];
+}
 const segOf = (x) => TERRACE_SEGS.find(([a, b]) => x >= a && x <= b);
 function terracePlan(z) {
   const seg = segOf(z.x) || TERRACE_SEGS[0];
@@ -540,7 +592,7 @@ function terracePlan(z) {
 let TG = [];
 function computeTargets() {
   TG = [];
-  if (playerAlive()) TG.push({ x: player.x, z: player.z, me: true, b: curBuilding });
+  if (playerAlive()) TG.push({ x: player.x, z: player.z, me: true, b: curBuilding, bile: player.bile > 0 });
   if (net.active) netTargetsInto(TG);
 }
 function spawnRef() { return TG.length ? TG[Math.floor(Math.random() * TG.length)] : player; }
@@ -548,8 +600,8 @@ function spawnZombie(stray = false) {
   const player = spawnRef();
   const type = stray ? 'walker' : pickType();
   const roll = stray ? 1 : Math.random();
-  const nearPond = Math.abs(player.x - POND.cx) < 18;
-  const nearCem = player.x > 36;
+  const nearPond = !!POND && Math.abs(player.x - POND.cx) < 18;
+  const nearCem = world.graves.length > 0 && player.x > 36;
   const segs = TERRACE_SEGS.filter(([a, b]) => b > player.x - 24 && a < player.x + 24);
   if (roll < 0.34 && segs.length) {
     // đi trên bậc thềm phía sau rồi nhảy xuống / xuống bậc thang
@@ -588,6 +640,13 @@ function spawnZombie(stray = false) {
   return true;
 }
 function killZombie(z, ang) {
+  if (z.state === 'pin') releasePin(z, 0);
+  if (z.type === 'bloater' && !z.burst) {
+    z.burst = true;
+    bileBlast(z.x, z.z);
+    if (net.active && net.host) netEvent('bx', Math.round(z.x * 10), Math.round(z.z * 10));
+    bileHorde(z.x, z.z);
+  }
   kills++; score += z.score * Math.max(1, wave);
   if (phase === 'night') nightKills++;
   z.state = 'dead'; z.t = 0;
@@ -622,14 +681,15 @@ function rollNightWeather() {
 function nextWave() {
   wave++;
   phase = 'night'; phaseT = 0;
-  toSpawn = Math.min(Math.round((8 + wave * 4) * (NIGHT_LEN / 120) * (Q.called ? 1.6 : 1)), 90);
+  toSpawn = Math.min(Math.round((6 + wave * 3) * Math.pow(NIGHT_LEN / 120, 0.8) * (Q.called ? 1.6 : 1)), 110);
   nightTotal = toSpawn; nightKills = 0; nightCleared = false;
   spawnTimer = 2.5; intermission = 0;
   atmos.hour = Math.max(atmos.hour, 19.6);
   hourFrom = atmos.hour;
   atmos.setWeather(rollNightWeather());
-  showMsg(`ĐÊM ${wave}`, atmos.weatherName + ' · zombie kéo tới!');
+  showMsg(`ĐÊM ${wave}`, atmos.weatherName + ' · zombie mạnh hơn và có zombie đặc biệt!');
   sound.wave();
+  if (Math.random() < Math.min(0.75, 0.35 + wave * 0.1)) spawnWeeper();
   hud.dirty = true;
 }
 function startDawn() {
@@ -647,10 +707,11 @@ function startDay(first = false) {
   showMsg(`NGÀY ${dayNo}`, first ? 'Lục soát thị trấn · tìm cách gọi cứu hộ' : atmos.kind === 'rain' ? 'Mưa rào · tranh thủ lục soát' : 'Trời sáng · tranh thủ lục soát');
 }
 // zombie nấp sẵn trong các toà nhà (chỉ lao ra khi thấy người hoặc nghe tiếng súng)
-const LURKERS = { kiosk: 1, garage: 1, houseA: 1, grocery: 2, pharmacy: 1, houseB: 1, radio: 1, police: 3 };
+const LURK_KIND = { kiosk: 1, garage: 1, house: 1, grocery: 2, pharmacy: 1, workshop: 1, police: 3, guardroom: 1, classroom: 2, infirmary: 1, canteen: 2, club: 1, mall: 4, plantshop: 1 };
 function spawnLurkers() {
   for (const b of world.buildings) {
-    for (let i = 0; i < (LURKERS[b.id] || 0); i++) {
+    if (b.alley) continue;
+    for (let i = 0; i < (LURK_KIND[b.kind] || 0); i++) {
       for (let k = 0; k < 16; k++) {
         const x = rand(b.x0 + 0.7, b.x1 - 0.7), z = rand(ZB + 0.9, WALL_Z - 0.9);
         if (insideSolid(x, z, 0.45) || Math.abs(x - b.door) < 0.8) continue;
@@ -659,7 +720,7 @@ function spawnLurkers() {
       }
     }
   }
-  for (let i = 0; i < 2; i++) newZombie('walker', rand(19.5, 26), 0, rand(-1.0, 1.6), 'walk', { aggro: false, variant: 'soldier' });
+  if (ZONE.checkpoint) for (let i = 0; i < 2; i++) newZombie('walker', rand(19.5, 26), 0, rand(-1.0, 1.6), 'walk', { aggro: false, variant: 'soldier' });
 }
 // zombie lang thang ban ngày (chưa phát hiện người chơi)
 function spawnStray() {
@@ -694,8 +755,8 @@ function updatePhase(dt) {
     atmos.hour = dayStartHour + (16.4 - dayStartHour) * Math.min(1, phaseT / DAY_LEN);
     strayT -= dt;
     if (strayT <= 0) {
-      strayT = rand(8, 13);
-      if (zombies.filter((z) => z.state !== 'dead' && !z.aggro).length < 5 + Math.min(4, dayNo)) spawnStray();
+      strayT = rand(14, 22);
+      if (zombies.filter((z) => z.state !== 'dead' && !z.aggro).length < 2 + Math.min(3, dayNo)) spawnStray();
     }
     if (phaseT >= DAY_LEN) startDusk();
   } else if (phase === 'dusk') {
@@ -721,9 +782,10 @@ const net = {
   active: false, host: true, transport: null, pending: true, room: null, code: '', me: null, joinT: 0, name: '',
   seq: 0, out: [], hits: new Map(), players: new Map(), hostPeer: null, sendT: 0, snapT: 0, lastW: 0, zmap: new Map(),
   colorIdx: 0, unsub: null, lobbyUnsub: null, lastAd: '', started: false, k: 0,
+  zoneSeq: 0, zoneSeqSeen: -1, zoneEntry: 'start', grants: [], grantSeen: new Set(), pickedDrops: new Set(),
 };
-const SKINS = ['walker', 'runner', 'brute', 'cop', 'soldier'];
-const ZST = ['walk', 'terrace', 'edge', 'drop', 'stairtop', 'stairs', 'wade', 'rise', 'dead'];
+const SKINS = ['walker', 'runner', 'brute', 'cop', 'soldier', 'bloater', 'spitter', 'pouncer', 'charger', 'weeper'];
+const ZST = ['walk', 'terrace', 'edge', 'drop', 'stairtop', 'stairs', 'wade', 'rise', 'dead', 'crouch', 'leap', 'pin', 'charge', 'stun'];
 const PH = ['day', 'dusk', 'night', 'dawn', 'shot', 'title'];
 const WX = ['clear', 'rain', 'storm', 'fog', 'blood'];
 function netEvent(...ev) { net.out.push({ t: performance.now(), ev: [++net.seq, ...ev] }); }
@@ -855,7 +917,7 @@ function startCoop(asHost) {
   if (!asHost) {
     for (const z of zombies) releaseSprite(z);
     zombies = []; net.zmap.clear();
-    player.x = 35.2 + rand(-1.5, 1.5); player.z = 0.8;
+    placeAtEntry('start');
   }
   advertise(roomMembers().length);
   showMsg(asHost ? 'CO-OP' : 'ĐÃ VÀO PHÒNG ' + net.code, 'Lục soát cùng nhau · gọi trực thăng cứu hộ');
@@ -864,7 +926,7 @@ function clientRestart() {
   startGame();
   for (const z of zombies) releaseSprite(z);
   zombies = []; net.zmap.clear();
-  player.x = 35.2 + rand(-1.5, 1.5); player.z = 0.8;
+  placeAtEntry('start');
   showMsg('CHƠI LẠI', 'Chủ phòng đã bắt đầu ván mới');
 }
 let skinIdx = 0;
@@ -887,7 +949,7 @@ function becomeHost() {
   showMsg('BẠN LÀ CHỦ PHÒNG', 'Chủ phòng cũ đã rời đi');
 }
 function netTargetsInto(list) {
-  for (const rp of net.players.values()) if (rp.alive) list.push({ x: rp.x, z: rp.z, me: false, b: buildingAt(rp.x, rp.z) });
+  for (const rp of net.players.values()) if (rp.alive && rp.here) list.push({ x: rp.x, z: rp.z, me: false, peer: rp.peer, b: buildingAt(rp.x, rp.z), bile: !!(rp.flags & 256) });
 }
 function netTick(dt) {
   if (!net.active || !net.room) return;
@@ -905,9 +967,11 @@ function netTick(dt) {
     if (Array.isArray(a) && a.length >= 6) {
       rp.tx = clamp(+a[0] / 100 || 0, BOUNDS.x0 - 2, BOUNDS.x1 + 2); rp.tz = clamp(+a[1] / 100 || 0, BOUNDS.z0 - 2, BOUNDS.z1 + 2);
       rp.aim = +a[2] / 100 || 0; rp.weapon = clamp(a[3] | 0, 0, 3); rp.flags = a[4] | 0; rp.hp = a[5] | 0; rp.inf = a[6] | 0;
+      rp.exit = EXITS[a[7] | 0] || null; rp.zone = a[8] === undefined ? -1 : a[8] | 0; rp.light = a[9] | 0;
       if (!rp.inited) { rp.x = rp.tx; rp.z = rp.tz; rp.inited = true; }
     }
-    rp.alive = rp.inited && !(rp.flags & (4 | 8 | 16 | 128));
+    rp.here = rp.zone === zoneIdx();
+    rp.alive = rp.inited && rp.here && !(rp.flags & (4 | 8 | 16 | 128));
     if (Array.isArray(pz.e)) handleEvents(rp, pz.e);
     if (!net.host && p.peer === net.hostPeer && pz.w && pz.w.t !== net.lastW) { net.lastW = pz.w.t; applySnapshot(pz.w); }
   }
@@ -923,8 +987,8 @@ function netTick(dt) {
   // giữ sự kiện tới khi đã gửi đủ vài lần (presence chỉ giữ giá trị mới nhất, có thể bị gộp)
   net.out = net.out.filter((e) => now - e.t < 700 || (e.sent || 0) < 4).slice(-24);
   for (const e of net.out) e.sent = (e.sent || 0) + 1;
-  const flags = (player.moving ? 1 : 0) | (player.firing ? 2 : 0) | (player.downed > 0 ? 4 : 0) | (player.dead ? 8 : 0) | (player.boarded ? 16 : 0) | (player.searching ? 32 : 0) | (player.infected > 0 ? 64 : 0) | (player.zombie ? 128 : 0);
-  const patch = { v: 1, n: net.name, j: net.joinT, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), player.weapon, flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected)], e: net.out.map((e) => e.ev) };
+  const flags = (player.moving ? 1 : 0) | (player.firing ? 2 : 0) | (player.downed > 0 ? 4 : 0) | (player.dead ? 8 : 0) | (player.boarded ? 16 : 0) | (player.searching ? 32 : 0) | (player.infected > 0 ? 64 : 0) | (player.zombie ? 128 : 0) | (player.bile > 0 ? 256 : 0);
+  const patch = { v: 1, n: net.name, j: net.joinT, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), player.weapon, flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected), EXITS.indexOf(player.exit), zoneIdx(), lightState()], e: net.out.map((e) => e.ev) };
   if (net.host) {
     net.snapT -= 1 / 12;
     if (net.snapT <= 0) { net.snapT = 1 / 8; patch.w = makeSnapshot(JSON.stringify(patch).length); }
@@ -945,6 +1009,15 @@ function handleEvents(rp, list) {
     else if (type === 'fl' && ev[2] === net.me && player.zombie) unzombie(rp);
     else if (type === 'cure' && ev[2] === net.me && player.infected > 0) cureInfection(rp.name);
     else if (type === 'gr') { rp.pingT = 6; sound.groan(rp.x, rp.z, true); }
+    else if (type === 'gv' && ev[2] === net.me) receiveGift(String(ev[3]), rp);
+    else if (type === 'bx') bileBlast((+ev[2] || 0) / 10, (+ev[3] || 0) / 10);
+    else if (type === 'ac' && !net.host) spitAcid((+ev[2] || 0) / 10, (+ev[3] || 0) / 10, (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, false);
+    else if (type === 'pin' && ev[2] === net.me) setPinned(ev[3] | 0);
+    else if (type === 'unpin' && ev[2] === net.me && player.pinned === (ev[3] | 0)) player.pinned = 0;
+    else if (type === 'chg' && ev[2] === net.me) knockPlayer((+ev[3] || 0) / 100, (+ev[4] || 0) / 100, clamp(ev[5] | 0, 0, 80));
+    else if (type === 'ups' && net.host) { const z = zombies.find((o) => o.id === (ev[2] | 0)); if (z && z.state === 'pin') releasePin(z, 2.4, true); }
+    else if (type === 'dr' && net.host) hostAddDrop(String(ev[2]), clamp(ev[3] | 0, 1, 99), (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, rp.zone);
+    else if (type === 'pk' && net.host) hostPickDrop(ev[2] | 0, rp.peer);
   }
 }
 function makeSnapshot(base) {
@@ -956,7 +1029,10 @@ function makeSnapshot(base) {
   const w = {
     t: Date.now(), st: state.mode === 'over' ? 'over' : 'play', ph: PH.indexOf(phase), hr: Math.round(atmos.hour * 100), wx: WX.indexOf(atmos.kind), d: dayNo, wv: wave, ts: toSpawn, k: kills,
     q: [Q.found ? 1 : 0, Q.parts, Q.called ? 1 : 0, h ? ['in', 'wait', 'out'].indexOf(h.stage) + 1 : 0, h ? Math.ceil(h.left) : 0, Q.won ? 1 : 0],
-    pw: power ? 1 : 0, ar: world.pois.armory.open ? 1 : 0, g: net.gameId, dl: [DAY_LEN, NIGHT_LEN], z,
+    pw: power ? 1 : 0, ar: Q.armory ? 1 : 0, g: net.gameId, dl: [DAY_LEN, NIGHT_LEN], z,
+    zn: [ZONE_IDS.indexOf(zt.target || ZONE.id), ENTRIES.indexOf(net.zoneEntry || 'start'), net.zoneSeq || 0],
+    dp: drops.filter((d) => d.id > 0).slice(-24).map((d) => [d.id, ITEM_KEYS.indexOf(d.it), d.n, Math.round(d.x * 10), Math.round(d.z * 10)]),
+    gr: net.grants.slice(-6),
   };
   // giữ presence dưới 4 KiB
   while (z.length > 8 && base + JSON.stringify(w).length > 3900) z.splice(z.length - 8, 8);
@@ -990,7 +1066,14 @@ function applySnapshot(w) {
   if (q[2] && !Q.called) { Q.called = true; showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh!'); sound.radio(); }
   if (!q[2] && Q.called && !q[3]) Q.called = false;
   if (w.pw && !power) powerOn(false);
-  if (w.ar && !world.pois.armory.open) unlockArmory(false);
+  if (w.ar && !Q.armory) unlockArmory(false);
+  // cả đội chuyển khu theo chủ phòng
+  if (Array.isArray(w.zn)) {
+    const zid = ZONE_IDS[w.zn[0] | 0];
+    if (zid && zid !== ZONE.id && zid !== zt.target) requestZone(zid, ENTRIES[w.zn[1] | 0] || 'start');
+  }
+  if (Array.isArray(w.dp) && !zt.busy) syncDrops(w.dp);
+  if (Array.isArray(w.gr)) for (const g of w.gr) if (Array.isArray(g) && g[0] === net.me && !net.grantSeen.has(g[3])) { net.grantSeen.add(g[3]); const it = ITEM_KEYS[g[1] | 0]; if (it) giveItems([[it, g[2] | 0]], true); }
   const hs = q[3] | 0;
   if (hs && !Q.heli) heliArrive();
   if (Q.heli) {
@@ -1007,7 +1090,7 @@ function applySnapshot(w) {
     let z = net.zmap.get(id);
     if (!z) {
       if (st === 'dead') continue;
-      z = newZombie(skin === 'runner' || skin === 'brute' ? skin : 'walker', a[i + 1] / 10, a[i + 3] / 10, a[i + 2] / 10, st, { variant: skin === 'cop' || skin === 'soldier' ? skin : null });
+      z = newZombie(ZT[skin] ? skin : 'walker', a[i + 1] / 10, a[i + 3] / 10, a[i + 2] / 10, st, { variant: skin === 'cop' || skin === 'soldier' ? skin : null });
       z.id = id; net.zmap.set(id, z);
     }
     z.tx = a[i + 1] / 10; z.tz = a[i + 2] / 10; z.ty = a[i + 3] / 10;
@@ -1041,6 +1124,7 @@ function clientZombies(dt) {
       continue;
     }
     if (z.gone) { net.zmap.delete(z.id); releaseSprite(z); zombies.splice(i, 1); i--; continue; }
+    if (z.skin === 'weeper' && !z.aggro) { z.cryT = (z.cryT || rand(0, 2)) - dt; if (z.cryT <= 0) { z.cryT = rand(2.5, 4.5); if (Math.abs(z.x - player.x) < 20) floaters.push({ x: z.x, y: 2.0, z: z.z, text: 'hu… hu…', t: 1.6, color: '#c8d0e8' }); } }
     const k = Math.min(1, dt * 9), ox = z.x, oz = z.z;
     z.x += ((z.tx ?? z.x) - z.x) * k; z.z += ((z.tz ?? z.z) - z.z) * k; z.y += ((z.ty ?? z.y) - z.y) * k;
     const mv = Math.hypot(z.x - ox, z.z - oz);
@@ -1079,7 +1163,8 @@ function updateRemote(dt) {
       rp.zsp.group.visible = zf;
       if (zf) { setFrame(rp.zsp, dirFromAngle(rp.aim), rp.flags & 1 ? Math.floor(rp.walk) % 4 : 0); rp.zsp.group.position.set(rp.x, 0, rp.z); }
     }
-    sp.group.visible = !(rp.flags & (8 | 16)) && !zf;
+    sp.group.visible = !(rp.flags & (8 | 16)) && !zf && rp.here;
+    if (rp.zsp) rp.zsp.group.visible = zf && rp.here;
     sp.mat.color.setRGB(rp.flags & 64 ? 0.78 : 1, 1, rp.flags & 64 ? 0.75 : 1);
     setSpriteMap(sp, rp.weapon);
     const down = rp.flags & 4;
@@ -1124,8 +1209,8 @@ function playerDied() {
 function revived(rp) { player.downed = 0; player.hp = 40; player.inv = 1.5; showMsg('ĐƯỢC CỨU!', (rp.name || 'Đồng đội') + ' đã kéo bạn dậy'); hud.dirty = true; }
 function respawn() {
   player.dead = false; player.downed = 0; player.hp = 60; player.food = Math.max(player.food, 50); player.water = Math.max(player.water, 50);
-  player.x = 35.2 + rand(-1, 1); player.z = 0.8; player.sprite.group.visible = true; player.sprite.mesh.rotation.x = 0;
-  showMsg('HỒI SINH', 'Bạn tỉnh dậy trước đồn cảnh sát'); hud.dirty = true;
+  placeAtEntry('start'); player.sprite.group.visible = true; player.sprite.mesh.rotation.x = 0;
+  showMsg('HỒI SINH', 'Bạn tỉnh dậy ở ' + ZONE.name); hud.dirty = true;
 }
 // chủ phòng: cả đội gục hết thì thua
 function hostCheckWipe() {
@@ -1139,7 +1224,7 @@ function hostCheckWipe() {
 // bị cắn có thể nhiễm virus: 5 phút để chế & tiêm thuốc giải (Kháng sinh + Ống tiêm),
 // không kịp thì hoá zombie ở một chỗ bất kỳ; đồng đội tìm hoa bỉ ngạn cho ăn để hồi sinh.
 const INFECT_TIME = 300;
-const BITE_CHANCE = { walker: 0.35, runner: 0.35, brute: 0.6 };
+const BITE_CHANCE = { walker: 0.35, runner: 0.35, brute: 0.6, bloater: 0.1, spitter: 0.15, pouncer: 0.45, charger: 0.15, weeper: 0.5 };
 function infectPlayer(z) {
   if (player.zombie || player.boarded || state.mode !== 'play') return;
   if (player.infected > 0) { player.infected = Math.max(20, player.infected - 15); return; }
@@ -1164,18 +1249,7 @@ function quickAntidote() {
   }
   craftAntidote();
 }
-function craftAntidote() {
-  if (player.action || player.zombie || state.mode !== 'play') return;
-  if (player.bag.antidote >= ITEMS.antidote.max) { lootFeed('antidote', 'Đã mang đủ thuốc giải', true); return; }
-  if (!hasRecipe()) {
-    const miss = [player.bag.antibio > 0 ? null : 'Kháng sinh', player.bag.syringe > 0 ? null : 'Ống tiêm'].filter(Boolean).join(' + ');
-    lootFeed('antidote', 'Thiếu ' + miss + ' để chế thuốc giải', true);
-    return;
-  }
-  player.action = { item: 'craft', t: 0, dur: 3.0 };
-  player.reloading = 0;
-  sound.use('heal');
-}
+function craftAntidote() { craft('antidote'); }
 function turnZombie() {
   player.infected = 0; player.downed = 0; player.dead = false; player.action = null; player.searching = false; player.reloading = 0;
   if (!net.active) { gameOver('BẠN ĐÃ HOÁ ZOMBIE'); return; }
@@ -1242,8 +1316,7 @@ function updateZombieForm(dt) {
   tu.textContent = 'GẦM'; tu.classList.toggle('off', player.groanT > 0);
 }
 // hoa bỉ ngạn mọc rải rác (vị trí giống nhau với cả đội, đổi mỗi ngày); mỗi người tự hái phần mình
-const FLOWER_SPOTS = [[-55.4, 0.2], [-47.6, -2.7], [-37.0, -4.0], [-31.2, -1.6], [-26.6, 2.6], [-16.5, -2.7], [-6.0, -5.6], [2.6, -4.6], [9.4, -5.2], [15.9, 2.1], [22.4, 3.7], [31.0, -5.0], [44.8, 3.7], [49.2, -1.6], [55.4, -0.5]];
-let flowers = [], flowerDay = -1, flowerSpr = null;
+let flowers = [], flowerDay = -1, flowerZone = '', flowerSpr = null;
 function clearFlowers() {
   for (const f of flowers) { scene.remove(f.mesh); f.e.base = 0; const i = world.emitters.indexOf(f.e); if (i >= 0) world.emitters.splice(i, 1); }
   flowers = [];
@@ -1251,8 +1324,8 @@ function clearFlowers() {
 function spawnFlowers(day) {
   if (!flowerSpr) flowerSpr = makeFlowerSprite();
   const seed = (net.host ? net.gameId : net.gameSeen) || 7;
-  const r = makeRng(Math.abs(seed % 1e6) * 31 + day * 977);
-  const spots = FLOWER_SPOTS.filter(([x, z]) => !insideSolid(x, z, 0.25));
+  const r = makeRng(Math.abs(seed % 1e6) * 31 + day * 977 + (ZONE.seed % 1000) * 13);
+  const spots = (ZONE.flowers || []).filter(([x, z]) => !insideSolid(x, z, 0.25));
   const n = Math.min(spots.length, 2 + Math.min(2, net.players.size));
   for (let i = 0; i < n; i++) {
     const [x, z] = spots.splice(Math.floor(r() * spots.length), 1)[0];
@@ -1265,14 +1338,14 @@ function spawnFlowers(day) {
     scene.add(mesh); world.hideInReflection.push(mesh);
     const e = { pos: new THREE.Vector3(x, 0.8, z + 0.3), color: new THREE.Color('#ff3a4a'), base: 3.2, dist: 4.5, kind: 'flower', flicker: 'lamp', phase: r() * 100, cur: 0, w: 0 };
     world.emitters.push(e);
-    const id = 'f' + day + '_' + i;
+    const id = 'f' + ZONE.id + day + '_' + i;
     if (player.picked.has(id)) { mesh.visible = false; e.base = 0; }
     flowers.push({ id, x, z, mesh, glow, e });
   }
 }
 function updateFlowers(dt) {
   const want = net.active && state.mode === 'play' ? dayNo : -1;
-  if (want !== flowerDay) { clearFlowers(); flowerDay = want; if (want >= 0) spawnFlowers(want); }
+  if (want !== flowerDay || flowerZone !== ZONE.id) { clearFlowers(); flowerDay = want; flowerZone = ZONE.id; if (want >= 0) spawnFlowers(want); }
   for (const f of flowers) {
     if (!f.mesh.visible) continue;
     f.mesh.position.y = 0.02 + Math.sin(gtime * 2 + f.x) * 0.04;
@@ -1283,12 +1356,12 @@ function updateFlowers(dt) {
 // mỗi sáng một phần chỗ đã lục có đồ mới (đủ nguyên liệu cho ván dài)
 function restock() { for (const id of [...player.looted]) if (Math.random() < 0.35) player.looted.delete(id); }
 
-const Q = { found: false, parts: 0, called: false, heli: null, evac: false, won: false };
-function questReset() { Object.assign(Q, { found: false, parts: 0, called: false, heli: null, evac: false, won: false }); power = false; if (heli) heli.group.visible = false; hud.dirty = true; }
+const Q = { found: false, parts: 0, called: false, heli: null, evac: false, won: false, armory: false };
+function questReset() { Object.assign(Q, { found: false, parts: 0, called: false, heli: null, evac: false, won: false, armory: false }); power = false; if (heli) heli.group.visible = false; hud.dirty = true; }
 function questDone(it) {
   if (it === 'fuel') return power || player.bag.fuel > 0;
   if (it === 'part') return Q.parts + (player.bag.part || 0) >= 2;
-  if (it === 'key') return world.pois.armory.open || player.bag.key > 0;
+  if (it === 'key') return Q.armory || player.bag.key > 0;
   return false;
 }
 function questDescribe(key) {
@@ -1300,6 +1373,7 @@ function questDescribe(key) {
     if (!Q.called) return { label: 'GỌI TRỰC THĂNG CỨU HỘ', can: true, time: 2.0 };
     return { label: 'Đã gọi cứu hộ · chờ bình minh', can: false };
   }
+  if (key === 'cctv') return camReveal > 0 ? { label: 'Đang xem camera…', can: false } : { label: 'Xem camera an ninh', can: true, time: 1.5 };
   if (key === 'generator') {
     if (power) return { label: 'Máy phát đang chạy', can: false };
     if (player.bag.fuel > 0) return { label: 'Đổ xăng, khởi động máy phát', can: true, time: 2.2 };
@@ -1324,9 +1398,15 @@ function powerOn(msg = true) {
   if (power) return;
   power = true;
   sound.generator(true);
-  const g = world.pois.generator; g.e.base = 4;
-  world.smokeSources.push({ x: g.exhaust.x, y: g.exhaust.y, z: g.exhaust.z, rate: 2.5 });
+  applyPowerVisual();
   if (msg) showMsg('CÓ ĐIỆN', 'Máy phát đã chạy · đồn cảnh sát sáng đèn');
+}
+// máy phát chỉ có ở Trung tâm: dựng lại hiệu ứng khi quay lại khu đó
+function applyPowerVisual() {
+  const g = world.pois.generator;
+  if (!g || !power || g.e.base === 4) return;
+  g.e.base = 4;
+  world.smokeSources.push({ x: g.exhaust.x, y: g.exhaust.y, z: g.exhaust.z, rate: 2.5 });
 }
 // predicted: khách đoán trước kết quả, chủ phòng xác nhận qua ảnh chụp
 function questApply(act, n, rp, predicted = false) {
@@ -1338,10 +1418,10 @@ function questApply(act, n, rp, predicted = false) {
   } else if (act === 'call' && power && Q.parts >= 2 && !Q.called) {
     Q.called = true; sound.radio();
     showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh · tín hiệu đang kéo zombie tới!');
-    if (!predicted) makeNoise(world.pois.radio.x, world.pois.radio.z, 40);
+    if (!predicted && world.pois.radio) makeNoise(world.pois.radio.x, world.pois.radio.z, 40);
   } else if (act === 'gen' && !power) {
     powerOn();
-    if (!predicted) makeNoise(world.pois.generator.x, world.pois.generator.z, 16);
+    if (!predicted && world.pois.generator) makeNoise(world.pois.generator.x, world.pois.generator.z, 16);
   } else if (act === 'armory') unlockArmory();
   hud.dirty = true;
 }
@@ -1350,26 +1430,27 @@ function questText() {
   if (player.zombie) return ['BẠN ĐANG LÀ ZOMBIE', 'Chờ đồng đội cho ăn hoa bỉ ngạn · ' + (isTouch ? 'GẦM' : 'E') + ': gầm gọi họ'];
   if (net.active) { const zf = [...net.players.values()].find((r) => r.flags & 128); if (zf) return [`CỨU ${zf.name.toUpperCase()}!`, player.bag.flower > 0 ? 'Mang hoa bỉ ngạn tới cho bạn ăn' : 'Tìm HOA BỈ NGẠN (đỏ, phát sáng) rồi cho bạn ăn']; }
   if (player.infected > 0) return ['NHIỄM VIRUS · CHẾ THUỐC GIẢI', 'Kháng sinh + Ống tiêm · nhà thuốc, xe cứu thương' + (isTouch ? '' : ' · phím V')];
-  if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · phía đông thị trấn →`];
-  if (Q.heli) return ['Trực thăng đang tới…', 'Chạy về bãi đáp phía đông'];
-  if (Q.called) return ['Cầm cự tới bình minh', 'Trực thăng cứu hộ sẽ tới lúc 6:00'];
-  if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', 'Đi về phía đông → · lục soát dọc đường'];
-  if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', 'Bàn bộ đàm trong đồn cảnh sát'];
-  const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (phía tây)');
-  const b = `• Linh kiện bộ đàm ${Q.parts}/2` + (player.bag.part ? ` (đang mang ${player.bag.part})` : ' · nhà ông Tư, xe quân sự');
+  const toDT = routeHint('downtown');
+  if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · ` + (toDT || 'bãi đáp cuối phố →')];
+  if (Q.heli) return ['Trực thăng đang tới…', toDT || 'Chạy về bãi đáp cuối phố →'];
+  if (Q.called) return ['Cầm cự tới bình minh', 'Trực thăng cứu hộ sẽ tới lúc 6:00' + (toDT ? ' · ' + toDT : '')];
+  if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', toDT ? 'Ở Trung tâm thành phố · ' + toDT : 'Đồn cảnh sát ở cuối phố phía đông →'];
+  if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', toDT || 'Bàn bộ đàm trong đồn cảnh sát'];
+  const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (Trung tâm, Phố chợ)');
+  const b = `• Linh kiện bộ đàm ${Q.parts}/2` + (player.bag.part ? ` (đang mang ${player.bag.part})` : ' · nhà ông Tư, xe quân sự (Trung tâm)');
   return ['Sửa bộ đàm để gọi cứu hộ', a + '\n' + b];
 }
 function questListHtml() {
   const it = (done, cur, text) => `<div class="${done ? 'done' : cur ? 'cur' : ''}">${done ? '✓' : '•'} ${text}</div>`;
   const ready = power && Q.parts >= 2;
   return '<b style="color:var(--gold);font-weight:400">NHIỆM VỤ</b>'
-    + it(Q.found, !Q.found, 'Tìm bộ đàm ở đồn cảnh sát (phía đông)')
-    + it(power, Q.found && !power, 'Can xăng ở gara phía tây → đổ vào máy phát cạnh đồn')
+    + it(Q.found, !Q.found, 'Tìm bộ đàm ở đồn cảnh sát (Trung tâm thành phố)')
+    + it(power, Q.found && !power, 'Can xăng ở gara → đổ vào máy phát cạnh đồn')
     + it(Q.parts >= 2, Q.found && Q.parts < 2, `Linh kiện bộ đàm ${Q.parts}/2 · nhà ông Tư, xe quân sự ở chốt kiểm soát`)
     + it(Q.called, ready && !Q.called, 'Gọi trực thăng cứu hộ')
     + it(!!Q.heli, Q.called && !Q.heli, 'Cầm cự tới bình minh')
     + it(Q.won, !!Q.heli, 'Lên trực thăng ở bãi đáp')
-    + '<div style="margin-top:6px;color:var(--ink-dim)">Kho súng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
+    + '<div style="margin-top:6px;color:var(--ink-dim)">Kho súng trong đồn cần chìa khoá · bàn trưởng đồn<br>Súng rất hiếm: súng lục ở phòng bảo vệ trường, shotgun ở kho súng · đạn tự chế từ thuốc súng + vỏ đạn</div>';
 }
 
 // ---------- trực thăng cứu hộ ----------
@@ -1404,9 +1485,9 @@ function makeHeli() {
 }
 function heliArrive() {
   if (!heli) heli = makeHeli();
-  Q.heli = { stage: 'in', t: 0, left: 75 };
-  heli.group.visible = true;
-  showMsg('TRỰC THĂNG ĐÃ TỚI', 'Chạy tới BÃI ĐÁP phía đông!');
+  Q.heli = { stage: 'in', t: 0, left: ZONE.id === 'downtown' ? 75 : 110 };
+  heli.group.visible = !!HELIPAD;
+  showMsg('TRỰC THĂNG ĐÃ TỚI', HELIPAD ? 'Chạy tới BÃI ĐÁP cuối phố!' : 'Bãi đáp ở Trung tâm · ' + routeHint('downtown'));
   sound.heli(true);
 }
 function updateHeli(dt) {
@@ -1416,7 +1497,8 @@ function updateHeli(dt) {
   heli.rotor.rotation.y += dt * 26; heli.tail.rotation.z += dt * 30;
   heli.beacon.visible = Math.floor(gtime * 2.5) % 2 === 0;
   heli.lamp.intensity = 30 * (0.4 + 0.6 * (1 - Math.min(1, atmos.hour > 5 && atmos.hour < 18 ? 0.6 : 0)));
-  const hx = HELIPAD.x, hz = HELIPAD.z;
+  const HP = HELIPAD || ZONES.downtown.helipad, hx = HP.x, hz = HP.z;
+  g.visible = !!HELIPAD && h.stage !== 'gone';
   if (h.stage === 'in') {
     const k = Math.min(1, h.t / 9), e = 1 - Math.pow(1 - k, 3);
     g.position.set(hx + 34 * (1 - e), 0.15 + 16 * Math.pow(1 - e, 1.4), hz - 1.2 * (1 - e));
@@ -1425,7 +1507,7 @@ function updateHeli(dt) {
   } else if (h.stage === 'wait') {
     h.left -= dt;
     g.position.set(hx, 0.15 + Math.sin(gtime * 6) * 0.02, hz);
-    if (playerAlive() && Math.hypot(player.x - hx, player.z - hz) < HELIPAD.r + 0.3) {
+    if (HELIPAD && playerAlive() && Math.hypot(player.x - hx, player.z - hz) < HP.r + 0.3) {
       h.board = (h.board || 0) + dt;
       if (h.board > 1.2) {
         player.boarded = true; player.sprite.group.visible = false; sound.pickup();
@@ -1467,16 +1549,17 @@ function winGame() {
 // ================= LỤC SOÁT, TÚI ĐỒ =================
 const interact = { target: null, t: 0, touchHold: false };
 let bagOpen = false;
-const ICON = {};
+const ICON = {}, iconCanvas = {};
 const CORPSE_NAMES = { z_walker: 'Lục xác zombie', z_runner: 'Lục xác zombie', z_brute: 'Lục xác zombie to xác', z_cop: 'Lục xác cảnh sát', z_soldier: 'Lục xác lính' };
 const lc = (t) => t.charAt(0).toLowerCase() + t.slice(1);
 function interactTargets() {
   const out = [];
   for (const c of world.containers) { const d = Math.hypot(c.x - player.x, c.z - player.z); if (d < 1.3) out.push({ type: 'c', id: c.id, c, d, x: c.x, z: c.z }); }
   for (const z of zombies) if (z.state === 'dead' && z.t > 0.4 && z.t < CORPSE_LIFE - 2) { const d = Math.hypot(z.x - player.x, z.z - player.z); if (d < 1.3) out.push({ type: 'z', id: 'z' + z.id, zo: z, d, x: z.x, z: z.z }); }
+  for (const dr of drops) { const d = Math.hypot(dr.x - player.x, dr.z - player.z); if (d < 1.2) out.push({ type: 'd', id: 'd' + dr.id, dr, d: d - 0.05, x: dr.x, z: dr.z }); }
   if (net.active) for (const rp of net.players.values()) {
     const d = Math.hypot(rp.x - player.x, rp.z - player.z);
-    if (d > 1.5 || !rp.inited) continue;
+    if (d > 1.5 || !rp.inited || !rp.here) continue;
     if (rp.flags & 128) out.push({ type: 'zf', id: 'zf' + rp.peer, rp, d, x: rp.x, z: rp.z });
     else if (rp.flags & 4 && !(rp.flags & 8)) out.push({ type: 'r', id: 'r' + rp.peer, rp, d, x: rp.x, z: rp.z });
     else if (rp.flags & 64 && player.bag.antidote > 0) out.push({ type: 'cu', id: 'cu' + rp.peer, rp, d: d + 0.3, x: rp.x, z: rp.z });
@@ -1501,6 +1584,7 @@ function describe(tg) {
     if (tg.zo.looted) return { label: 'Xác đã lục', can: false, done: true };
     return { label: CORPSE_NAMES[tg.zo.lootKind] || 'Lục xác', can: true, time: searchTime('corpse') };
   }
+  if (tg.type === 'd') return { label: `Nhặt ${ITEMS[tg.dr.it].name}${tg.dr.n > 1 ? ' ×' + tg.dr.n : ''}`, can: true, time: 0.35 };
   if (tg.type === 'r') return { label: 'Cứu ' + tg.rp.name, can: true, time: 3.0 };
   if (tg.type === 'zf') return player.bag.flower > 0 ? { label: `Cho ${tg.rp.name} ăn hoa bỉ ngạn`, can: true, time: 2.0 } : { label: `${tg.rp.name} đã hoá zombie · cần hoa bỉ ngạn`, can: false };
   if (tg.type === 'cu') return { label: `Tiêm thuốc giải cho ${tg.rp.name}`, can: true, time: 1.5 };
@@ -1534,16 +1618,18 @@ function doInteract(tg) {
     tg.zo.looted = true;
     tg.zo.sprite.mat.color.setScalar(0.62);
     giveItems(rollLoot(tg.zo.lootKind));
-  } else if (tg.type === 'r') netEvent('rv', tg.rp.peer);
+  } else if (tg.type === 'd') { if (drops.includes(tg.dr)) pickDrop(tg.dr); }
+  else if (tg.type === 'r') netEvent('rv', tg.rp.peer);
   else if (tg.type === 'zf') { if (player.bag.flower > 0) { player.bag.flower--; netEvent('fl', tg.rp.peer); lootFeed('flower', `Đã cho ${tg.rp.name} ăn hoa`); } }
   else if (tg.type === 'cu') { if (player.bag.antidote > 0) { player.bag.antidote--; netEvent('cure', tg.rp.peer); lootFeed('antidote', `Đã tiêm thuốc giải cho ${tg.rp.name}`); } }
   else if (tg.type === 'f') { player.picked.add(tg.f.id); tg.f.mesh.visible = false; tg.f.e.base = 0; addItem('flower', 1); lootFeed('flower', '+1 Hoa bỉ ngạn'); sound.flower(); }
   else if (tg.key === 'armory') { unlockArmory(); if (net.active && !net.host) netEvent('q', 'armory', 0); }
+  else if (tg.key === 'cctv') { camReveal = 25; showMsg('CAMERA AN NINH', 'Thấy mọi zombie trong khu này trong 25 giây'); sound.radio(); }
   else questInteract(tg.key);
   hud.dirty = true; renderBagIfOpen();
 }
-function giveItems(list) {
-  player.lootCount++;
+function giveItems(list, picked = false) {
+  if (!picked) player.lootCount++;
   if (!list.length) { lootFeed(null, 'Không có gì…', true); sound.empty(); return; }
   for (const [it, n] of list) {
     const got = addItem(it, n);
@@ -1556,18 +1642,18 @@ function addItem(it, n) {
   if (def.weapon !== undefined) {
     const g = player.guns[def.weapon], w = WEAPONS[def.weapon];
     if (!g.owned) {
-      g.owned = true; g.ammo = w.mag;
+      g.owned = true; g.ammo = Math.ceil(w.mag / 2);
       showMsg('VŨ KHÍ MỚI', `${w.name} — bấm ${def.weapon + 1}${isTouch ? ' hoặc ⇄' : ''}`);
       switchWeapon(def.weapon);
       return 1;
     }
-    return addItem(w.ammo, w.mag) > 0 ? 1 : 0;
+    return addItem(w.ammo, Math.ceil(w.mag / 4)) > 0 ? 1 : 0;
   }
   const before = player.bag[it] || 0;
   player.bag[it] = Math.min(def.max, before + n);
   return player.bag[it] - before;
 }
-const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…', craft: 'Đang chế thuốc giải…', antidote: 'Tiêm thuốc giải…' };
+const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…', craft: 'Đang chế…', antidote: 'Tiêm thuốc giải…', torch: 'Châm đuốc…' };
 function useItem(it) {
   const def = ITEMS[it];
   if (!def.use || player.action || !(player.bag[it] > 0) || state.mode !== 'play') return false;
@@ -1575,23 +1661,25 @@ function useItem(it) {
   if (def.use === 'eat' && player.food > 96) { lootFeed(it, 'Chưa đói', true); return false; }
   if (def.use === 'drink' && player.water > 96) { lootFeed(it, 'Chưa khát', true); return false; }
   if (def.use === 'cure' && !(player.infected > 0)) { lootFeed(it, 'Chưa nhiễm virus', true); return false; }
+  if (def.use === 'torch' && player.torchT > 20) { lootFeed(it, 'Đuốc vẫn đang cháy', true); return false; }
   player.action = { item: it, t: 0, dur: def.time };
   player.reloading = 0;
   sound.use(def.use);
   return true;
 }
 function finishAction() {
-  const it = player.action.item, def = ITEMS[it];
+  const act = player.action, it = act.item, def = ITEMS[it];
   player.action = null;
-  if (it === 'craft') {
-    if (!hasRecipe() || player.bag.antidote >= ITEMS.antidote.max) return;
-    player.bag.antibio--; player.bag.syringe--; player.bag.antidote = (player.bag.antidote || 0) + 1;
-    lootFeed('antidote', '+1 Thuốc giải'); sound.unlock(); hud.dirty = true; renderBagIfOpen();
-    if (player.infected > 0) useItem('antidote');
-    return;
-  }
+  if (it === 'craft') { const R = RECIPES.find((r) => r.id === (act.recipe || 'antidote')); if (R) finishCraft(R); return; }
   if (!(player.bag[it] > 0)) return;
   player.bag[it]--;
+  if (act.target) {
+    netEvent('gv', act.target, it);
+    lootFeed(it, `Đã dùng ${def.name.toLowerCase()} cho ${act.targetName}`);
+    sound.pickup(); hud.dirty = true; renderBagIfOpen();
+    return;
+  }
+  if (def.use === 'torch') { player.torchT = TORCH_TIME; lootFeed(it, 'Đã châm đuốc · cháy khoảng ' + Math.round(TORCH_TIME / 60 * 10) / 10 + ' phút'); sound.use('heal'); hud.dirty = true; renderBagIfOpen(); return; }
   if (def.use === 'cure') { cureInfection(); renderBagIfOpen(); return; }
   if (def.heal) { player.hp = Math.min(player.maxHp, player.hp + def.heal); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${def.heal} MÁU`, t: 1.2, color: '#7fe07f' }); }
   if (def.food) { player.food = Math.min(100, player.food + def.food); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NO BỤNG', t: 1.0, color: '#e8a860' }); }
@@ -1622,10 +1710,10 @@ function buildIcons() {
   for (const it in ITEMS) {
     const c = document.createElement('canvas'); c.width = c.height = 16;
     c.getContext('2d').drawImage(cv, ITEMS[it].icon * 16, 0, 16, 16, 0, 0, 16, 16);
-    ICON[it] = c.toDataURL();
+    ICON[it] = c.toDataURL(); iconCanvas[it] = c;
   }
 }
-const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V']];
+const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L']];
 function buildQuickBar() {
   const q = $('quick');
   q.innerHTML = '';
@@ -1633,7 +1721,7 @@ function buildQuickBar() {
     const d = document.createElement('div');
     d.className = 'qi'; d.dataset.it = it; d.title = ITEMS[it].name;
     d.innerHTML = `<img alt="" src="${ICON[it]}"><b>0</b><i>${key}</i>`;
-    const act = () => (it === 'antidote' ? quickAntidote() : useItem(it));
+    const act = () => (it === 'antidote' ? quickAntidote() : it === 'flashlight' ? toggleFlashlight() : useItem(it));
     d.addEventListener('click', act);
     d.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); act(); }, { passive: false });
     q.appendChild(d);
@@ -1650,54 +1738,654 @@ function renderBagIfOpen() { if (bagOpen) renderBag(); }
 function renderBag() {
   const grid = $('bag-grid');
   grid.innerHTML = '';
+  const mates = nearMates();
+  for (const R of RECIPES) {
+    const cr = document.createElement('div');
+    cr.className = 'bi craft';
+    const need = Object.entries(R.need).map(([k, v]) => `${ITEMS[k].name} ${player.bag[k] || 0}/${v}`).join(' + ');
+    cr.innerHTML = `<img alt="" src="${ICON[R.out]}"><span>${R.label}<br><span class="n">${need}</span></span>`;
+    const cb = document.createElement('button'); cb.textContent = 'Chế'; cb.disabled = !canCraft(R);
+    cb.addEventListener('click', () => { if (bagOpen && !net.active) toggleBag(false); craft(R.id); });
+    cr.appendChild(cb); grid.appendChild(cr);
+  }
   for (const it of ITEM_ORDER) {
     const n = player.bag[it] || 0;
     if ((ITEMS[it].quest || ITEMS[it].hideZero) && !n) continue;
     const d = document.createElement('div');
     d.className = 'bi' + (n ? '' : ' zero');
-    d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${ITEMS[it].name}<br><span class="n">×${n}</span></span>`;
-    if (ITEMS[it].use && n) {
-      const b = document.createElement('button'); b.textContent = 'Dùng';
-      b.addEventListener('click', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
-      d.appendChild(b);
-    }
+    const extra = it === 'flashlight' && n ? ` · pin ${Math.ceil(player.battery / BATTERY_TIME * 100)}%` : '';
+    d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${ITEMS[it].name}<br><span class="n">×${n}${extra}</span></span>`;
+    let acts = null;
+    const btn = (label, fn, cls) => {
+      if (!acts) { acts = document.createElement('div'); acts.className = 'acts'; d.appendChild(acts); }
+      const b2 = document.createElement('button'); b2.textContent = label; if (cls) b2.className = cls; b2.addEventListener('click', fn); acts.appendChild(b2);
+    };
+    if (n && ITEMS[it].use) btn('Dùng', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
+    if (n && it === 'flashlight') btn(player.flashOn ? 'Tắt' : 'Bật', () => { toggleFlashlight(); renderBagIfOpen(); });
+    if (n && ITEMS[it].give) for (const rp of mates) btn('Cho ' + rp.name, () => { if (bagOpen && !net.active) toggleBag(false); giveTo(it, rp); renderBagIfOpen(); }, 'give');
+    if (n) btn('Vứt', () => dropItem(it), 'drop');
     grid.appendChild(d);
   }
   WEAPONS.forEach((w, i) => {
     if (!player.guns[i].owned || w.melee) return;
     const d = document.createElement('div'); d.className = 'bi';
-    const ic = i === 2 ? ICON.shotgun : i === 3 ? ICON.smg : ICON.ammo9;
-    d.innerHTML = `<img alt="" src="${ic}"><span>${w.name}<br><span class="n">${player.guns[i].ammo}/${w.mag}</span></span>`;
+    const ic = i === 1 ? ICON.pistol : i === 2 ? ICON.shotgun : ICON.smg;
+    d.innerHTML = `<img alt="" src="${ic}"><span>${w.name}<br><span class="n">${player.guns[i].ammo}/${w.mag} · dự trữ ${player.bag[w.ammo] || 0}</span></span>`;
     grid.appendChild(d);
   });
-  const cr = document.createElement('div');
-  cr.className = 'bi craft';
-  cr.innerHTML = `<img alt="" src="${ICON.antidote}"><span>Chế thuốc giải<br><span class="n">Kháng sinh ×${player.bag.antibio || 0} + Ống tiêm ×${player.bag.syringe || 0}</span></span>`;
-  const cb = document.createElement('button'); cb.textContent = 'Chế'; cb.disabled = !hasRecipe();
-  cb.addEventListener('click', () => { if (bagOpen && !net.active) toggleBag(false); craftAntidote(); });
-  cr.appendChild(cb); grid.prepend(cr);
   $('bag-quest').innerHTML = questListHtml();
 }
 function unlockArmory(feed = true) {
+  const first = !Q.armory;
+  Q.armory = true;
   const a = world.pois.armory;
-  if (a.open) return;
-  if (!feed) { a.open = true; a.door.rotation.y = -1.75; const j = world.colliders.boxes.indexOf(a.box); if (j >= 0) world.colliders.boxes.splice(j, 1); navBuild(); return; }
-  a.open = true;
-  a.door.rotation.y = -1.75;
-  const i = world.colliders.boxes.indexOf(a.box);
-  if (i >= 0) world.colliders.boxes.splice(i, 1);
-  navBuild();
-  sound.unlock();
-  lootFeed('key', 'Đã mở kho vũ khí!');
+  if (a && !a.open) {
+    a.open = true; a.door.rotation.y = -1.75;
+    const j = world.colliders.boxes.indexOf(a.box); if (j >= 0) world.colliders.boxes.splice(j, 1);
+    navBuild();
+  }
+  if (feed && first) { sound.unlock(); lootFeed('key', 'Đã mở kho vũ khí!'); }
 }
 function resetWorldState() {
-  const g = world.pois.generator; g.e.base = 0;
-  world.smokeSources = world.smokeSources.filter((s0) => !(s0.x === g.exhaust.x && s0.z === g.exhaust.z));
+  const g = world.pois.generator;
+  if (g) { g.e.base = 0; world.smokeSources = world.smokeSources.filter((s0) => !(s0.x === g.exhaust.x && s0.z === g.exhaust.z)); }
   const a = world.pois.armory;
-  a.open = false; a.door.rotation.y = 0;
-  if (!world.colliders.boxes.includes(a.box)) world.colliders.boxes.push(a.box);
+  if (a) { a.open = false; a.door.rotation.y = 0; if (!world.colliders.boxes.includes(a.box)) world.colliders.boxes.push(a.box); }
   power = false;
   if (NAV.block) navBuild();
+}
+
+
+
+// ================= ZOMBIE ĐẶC BIỆT =================
+// Phình (nổ dịch xanh dụ cả bầy), Phun (axit), Vồ (đè người), Húc (lao húc văng),
+// Khóc (ngồi khóc, làm phiền thì nổi điên), Khổng lồ. Chủ phòng điều khiển; hiệu ứng lên người chơi
+// gửi qua sự kiện để máy của từng người tự áp dụng.
+let acidPools = [], globs = [];
+const keyOf = (t) => (t.me ? 'me' : t.peer);
+function noticeSpecials() {
+  for (const z of zombies) {
+    if (z.state === 'dead' || !SPECIAL[z.skin] || seenSpecial.has(z.skin)) continue;
+    if (Math.abs(z.x - player.x) > 15 || !(z.aggro || z.skin === 'weeper')) continue;
+    seenSpecial.add(z.skin);
+    showMsg(SPECIAL[z.skin].name, SPECIAL[z.skin].hint);
+  }
+}
+function weeperIdle(z, dt) {
+  const s = z.sprite;
+  setFrame(s, 'down', 0);
+  s.group.position.set(z.x, 0, z.z);
+  s.mat.color.setScalar(1);
+  z.hitT -= dt;
+  z.cryT = (z.cryT || rand(0, 2)) - dt;
+  if (z.cryT <= 0) { z.cryT = rand(2.5, 4.5); if (Math.abs(z.x - player.x) < 20) floaters.push({ x: z.x, y: 2.0, z: z.z, text: 'hu… hu…', t: 1.6, color: '#c8d0e8' }); }
+  for (const t of TG) {
+    const d = Math.hypot(t.x - z.x, t.z - z.z);
+    const ang = (o) => Math.abs(angDiff(o.aim, Math.atan2(z.z - o.z, z.x - o.x)));
+    let lit = false;
+    if (lastFlash > 0.05 && d < 7) {
+      if (t.me) lit = (flashActive() && ang(player) < 0.45) || player.torchT > 0 && d < 4;
+      else { const rp = net.players.get(t.peer); lit = !!rp && ((rp.light & 1 && ang(rp) < 0.45) || (rp.light & 2 && d < 4)); }
+    }
+    if (d < 2.8 || lit) { enrage(z, t); return; }
+  }
+}
+function enrage(z, t) {
+  if (z.aggro) return;
+  z.aggro = true; z.prey = t ? keyOf(t) : null; z.sprite.xr.visible = true;
+  sound.groan(z.x, z.z, true); shake = Math.max(shake, 0.4);
+  floaters.push({ x: z.x, y: 2.3, z: z.z, text: 'AAAAAA!', t: 1.4, color: '#ff4a4a' });
+  if (Math.abs(z.x - player.x) < 20) showMsg('ZOMBIE KHÓC NỔI ĐIÊN!', 'Chạy hoặc dồn hết hoả lực!');
+}
+// ---------- hành vi theo loại (chủ phòng / solo) ----------
+const SPECIAL_AI = {
+  bloater(z, T, d) { if (d < 1.3) { killZombie(z, 0); return true; } return false; },
+  spitter(z, T, d, dt) {
+    z.sT = (z.sT ?? rand(1.5, 3)) - dt;
+    if (z.sT <= 0 && d < 9.5 && d > 2 && navLOS(z.x, z.z, T.x, T.z)) {
+      z.sT = rand(4.5, 6.5);
+      spitAcid(z.x, z.z, T.x + rand(-0.4, 0.4), T.z + rand(-0.3, 0.3), true);
+      floaters.push({ x: z.x, y: 2.1, z: z.z, text: 'PHỤT!', t: 0.8, color: '#9aff6a' });
+    }
+    return false;
+  },
+  pouncer(z, T, d, dt) {
+    z.sT = (z.sT ?? rand(0.5, 1.5)) - dt;
+    if (z.sT <= 0 && d > 2.2 && d < 8 && navLOS(z.x, z.z, T.x, T.z)) {
+      z.state = 'crouch'; z.ct = 0.45; z.tx0 = T.x; z.tz0 = T.z;
+      sound.groan(z.x, z.z, false);
+      return true;
+    }
+    return false;
+  },
+  charger(z, T, d, dt) {
+    z.sT = (z.sT ?? rand(2, 4)) - dt;
+    if (z.sT <= 0 && d > 3 && d < 11 && navLOS(z.x, z.z, T.x, T.z)) {
+      z.sT = rand(6, 9); z.state = 'charge'; z.ct = 0.6; z.wind = true;
+      z.cdx = (T.x - z.x) / d; z.cdz = (T.z - z.z) / d; z.hitKeys = new Set();
+      sound.groan(z.x, z.z, true);
+      floaters.push({ x: z.x, y: 2.6, z: z.z, text: 'GRAAA!', t: 0.9, color: '#ff8a4a' });
+      return true;
+    }
+    return false;
+  },
+};
+function targetByKey(k) { return TG.find((t) => keyOf(t) === k) || null; }
+function specialState(z, dt) {
+  const s = z.sprite;
+  z.hitT -= dt;
+  s.mat.color.setScalar(z.hitT > 0 ? 3 : 1);
+  if (z.state === 'stun') {
+    z.stunT -= dt;
+    setFrame(s, z.dir, 0); s.group.position.set(z.x + Math.sin(gtime * 40) * 0.03, 0, z.z);
+    if (z.stunT <= 0) z.state = 'walk';
+    return;
+  }
+  if (z.state === 'crouch') {
+    z.ct -= dt;
+    setFrame(s, z.dir, 0); s.group.position.set(z.x, -0.12, z.z);
+    if (z.ct <= 0) {
+      const dx = z.tx0 - z.x, dz = z.tz0 - z.z, d = Math.hypot(dx, dz) || 1, L = Math.min(d + 0.4, 8.5);
+      z.state = 'leap'; z.lt = 0; z.ld = Math.max(0.35, L / 10);
+      z.lx0 = z.x; z.lz0 = z.z; z.lx1 = z.x + dx / d * L; z.lz1 = z.z + dz / d * L;
+    }
+    return;
+  }
+  if (z.state === 'leap') {
+    z.lt += dt;
+    const k = Math.min(1, z.lt / z.ld);
+    z.x = z.lx0 + (z.lx1 - z.lx0) * k; z.z = z.lz0 + (z.lz1 - z.lz0) * k;
+    collide(z);
+    const y = Math.sin(Math.PI * k) * 1.3;
+    z.dir = dirFromAngle(Math.atan2(z.lz1 - z.lz0, z.lx1 - z.lx0));
+    setFrame(s, z.dir, 1); s.group.position.set(z.x, y, z.z);
+    if (k >= 1) {
+      let tg = null;
+      for (const t of TG) if (Math.hypot(t.x - z.x, t.z - z.z) < 1.15) tg = t;
+      if (tg) pinTarget(z, tg);
+      else { z.state = 'walk'; z.sT = rand(2, 3.5); }
+    }
+    return;
+  }
+  if (z.state === 'pin') {
+    const t = targetByKey(z.pinKey);
+    z.pinT += dt;
+    if (!t || z.pinT > 9) { releasePin(z, 1.5); return; }
+    z.x = t.x + 0.18; z.z = t.z - 0.06;
+    setFrame(s, 'down', Math.floor(gtime * 10) % 4);
+    s.group.position.set(z.x, 0.3, z.z);
+    return;
+  }
+  if (z.state === 'charge') {
+    if (z.wind) {
+      z.ct -= dt;
+      setFrame(s, z.dir, 0); s.group.position.set(z.x + Math.sin(gtime * 50) * 0.05, 0, z.z);
+      if (z.ct <= 0) { z.wind = false; z.ct = 1.4; }
+      return;
+    }
+    z.ct -= dt;
+    const ox = z.x, oz = z.z, sp = 9;
+    z.x += z.cdx * sp * dt; z.z += z.cdz * sp * dt;
+    const blocked = collide(z) && Math.hypot(z.x - ox, z.z - oz) < sp * dt * 0.5;
+    for (const t of TG) {
+      const k = keyOf(t);
+      if (!z.hitKeys.has(k) && Math.hypot(t.x - z.x, t.z - z.z) < z.r + 0.5) { z.hitKeys.add(k); chargeHit(z, t); }
+    }
+    z.walk += dt * sp * 1.5;
+    z.dir = dirFromAngle(Math.atan2(z.cdz, z.cdx));
+    setFrame(s, z.dir, Math.floor(z.walk) % 4); s.group.position.set(z.x, 0, z.z);
+    if (Math.random() < dt * 20) fx.lit.spawn(z.x, 0.1, z.z, rand(-1, 1), rand(0.5, 1.5), rand(-0.5, 0.5), 0.6, 0.1, '#6a5a48', { grav: 2, drag: 2 });
+    if (z.ct <= 0 || blocked) {
+      z.state = 'stun'; z.stunT = blocked ? 1.8 : 0.7;
+      if (blocked) { shake = Math.max(shake, Math.abs(z.x - player.x) < 12 ? 0.5 : 0); sound.hit(z.x, z.z); }
+    }
+  }
+}
+function pinTarget(z, t) {
+  z.state = 'pin'; z.pinKey = keyOf(t); z.pinT = 0; z.pinDmg = 0;
+  if (t.me) setPinned(z.id);
+  else netEvent('pin', t.peer, z.id);
+}
+function releasePin(z, stun, fromVictim = false) {
+  if (!fromVictim) { if (z.pinKey === 'me') player.pinned = 0; else if (z.pinKey) netEvent('unpin', z.pinKey, z.id); }
+  z.pinKey = null; z.state = 'stun'; z.stunT = stun; z.y = 0;
+  z.x += rand(-0.8, 0.8); z.z += rand(-0.4, 0.4); collide(z);
+}
+function setPinned(id) {
+  if (player.pinned === id) return;
+  player.pinned = id; player.struggle = 0; player.pinDmgT = 0.6; player.action = null; player.searching = false;
+  showMsg('BỊ ZOMBIE VỒ!', isTouch ? 'Bấm VÙNG liên tục để thoát' : 'Bấm E liên tục để vùng ra');
+}
+function breakPin() {
+  const id = player.pinned;
+  player.pinned = 0; player.struggle = 0; player.inv = 1.0;
+  if (!net.active || net.host) { const z = zombies.find((o) => o.id === id); if (z && z.state === 'pin') releasePin(z, 2.4, true); }
+  else netEvent('ups', id);
+  floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'THOÁT!', t: 1.0, color: '#f2c14e' });
+}
+function chargeHit(z, t) {
+  if (t.me) knockPlayer(z.cdx, z.cdz, z.dmg);
+  else netEvent('chg', t.peer, Math.round(z.cdx * 100), Math.round(z.cdz * 100), z.dmg);
+}
+function knockPlayer(dx, dz, dmg) {
+  if (!playerAlive()) return;
+  player.kx = dx * 9; player.kz = dz * 9; player.stunT = 0.8;
+  hurtPlayer({ dmg, type: 'charger', x: player.x - dx, z: player.z - dz }, 1);
+  shake = Math.max(shake, 0.7);
+  floaters.push({ x: player.x, y: 2.4, z: player.z, text: 'BỊ HÚC VĂNG!', t: 1.1, color: '#ff8a4a' });
+}
+// nổ dịch xanh: chạy trên mọi máy, mỗi máy tự áp dụng lên người chơi của mình
+function bileBlast(x, z) {
+  for (let i = 0; i < 46; i++) {
+    const a = Math.random() * TAU, sp = rand(1.5, 6);
+    fx.blood.spawn(x, rand(0.5, 1.4), z, Math.cos(a) * sp, rand(1, 4.5), Math.sin(a) * sp, 2, rand(0.07, 0.14), Math.random() < 0.5 ? '#6a8a1a' : '#9ac83a', { grav: 10, drag: 0.6 });
+  }
+  sound.hit(x, z); sound.groan(x, z, true);
+  if (Math.abs(x - camTarget.x) < 16) shake = Math.max(shake, 0.35);
+  const d = Math.hypot(player.x - x, player.z - z);
+  if (d < 3.2 && playerAlive()) {
+    player.bile = 10;
+    player.hp -= 5; hurtFlash = 0.5; hud.dirty = true;
+    floaters.push({ x: player.x, y: 2.4, z: player.z, text: 'DÍNH DỊCH!', t: 1.4, color: '#b8f04a' });
+    showMsg('DÍNH DỊCH ZOMBIE!', 'Cả bầy zombie đang lao về phía bạn!');
+    if (player.hp <= 0) playerDied();
+  }
+}
+function bileHorde(x, z) {
+  // chủ phòng: dịch xanh gọi một bầy nhỏ lao tới những người bị dính
+  for (const t of TG) {
+    if (Math.hypot(t.x - x, t.z - z) > 3.4) continue;
+    for (let i = 0; i < (phase === 'night' ? 4 : 2); i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const zx = clamp(t.x + side * rand(9, 13), BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5), zz = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
+      if (!insideSolid(zx, zz, 0.5)) newZombie(Math.random() < 0.4 ? 'runner' : 'walker', zx, 0, zz, 'walk');
+    }
+  }
+}
+// axit: cục axit bay theo đường cong rồi thành vũng
+function spitAcid(x0, z0, x1, z1, host) {
+  if (host && net.active && net.host) netEvent('ac', Math.round(x0 * 10), Math.round(z0 * 10), Math.round(x1 * 10), Math.round(z1 * 10));
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(0.6, 2.2, 0.4), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  m.scale.set(0.55, 0.55, 1); scene.add(m);
+  globs.push({ x0, z0, x1, z1, t: 0, d: 0.85, m });
+  sound.cough();
+}
+function updateAcid(dt) {
+  for (let i = globs.length - 1; i >= 0; i--) {
+    const g = globs[i];
+    g.t += dt;
+    const k = Math.min(1, g.t / g.d);
+    g.m.position.set(g.x0 + (g.x1 - g.x0) * k, 1.4 + Math.sin(Math.PI * k) * 1.6 - k * 1.3, g.z0 + (g.z1 - g.z0) * k);
+    if (k >= 1) {
+      scene.remove(g.m); g.m.material.dispose(); globs.splice(i, 1);
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(1.25, 22), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 1.5, 0.22), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+      mesh.rotation.x = -Math.PI / 2; mesh.position.set(g.x1, 0.035, g.z1); scene.add(mesh); hideRefl(mesh);
+      acidPools.push({ x: g.x1, z: g.z1, r: 1.25, t: 7, mesh });
+      sound.hit(g.x1, g.z1);
+    }
+  }
+  for (let i = acidPools.length - 1; i >= 0; i--) {
+    const a = acidPools[i];
+    a.t -= dt;
+    a.mesh.material.opacity = Math.min(0.6, a.t * 0.4) * (0.85 + 0.15 * Math.sin(gtime * 9 + a.x));
+    if (Math.random() < dt * 14) fx.spark.spawn(a.x + rand(-1, 1), 0.05, a.z + rand(-0.8, 0.8), 0, rand(0.4, 1.0), 0, 0.5, 0.05, '#9aff6a', { grav: -0.4, drag: 1, mode: 1 });
+    if (playerAlive() && Math.hypot(player.x - a.x, player.z - a.z) < a.r) {
+      player.acidT = (player.acidT || 0) - dt;
+      if (player.acidT <= 0) {
+        player.acidT = 0.35; player.hp -= 3; hurtFlash = Math.max(hurtFlash, 0.3); hud.dirty = true;
+        floaters.push({ x: player.x, y: 2.2, z: player.z, text: 'AXIT!', t: 0.6, color: '#9aff6a' });
+        if (player.hp <= 0) playerDied();
+      }
+    }
+    if (a.t <= 0) { scene.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose(); acidPools.splice(i, 1); }
+  }
+}
+function clearAcid() {
+  for (const g of globs) { scene.remove(g.m); g.m.material.dispose(); }
+  for (const a of acidPools) { scene.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose(); }
+  globs = []; acidPools = [];
+}
+
+// ================= THÀNH PHỐ NHIỀU KHU =================
+// lưới 3 dãy phố × 4 khu; đi hết đường thì sang khu bên cạnh, vào hẻm phía sau lên dãy trên,
+// rẽ ở ngã tư phía trước xuống dãy dưới. Co-op: cả đội cùng ở một khu, phải cùng ra một lối.
+const ZONE_IDS = GRID.flat();
+const EXITS = [null, 'w', 'e', 'n', 's'];
+const ENTRIES = ['start', 'w', 'e', 'n', 's'];
+const OPP = { w: 'e', e: 'w', n: 's', s: 'n' };
+const ITEM_KEYS = Object.keys(ITEMS);
+const zt = { busy: false, wait: '', target: null };
+const zoneIdx = () => ZONE_IDS.indexOf(ZONE.id);
+let corpseSprites = [], camReveal = 0;
+// gợi ý đường đi tới một khu (tìm đường trên lưới các lối ra)
+function routeHint(target) {
+  if (ZONE.id === target) return '';
+  const prev = new Map([[ZONE.id, null]]), q = [ZONE.id];
+  while (q.length) {
+    const id = q.shift();
+    if (id === target) break;
+    const L = zoneLinks(id);
+    for (const k in L) if (!prev.has(L[k])) { prev.set(L[k], [id, k]); q.push(L[k]); }
+  }
+  if (!prev.has(target)) return '';
+  let cur = target, step = null;
+  while (prev.get(cur)) { step = prev.get(cur); if (step[0] === ZONE.id) break; cur = step[0]; }
+  const name = ZONES[zoneLinks(ZONE.id)[step[1]]].name;
+  return { e: `đi hết đường về phía đông → ${name}`, w: `← quay về phía tây: ${name}`, n: `vào hẻm phía sau ↑ ${name}`, s: `rẽ ở ngã tư phía trước ↓ ${name}` }[step[1]];
+}
+function placeAtEntry(entry) {
+  const k = (net.active ? skinIdx : 0) * 0.7 - 1.0;
+  if (entry === 'w') { player.x = BOUNDS.x0 + 1.4; player.z = 0.6 + k * 0.5; }
+  else if (entry === 'e') { player.x = BOUNDS.x1 - 1.4; player.z = 0.6 + k * 0.5; }
+  else if (entry === 'n' && ZONE.alley !== undefined) { player.x = ZONE.alley + k * 0.5; player.z = ZB + 1.6; }
+  else if (entry === 's' && ZONE.cross !== undefined) { player.x = ZONE.cross + k * 0.5; player.z = BOUNDS.z1 - 0.7; }
+  else { player.x = ((ZONE.start && ZONE.start.x) ?? 0) + k; player.z = (ZONE.start && ZONE.start.z) ?? 1.0; }
+  player.exit = null;
+  camTarget.x = clamp(player.x, BOUNDS.x0 + 9, BOUNDS.x1 - 9);
+}
+function disposeWorld(w) {
+  scene.remove(w.root);
+  const mats = new Set();
+  w.root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) mats.add(m);
+    if (o.isReflector && o.dispose) o.dispose();
+  });
+  const texs = new Set();
+  for (const m of mats) {
+    for (const k in m) { const v = m[k]; if (v && v.isTexture) texs.add(v); }
+    if (m.uniforms) for (const k in m.uniforms) { const v = m.uniforms[k] && m.uniforms[k].value; if (v && v.isTexture) texs.add(v); }
+    m.dispose();
+  }
+  for (const t of texs) t.dispose();
+}
+function makeCorpseProps() {
+  for (const sp of corpseSprites) scene.remove(sp.group);
+  corpseSprites = [];
+  for (const c of world.containers) if (c.corpse) {
+    const sp = makeSprite([SPR.zombies[c.label === 'Xác lính' ? 'soldier' : 'walker'][c.x > 0 ? 1 : 0]], '#ff4a4a');
+    setFrame(sp, 'down', 0);
+    sp.mesh.rotation.x = -Math.PI / 2; sp.xr.visible = false; sp.blob.visible = false;
+    sp.mat.color.setRGB(0.75, 0.7, 0.7);
+    sp.group.position.set(c.x, 0.03, c.z + sp.h / 2);
+    corpseSprites.push(sp);
+  }
+}
+// dựng (lại) thế giới cho khu hiện tại và nối các hệ thống phụ thuộc vào nó
+function buildZoneWorld() {
+  world = buildWorld(scene, quality);
+  for (const m of reflHide) world.hideInReflection.push(m);
+  navBuild(); computeTerraceSegs();
+  if (SPR) makeCorpseProps();
+  if (fx.crows) { fx.crows.perches = world.perches; for (const b of fx.crows.birds) { b.state = 'gone'; b.perch = null; b.t = rand(1, 6); b.mesh.visible = false; } }
+  if (fx.cones) { scene.remove(fx.cones.mesh); fx.cones.mesh.geometry.dispose(); fx.cones.mesh.material.dispose(); fx.cones = new LampCones(scene, world.lampHeads); }
+  if (fx.decals) { fx.decals.clear(); for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9); }
+}
+function loadZone(id, entry) {
+  clearFlowers(); clearDrops(); clearAcid(); player.pinned = 0;
+  for (const z of zombies) releaseSprite(z);
+  zombies = []; bullets = []; net.zmap.clear();
+  for (const p of pickups) scene.remove(p.mesh);
+  pickups = [];
+  disposeWorld(world);
+  setZone(id);
+  buildZoneWorld();
+  if (power) applyPowerVisual();
+  if (Q.armory) unlockArmory(false);
+  curBuilding = null; interact.target = null; interact.t = 0; player.action = null; player.searching = false;
+  camReveal = 0;
+  if (player.zombie) { placeAtEntry(entry); turnZombiePlace(); } else placeAtEntry(entry);
+  if (state.mode === 'play' && (!net.active || net.host)) {
+    spawnLurkers();
+    for (let i = 0; i < (phase === 'night' ? 1 : 2); i++) spawnStray();
+    if (phase === 'night' && Math.random() < 0.4) spawnWeeper();
+    if (net.active) loadHostDrops();
+  }
+  if (!net.active) loadHostDrops();
+  hud.dirty = true;
+  sound.generator(power && !!world.pois.generator);
+  showMsg(ZONE.name.toUpperCase(), zoneSubtitle());
+}
+function zoneSubtitle() {
+  const L = ZONE.links || {};
+  const parts = [];
+  if (L.w) parts.push('← ' + L.w);
+  if (L.e) parts.push(L.e + ' →');
+  if (L.n) parts.push('hẻm ↑ ' + L.n);
+  if (L.s) parts.push('ngã tư ↓ ' + L.s);
+  return parts.join(' · ');
+}
+// làm mờ màn hình rồi chuyển khu (solo, chủ phòng, hoặc khách theo ảnh chụp của chủ phòng)
+function requestZone(id, entry) {
+  if (zt.busy || !ZONES[id]) return;
+  zt.busy = true; zt.target = id;
+  $('zfade').classList.add('on');
+  setTimeout(() => {
+    try { loadZone(id, entry); } catch (e) { console.error(e); }
+    zt.target = null;
+    setTimeout(() => { $('zfade').classList.remove('on'); zt.busy = false; }, 80);
+  }, 360);
+}
+function exitAt(mx, mz) {
+  const L = ZONE.linkIds || {};
+  if (L.w && player.x <= BOUNDS.x0 + 0.4 && mx < -0.3) return 'w';
+  if (L.e && player.x >= BOUNDS.x1 - 0.4 && mx > 0.3) return 'e';
+  if (L.n && ZONE.alley !== undefined && Math.abs(player.x - ZONE.alley) < 1.35 && player.z < ZB + 1.6 && mz < -0.3) return 'n';
+  if (L.s && ZONE.cross !== undefined && Math.abs(player.x - ZONE.cross) < 1.35 && player.z > BOUNDS.z1 + 0.8 && mz > 0.3) return 's';
+  return null;
+}
+// đứng ở lối ra: solo thì đi luôn; co-op thì chờ cả đội cùng tới lối đó (chủ phòng quyết định)
+function updateExit(mx, mz) {
+  player.exit = zt.busy ? null : exitAt(mx, mz);
+  zt.wait = '';
+  if (!player.exit) return;
+  const to = ZONE.linkIds[player.exit];
+  if (!net.active) { requestZone(to, OPP[player.exit]); return; }
+  let ready = 1, total = 1;
+  for (const rp of net.players.values()) { if (!rp.inited || !rp.here || rp.flags & (8 | 16 | 128)) continue; total++; if (rp.exit === player.exit) ready++; }
+  if (ready < total) { zt.wait = `Chờ cả đội ra lối này (${ready}/${total}) → ${ZONES[to].name}`; return; }
+  if (net.host) { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = OPP[player.exit]; net.zoneSeqSeen = net.zoneSeq; requestZone(to, OPP[player.exit]); }
+}
+// zombie (người chơi hoá zombie) xuất hiện ở chỗ bất kỳ trong khu mới
+function turnZombiePlace() {
+  for (let k = 0; k < 30; k++) {
+    const x = rand(BOUNDS.x0 + 3, BOUNDS.x1 - 3), z = rand(WALL_Z + 0.6, BOUNDS.z1 - 0.6);
+    if (!insideSolid(x, z, 0.45) && Math.abs(x - player.x) > 12) { player.x = x; player.z = z; return; }
+  }
+}
+
+// ---------- bản đồ thành phố ----------
+let mapOpen = false;
+function toggleMap(force) {
+  if (state.mode !== 'play') return;
+  mapOpen = force !== undefined ? force : !mapOpen;
+  $('citymap').classList.toggle('hidden', !mapOpen);
+  if (!net.active) state.paused = mapOpen || bagOpen;
+  if (mapOpen) renderMap();
+}
+function renderMap() {
+  const CW = 150, CH = 86, PAD = 22, W2 = GRID[0].length * CW + PAD * 2, H2 = GRID.length * CH + PAD * 2;
+  const cx = (c) => PAD + c * CW + CW / 2, cy = (r) => PAD + r * CH + CH / 2;
+  let svg = `<svg viewBox="0 0 ${W2} ${H2}" width="100%" style="max-width:${W2}px" xmlns="http://www.w3.org/2000/svg" font-family="VT323, monospace">`;
+  // đường nối
+  GRID.forEach((row, r) => row.forEach((id, c) => {
+    const L = zoneLinks(id);
+    if (L.e) svg += `<line x1="${cx(c)}" y1="${cy(r)}" x2="${cx(c + 1)}" y2="${cy(r)}" stroke="#6a6258" stroke-width="10"/>`;
+    if (L.s) svg += `<line x1="${cx(c)}" y1="${cy(r)}" x2="${cx(c)}" y2="${cy(r + 1)}" stroke="#6a6258" stroke-width="8" stroke-dasharray="10 5"/>`;
+  }));
+  GRID.forEach((row, r) => row.forEach((id, c) => {
+    const here = id === ZONE.id, dt = id === 'downtown';
+    const fill = here ? '#5a4a1e' : dt ? '#3a1e1e' : '#1e1c24';
+    svg += `<rect x="${cx(c) - CW / 2 + 8}" y="${cy(r) - CH / 2 + 8}" width="${CW - 16}" height="${CH - 16}" fill="${fill}" stroke="${here ? '#f2c14e' : dt ? '#c8402a' : '#4a4652'}" stroke-width="${here ? 3 : 2}"/>`;
+    const name = ZONES[id].name;
+    const words = name.split(' '), half = Math.ceil(words.length / 2);
+    const l1 = words.length > 2 ? words.slice(0, half).join(' ') : name, l2 = words.length > 2 ? words.slice(half).join(' ') : '';
+    svg += `<text x="${cx(c)}" y="${cy(r) - (l2 ? 4 : -4)}" fill="${here ? '#fff0c8' : '#d8d0c4'}" font-size="18" text-anchor="middle">${l1}</text>`;
+    if (l2) svg += `<text x="${cx(c)}" y="${cy(r) + 14}" fill="${here ? '#fff0c8' : '#d8d0c4'}" font-size="18" text-anchor="middle">${l2}</text>`;
+    if (here) svg += `<text x="${cx(c)}" y="${cy(r) + CH / 2 - 12}" fill="#f2c14e" font-size="15" text-anchor="middle">● BẠN ĐANG Ở ĐÂY</text>`;
+    else if (dt) svg += `<text x="${cx(c)}" y="${cy(r) + CH / 2 - 12}" fill="#ff8a6a" font-size="15" text-anchor="middle">★ đồn cảnh sát · bãi đáp</text>`;
+  }));
+  svg += '</svg>';
+  $('map-svg').innerHTML = svg;
+  const hint = routeHint('downtown');
+  $('map-note').textContent = (hint ? 'Đường tới Trung tâm: ' + hint + '. ' : '') + 'Nét liền: hai đầu phố · nét đứt: hẻm/ngã tư. Co-op: cả đội phải cùng ra một lối.';
+}
+
+// ---------- đèn pin, đuốc ----------
+const torchLight = new THREE.PointLight('#ff9a4a', 0, 9, 1.6);
+scene.add(torchLight);
+function toggleFlashlight() {
+  if (!(player.bag.flashlight > 0)) { lootFeed('flashlight', 'Chưa có đèn pin · tìm ở phòng bảo vệ, cửa hàng điện máy', true); return; }
+  player.flashOn = !player.flashOn;
+  if (player.flashOn && player.battery <= 0 && !consumeBattery()) { player.flashOn = false; return; }
+  sound.reload(); hud.dirty = true;
+}
+function consumeBattery() {
+  if (player.bag.battery > 0) { player.bag.battery--; player.battery = BATTERY_TIME; lootFeed('battery', 'Thay pin đèn pin'); hud.dirty = true; return true; }
+  lootFeed('flashlight', 'Đèn pin hết pin · cần thêm Pin', true);
+  return false;
+}
+const flashActive = () => player.bag.flashlight > 0 && player.flashOn && player.battery > 0;
+const lightState = () => (flashActive() ? 1 : 0) | (player.torchT > 0 ? 2 : 0);
+function updatePlayerLights(dt, A) {
+  const dark = A.flash > 0.05;
+  if (player.bag.flashlight > 0 && player.flashOn) {
+    if (player.battery <= 0 && dark) { if (!consumeBattery()) player.flashOn = false; }
+    else if (dark && state.mode === 'play') player.battery = Math.max(0, player.battery - dt);
+  }
+  if (player.torchT > 0 && state.mode === 'play') {
+    player.torchT -= dt;
+    if (player.torchT <= 0) { player.torchT = 0; lootFeed('torch', 'Đuốc đã tàn', true); hud.dirty = true; }
+    const hx = player.x + Math.cos(player.aim) * 0.35, hz = player.z + Math.sin(player.aim) * 0.35 + 0.2;
+    torchLight.position.set(hx, 1.55, hz);
+    torchLight.intensity = (6 + 16 * Math.max(0.15, A.flash)) * (0.85 + 0.15 * Math.sin(gtime * 17) * Math.sin(gtime * 7.3));
+    if (Math.random() < dt * 30) fx.ember.spawn(hx + rand(-0.06, 0.06), 1.62, hz, rand(-0.2, 0.2), rand(0.8, 1.6), rand(-0.1, 0.1), rand(0.4, 0.8), rand(0.05, 0.09), Math.random() < 0.5 ? '#ffb040' : '#ff6a20', { grav: -0.6, drag: 1.2, mode: 1 });
+  } else torchLight.intensity = 0;
+}
+
+// ---------- vứt đồ cho người khác nhặt ----------
+let drops = [], dropTmp = -1, dropSeq = 0, dropSpr = null;
+const dropStore = {};   // chủ phòng/solo: đồ vứt của từng khu
+function dropMesh(it) {
+  const map = new THREE.CanvasTexture(iconCanvas[it]);
+  map.magFilter = THREE.NearestFilter; map.minFilter = THREE.NearestFilter; map.colorSpace = THREE.SRGBColorSpace;
+  const mat = spriteLit(new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, emissive: new THREE.Color(0.4, 0.4, 0.4), emissiveMap: map }));
+  const geo = new THREE.PlaneGeometry(0.62, 0.62); geo.translate(0, 0.36, 0);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.quaternion.copy(camQuat);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(1.1, 0.95, 0.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  glow.scale.set(1.0, 1.0, 1); glow.position.set(0, 0.3, -0.05); mesh.add(glow);
+  scene.add(mesh);
+  return mesh;
+}
+function addDropLocal(d) {
+  d.mesh = dropMesh(d.it); d.mesh.position.set(d.x, 0.02, d.z);
+  drops.push(d);
+  return d;
+}
+function removeDrop(d) { scene.remove(d.mesh); d.mesh.geometry.dispose(); d.mesh.material.map.dispose(); d.mesh.material.dispose(); drops.splice(drops.indexOf(d), 1); }
+function clearDrops() { for (const d of [...drops]) removeDrop(d); }
+function hostAddDrop(it, n, x, z, zone = zoneIdx()) {
+  if (!ITEMS[it] || ITEMS[it].weapon !== undefined) return;
+  const zid = ZONE_IDS[zone] || ZONE.id;
+  const d = { id: ++dropSeq, it, n, x: clamp(x, BOUNDS.x0, BOUNDS.x1), z: clamp(z, BOUNDS.z0, BOUNDS.z1) };
+  (dropStore[zid] = dropStore[zid] || []).push(d);
+  if (zid === ZONE.id) addDropLocal({ ...d });
+}
+function loadHostDrops() { for (const d of dropStore[ZONE.id] || []) addDropLocal({ ...d }); }
+function hostPickDrop(id, peer) {
+  const list = dropStore[ZONE.id] || [];
+  const k = list.findIndex((d) => d.id === id);
+  if (k < 0) return;
+  const d = list.splice(k, 1)[0];
+  const local = drops.find((o) => o.id === id); if (local) removeDrop(local);
+  if (peer === net.me || !net.active) giveItems([[d.it, d.n]], true);
+  else net.grants.push([peer, ITEM_KEYS.indexOf(d.it), d.n, Date.now() % 1e9 + '_' + id]);
+}
+// khách: dựng đồ vứt theo ảnh chụp của chủ phòng
+function syncDrops(list) {
+  const seen = new Set();
+  for (const a of list) {
+    if (!Array.isArray(a)) continue;
+    const id = a[0] | 0, it = ITEM_KEYS[a[1] | 0];
+    if (!it || net.pickedDrops.has(id)) continue;
+    seen.add(id);
+    if (!drops.some((d) => d.id === id)) addDropLocal({ id, it, n: a[2] | 0, x: a[3] / 10, z: a[4] / 10 });
+  }
+  for (const d of [...drops]) if ((d.id > 0 && !seen.has(d.id)) || (d.id < 0 && list.length && drops.some((o) => o.id > 0 && o.it === d.it && Math.hypot(o.x - d.x, o.z - d.z) < 0.6))) removeDrop(d);
+}
+const DROP_CHUNK = { ammo9: 10, shells: 4, casing: 5 };
+function dropItem(it) {
+  const have = player.bag[it] || 0;
+  if (!have || state.mode !== 'play' || player.zombie) return;
+  const n = Math.min(have, DROP_CHUNK[it] || 1);
+  player.bag[it] -= n;
+  if (it === 'flashlight' && !player.bag.flashlight) player.flashOn = false;
+  const x = player.x + Math.cos(player.aim) * 0.6, z = player.z + Math.sin(player.aim) * 0.4;
+  if (!net.active || net.host) hostAddDrop(it, n, x, z);
+  else { netEvent('dr', it, n, Math.round(x * 10), Math.round(z * 10)); addDropLocal({ id: dropTmp--, it, n, x, z }); }
+  lootFeed(it, `Đã vứt ${n} ${ITEMS[it].name}`);
+  sound.rustle(0.2); hud.dirty = true; renderBagIfOpen();
+}
+function pickDrop(d) {
+  if (d.id < 0) { giveItems([[d.it, d.n]], true); removeDrop(d); return; }
+  if (!net.active || net.host) { hostPickDrop(d.id, net.me); return; }
+  net.pickedDrops.add(d.id);
+  netEvent('pk', d.id);
+  removeDrop(d);
+}
+
+// ---------- dùng đồ cho đồng đội ----------
+function nearMates(r = 2.6) {
+  const out = [];
+  if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && !(rp.flags & (8 | 16 | 128)) && Math.hypot(rp.x - player.x, rp.z - player.z) < r) out.push(rp);
+  return out;
+}
+function giveTo(it, rp) {
+  const def = ITEMS[it];
+  if (!def.give || !(player.bag[it] > 0) || player.action || state.mode !== 'play') return;
+  if (it === 'antidote' && !(rp.flags & 64)) { lootFeed(it, `${rp.name} chưa nhiễm virus`, true); return; }
+  player.action = { item: it, t: 0, dur: def.time, target: rp.peer, targetName: rp.name };
+  player.reloading = 0;
+  sound.use(def.use);
+}
+function receiveGift(it, rp) {
+  const def = ITEMS[it];
+  if (!def || !def.give) return;
+  const who = rp && rp.name ? rp.name : 'Đồng đội';
+  if (def.use === 'cure') { if (player.infected > 0) cureInfection(who); return; }
+  applyItemEffect(it);
+  showMsg('ĐƯỢC GIÚP', `${who} đã dùng ${def.name.toLowerCase()} cho bạn`);
+}
+function applyItemEffect(it) {
+  const def = ITEMS[it];
+  if (def.heal) { player.hp = Math.min(player.maxHp, player.hp + def.heal); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${def.heal} MÁU`, t: 1.2, color: '#7fe07f' }); }
+  if (def.food) { player.food = Math.min(100, player.food + def.food); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NO BỤNG', t: 1.0, color: '#e8a860' }); }
+  if (def.water) { player.water = Math.min(100, player.water + def.water); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'HẾT KHÁT', t: 1.0, color: '#7ac8f0' }); }
+  sound.pickup(); hud.dirty = true; renderBagIfOpen();
+}
+
+// ---------- chế tạo ----------
+const canCraft = (R) => Object.entries(R.need).every(([k, v]) => (player.bag[k] || 0) >= v);
+function craft(id) {
+  const R = RECIPES.find((r) => r.id === id);
+  if (!R || player.action || player.zombie || state.mode !== 'play') return;
+  if ((player.bag[R.out] || 0) >= ITEMS[R.out].max) { lootFeed(R.out, `Đã mang đủ ${ITEMS[R.out].name.toLowerCase()}`, true); return; }
+  if (!canCraft(R)) {
+    const miss = Object.keys(R.need).filter((k) => (player.bag[k] || 0) < R.need[k]).map((k) => ITEMS[k].name).join(' + ');
+    lootFeed(R.out, 'Thiếu ' + miss, true);
+    return;
+  }
+  player.action = { item: 'craft', recipe: R.id, t: 0, dur: R.time, label: R.label + '…' };
+  player.reloading = 0;
+  sound.use('heal');
+}
+function finishCraft(R) {
+  if (!canCraft(R)) return;
+  for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
+  const got = addItem(R.out, R.n);
+  lootFeed(R.out, `+${got} ${ITEMS[R.out].name}`); sound.unlock(); hud.dirty = true; renderBagIfOpen();
+  if (R.out === 'antidote' && player.infected > 0) useItem('antidote');
 }
 
 // ================= HUD =================
@@ -1748,10 +2436,11 @@ function updateHud() {
     if (hud.last.team !== html) { hud.last.team = html; team.innerHTML = html; }
   } else if (hud.last.team) { hud.last.team = ''; team.innerHTML = ''; }
   document.querySelectorAll('#quick .qi').forEach((el) => {
-    const n = player.bag[el.dataset.it] || 0;
-    el.querySelector('b').textContent = n;
-    el.classList.toggle('zero', !n);
+    const it = el.dataset.it, n = player.bag[it] || 0;
+    el.querySelector('b').textContent = it === 'flashlight' ? (n ? Math.ceil(player.battery / BATTERY_TIME * 100) + '%' : '0') : it === 'torch' && player.torchT > 0 ? Math.ceil(player.torchT) + 's' : n;
+    el.classList.toggle('zero', it === 'flashlight' ? !n || !player.flashOn : it === 'torch' ? !n && !(player.torchT > 0) : !n);
   });
+  setText('zone-tag', ZONE.name);
 }
 
 // ================= ÁNH SÁNG, KHÍ QUYỂN =================
@@ -1847,8 +2536,8 @@ function applyAtmos(dt, t) {
     rain: A.rain, wind: A.wind,
     crickets: (1 - A.rain) * A.night * (A.ash > 0 ? 0.2 : 1), birds: A.birds,
     fire: Math.max(0, 1 - Math.hypot(player.x - world.campfire.x, player.z - world.campfire.z) / 9), music: state.mode === 'view' ? 0.6 : 1,
-    water: Math.max(0, 1 - Math.abs(camTarget.x - (world.waterfalls[1].x0 + world.waterfalls[1].x1) / 2) / 16),
-    gen: Math.max(0, 1 - Math.hypot(player.x - world.pois.generator.x, player.z - world.pois.generator.z) / 14),
+    water: world.waterfalls[1] ? Math.max(0, 1 - Math.abs(camTarget.x - (world.waterfalls[1].x0 + world.waterfalls[1].x1) / 2) / 16) : 0,
+    gen: world.pois.generator ? Math.max(0, 1 - Math.hypot(player.x - world.pois.generator.x, player.z - world.pois.generator.z) / 14) : 0,
     heli: heli && heli.group.visible ? Math.max(0.15, 1 - Math.abs(player.x - heli.group.position.x) / 40) : 0,
   });
   return A;
@@ -1969,6 +2658,32 @@ function updatePlayer(dt) {
     if (player.coughT <= 0) { player.coughT = rand(9, 20) * (0.35 + player.infected / INFECT_TIME); sound.cough(); }
     if (player.infected <= 0) { turnZombie(); return; }
   }
+  if (player.bile > 0) player.bile -= dt;
+  if (player.pinned) {
+    player.pinDmgT -= dt;
+    if (player.pinDmgT <= 0) {
+      player.pinDmgT = 0.5; player.hp -= phase === 'night' ? 7 : 5; hurtFlash = 0.45; sound.hurt(); hud.dirty = true;
+      if (player.hp <= 0) { player.pinned = 0; playerDied(); return; }
+    }
+    if (player.struggle >= 10) breakPin();
+    if (net.active && !net.host) {
+      const pz = zombies.find((o) => o.id === player.pinned);
+      if (!pz || (pz.state !== 'pin' && pz.state !== 'leap')) { player.pinCheck = (player.pinCheck || 0) + dt; if (player.pinCheck > 1.5) { player.pinned = 0; player.pinCheck = 0; } } else player.pinCheck = 0;
+    }
+    if (player.pinned) {
+      player.sprite.mesh.rotation.x = -Math.PI / 2; player.sprite.group.position.set(player.x, 0.05, player.z);
+      player.firing = false; player.moving = false; player.searching = false; interact.target = null; player.exit = null;
+      const tu = $('t-use'); tu.textContent = 'VÙNG'; tu.classList.remove('off');
+      return;
+    }
+  }
+  if ($('t-use').textContent === 'VÙNG') $('t-use').textContent = 'LỤC';
+  if (player.kx || player.kz) {
+    player.x += player.kx * dt; player.z += player.kz * dt; collide(player);
+    const f = Math.exp(-dt * 6); player.kx *= f; player.kz *= f;
+    if (Math.abs(player.kx) + Math.abs(player.kz) < 0.25) player.kx = player.kz = 0;
+  }
+  if (player.stunT > 0) player.stunT -= dt;
   let mx = 0, mz = 0;
   if (keys.KeyW || keys.ArrowUp) mz -= 1;
   if (keys.KeyS || keys.ArrowDown) mz += 1;
@@ -1978,12 +2693,14 @@ function updatePlayer(dt) {
   if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
   const ms = stickVec(sticks.move);
   if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
+  if (player.stunT > 0) { mx = mz = 0; mag = 0; }
   const sprint = (keys.ShiftLeft || keys.ShiftRight || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
   player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22) * dt, 0, 1);
   const spd = player.speed * (sprint ? 1.55 : 1) * mag * (player.action || player.searching ? 0.45 : 1);
   player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
   collide(player);
   player.moving = mag > 0.1;
+  updateExit(mx, mz);
   // đói, khát: cạn thì mất máu dần
   player.water = Math.max(0, player.water - dt * (100 / 420) * (sprint ? 1.7 : 1));
   player.food = Math.max(0, player.food - dt * (100 / 640));
@@ -2111,7 +2828,9 @@ function updateZombies(dt) {
       }
       continue;
     }
+    if (z.state === 'crouch' || z.state === 'leap' || z.state === 'pin' || z.state === 'charge' || z.state === 'stun') { specialState(z, dt); continue; }
     if (z.state !== 'walk') { zombieTerrace(z, dt); s.mat.color.setScalar(1); continue; }
+    if (z.type === 'weeper' && !z.aggro) { weeperIdle(z, dt); continue; }
     if (!z.aggro) {
       // chưa phát hiện: đứng lắc lư / đi lang thang quanh chỗ cũ; tỉnh khi người chơi lại gần
       const zb = buildingAt(z.x, z.z);
@@ -2131,12 +2850,14 @@ function updateZombies(dt) {
         continue;
       }
     }
-    let T = null, best = 1e9;
-    for (const t of TG) { const dd = (t.x - z.x) ** 2 + (t.z - z.z) ** 2; if (dd < best) { best = dd; T = t; } }
+    let T = z.prey ? targetByKey(z.prey) : null, best = 1e9;
+    // người dính dịch xanh hút zombie như nam châm
+    if (!T) for (const t of TG) { const dd = ((t.x - z.x) ** 2 + (t.z - z.z) ** 2) / (t.bile ? 8 : 1); if (dd < best) { best = dd; T = t; } }
     if (!T) { z.walk += dt; setFrame(s, z.dir, 0); s.group.position.set(z.x, 0, z.z); continue; }
     let dx = T.x - z.x, dz = T.z - z.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
+    if (SPECIAL_AI[z.type] && SPECIAL_AI[z.type](z, T, d, dt)) continue;
     if (d > 1.0 && !(d < 7 && navLOS(z.x, z.z, T.x, T.z)) && navDir(z)) { dx = navOut.x; dz = navOut.z; }
     if (z.stuck > 0.6) { const sx = -dz * z.side, sz = dx * z.side; dx = dx * 0.4 + sx * 0.6; dz = dz * 0.4 + sz * 0.6; z.stuck -= dt; if (z.stuck > 1.2) { z.stuck = 0; z.side *= -1; } }
     z.ux = z.ux === undefined ? dx : z.ux + (dx - z.ux) * Math.min(1, dt * 7);
@@ -2149,6 +2870,7 @@ function updateZombies(dt) {
       const ex = z.x - o.x, ez = z.z - o.z, ed = ex * ex + ez * ez, rr = z.r + o.r;
       if (ed < rr * rr && ed > 1e-4) { const e = Math.sqrt(ed), p = (rr - e) / 2, nx = ex / e, nz = ez / e; z.x += nx * p; z.z += nz * p; o.x -= nx * p; o.z -= nz * p; }
     }
+    if (z.keep && d < z.keep) { dx = -dx; dz = -dz; }
     const ox = z.x, oz = z.z;
     const spd = z.speed * (z.hitT > 0 ? 0.35 : 1);
     z.x += dx * spd * dt; z.z += dz * spd * dt;
@@ -2235,7 +2957,7 @@ function updateWaves(dt) {
     const batch = Math.min(toSpawn, 1 + Math.floor(wave / 3));
     for (let i = 0; i < batch; i++) if (spawnZombie()) toSpawn--;
     // rải đều đợt zombie trong khoảng 2/3 đầu của đêm
-    spawnTimer = clamp((NIGHT_LEN * 0.65 / Math.max(1, nightTotal)) * batch, 0.35, 4) * rand(0.7, 1.3);
+    spawnTimer = clamp((NIGHT_LEN * 0.75 / Math.max(1, nightTotal)) * batch, 0.35, 20) * rand(0.7, 1.3);
     hud.dirty = true;
   }
 }
@@ -2296,7 +3018,7 @@ function draw2D() {
     g.fillStyle = '#c9261b'; g.fillRect(x - w / 2, y, w * Math.max(0, z.hp / z.maxHp), 4);
   }
   if (net.active && state.mode !== 'title') for (const rp of net.players.values()) {
-    if (!rp.inited || rp.flags & (8 | 16)) continue;
+    if (!rp.inited || rp.flags & (8 | 16) || !rp.here) continue;
     if (rp.flags & 128 || rp.pingT > 0) {
       tmpV.set(rp.x, 1.2, rp.z).project(camera);
       const sx = (tmpV.x * 0.5 + 0.5) * W;
@@ -2341,13 +3063,27 @@ function draw2D() {
       g.fillStyle = '#f2c14e'; g.fillRect(x - tw / 2, y + 9, tw * Math.min(1, interact.t / inf.time), 5);
     }
   }
+  if (state.mode === 'play' && player.pinned) {
+    const msg = (isTouch ? 'BỊ VỒ! Bấm VÙNG liên tục' : 'BỊ VỒ! Bấm E liên tục') + ` (${Math.min(10, player.struggle || 0)}/10)`;
+    g.font = '24px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(msg).width) + 24;
+    g.fillStyle = 'rgba(40,6,6,.85)'; g.fillRect(W / 2 - tw / 2, H * 0.36 - 20, tw, 30);
+    g.fillStyle = Math.floor(gtime * 4) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText(msg, W / 2, H * 0.36 + 2);
+  }
+  if (state.mode === 'play' && zt.wait) {
+    g.font = '22px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(zt.wait).width) + 24;
+    g.fillStyle = 'rgba(10,8,14,.85)'; g.fillRect(W / 2 - tw / 2, H * 0.3 - 18, tw, 28);
+    g.fillStyle = '#f2c14e'; g.fillText(zt.wait, W / 2, H * 0.3 + 2);
+  }
   if (state.mode === 'play' && player.action) {
     tmpV.set(player.x, 2.35, player.z).project(camera);
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     const k = Math.min(1, player.action.t / player.action.dur);
     g.font = '18px "VT323", monospace';
-    g.fillStyle = '#000'; g.fillText(ACTION_TEXT[player.action.item] || '', x + 1, y - 7);
-    g.fillStyle = '#e8f0d8'; g.fillText(ACTION_TEXT[player.action.item] || '', x, y - 8);
+    const at = player.action.label || (player.action.target ? `Giúp ${player.action.targetName}…` : ACTION_TEXT[player.action.item] || '');
+    g.fillStyle = '#000'; g.fillText(at, x + 1, y - 7);
+    g.fillStyle = '#e8f0d8'; g.fillText(at, x, y - 8);
     g.fillStyle = 'rgba(0,0,0,.75)'; g.fillRect(x - 31, y - 2, 62, 7);
     g.fillStyle = '#7fe07f'; g.fillRect(x - 30, y - 1, 60 * k, 5);
   }
@@ -2387,15 +3123,22 @@ function togglePause() {
   $('pause').classList.toggle('hidden', !state.paused);
 }
 function bestScore() { return +store.get('deadnight_days', '0') || 0; }
+const START_ZONE = 'school';
 function startGame() {
   sound.init();
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = [];
+  clearDrops(); clearFlowers();
+  for (const k in dropStore) delete dropStore[k];
+  net.zoneSeq = 0; net.zoneSeqSeen = -1; net.zoneEntry = 'start'; net.grants = []; net.pickedDrops.clear();
+  if (ZONE.id !== START_ZONE && !QS.has('zone')) { disposeWorld(world); setZone(START_ZONE); buildZoneWorld(); }
+  camReveal = 0; zt.wait = ''; clearAcid(); seenSpecial.clear();
   for (const p of pickups) scene.remove(p.mesh);
   pickups = []; floaters = [];
   fx.decals.clear();
   for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9);
   player = newPlayer();
+  player.pinned = 0; player.bile = 0; player.stunT = 0; player.kx = player.kz = 0;
   player.sprite.group.visible = true;
   setSpriteMap(player.sprite, player.weapon);
   wave = 0; kills = 0; score = 0; shake = 0; hurtFlash = 0;
@@ -2478,18 +3221,11 @@ function init() {
   placeCamera();
   camera.updateMatrixWorld();
   camQuat.copy(camera.quaternion);
-  world = buildWorld(scene, quality);
-  navBuild();
+  setZone(QS.get('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : START_ZONE);
   SPR = makeCharacterSprites();
+  buildZoneWorld();
   pickupAtlas = makePickupAtlas();
   buildIcons(); buildQuickBar();
-  for (const c of world.containers) if (c.corpse) {
-    const sp = makeSprite([SPR.zombies[c.label === 'Xác lính' ? 'soldier' : 'walker'][c.x > 0 ? 1 : 0]], '#ff4a4a');
-    setFrame(sp, 'down', 0);
-    sp.mesh.rotation.x = -Math.PI / 2; sp.xr.visible = false; sp.blob.visible = false;
-    sp.mat.color.setRGB(0.75, 0.7, 0.7);
-    sp.group.position.set(c.x, 0.03, c.z + sp.h / 2);
-  }
   glowTex = softDisc(64, 0, 2.2);
   fx.sky = new Sky(scene);
   fx.lit = new Particles(scene, 500, { camQuat });
@@ -2500,7 +3236,7 @@ function init() {
   fx.decals = new Decals(scene, 200);
   fx.blood.onLand = (x, z) => { if (Math.random() < 0.35 && z > WALL_Z) fx.decals.add(x, z, rand(0.25, 0.55)); return true; };
   fx.rain = new Rain(scene, quality === 'high' ? 2400 : 1200);
-  const fz = [{ x: POND.cx, z: POND.cz, w: 16, d: 7 }, { x: 0, z: 9, w: 140, d: 9 }, { x: 0, z: 4.5, w: 140, d: 2 }, { x: 44, z: 11, w: 14, d: 7 }];
+  const fz = [{ x: -28, z: 6.25, w: 16, d: 7 }, { x: 0, z: 9, w: 140, d: 9 }, { x: 0, z: 4.5, w: 140, d: 2 }, { x: 44, z: 11, w: 14, d: 7 }];
   fx.fireflies = new Motes(scene, quality === 'high' ? 220 : 120, { color: new THREE.Color(3.2, 4.2, 1.2), size: 0.11, zones: fz });
   fx.ash = new Motes(scene, quality === 'high' ? 500 : 250, { color: new THREE.Color(1.6, 0.7, 0.4), size: 0.05, zones: [{ x: 0, z: 0, w: 1, d: 1 }], mode: 'ash', glow: false });
   fx.mist = new Mist(scene);
@@ -2508,9 +3244,9 @@ function init() {
   fx.crows = new Crows(scene, world.perches, camQuat, (p) => sound.caw(p.x, p.z));
   fx.moths = new Moths(scene, camQuat);
   fx.leaves = new Leaves(scene, camQuat);
-  for (const m of [fx.lit.mesh, fx.blood.mesh, fx.spark.mesh, fx.smoke.mesh, fx.ember.mesh, fx.rain.mesh, fx.rain.splash, fx.fireflies.mesh, fx.ash.mesh, fx.moths.mesh, fx.leaves.p.mesh]) world.hideInReflection.push(m);
-  for (const L of fx.mist.layers) world.hideInReflection.push(L.mesh);
-  for (const it of fx.shafts.items) world.hideInReflection.push(it.mesh);
+  hideRefl(fx.lit.mesh, fx.blood.mesh, fx.spark.mesh, fx.smoke.mesh, fx.ember.mesh, fx.rain.mesh, fx.rain.splash, fx.fireflies.mesh, fx.ash.mesh, fx.moths.mesh, fx.leaves.p.mesh);
+  for (const L of fx.mist.layers) hideRefl(L.mesh);
+  for (const it of fx.shafts.items) hideRefl(it.mesh);
   const beamGeo = new THREE.ConeGeometry(2.4, 9, 24, 1, true);
   beamGeo.translate(0, -4.5, 0); beamGeo.rotateZ(Math.PI / 2);
   beam = new THREE.Mesh(beamGeo, new THREE.ShaderMaterial({
@@ -2528,17 +3264,17 @@ function init() {
       }`,
   }));
   beam.renderOrder = 7; beam.frustumCulled = false;
-  scene.add(beam); world.hideInReflection.push(beam);
+  scene.add(beam); hideRefl(beam);
   tracerMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 3.6, 1.6), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }), 64);
   tracerMesh.count = 0; tracerMesh.frustumCulled = false;
-  scene.add(tracerMesh); world.hideInReflection.push(tracerMesh);
+  scene.add(tracerMesh); hideRefl(tracerMesh);
   player = newPlayer();
   camTarget.set(player.x, 1, 1);
   fx.butterflies = new Butterflies(scene, camQuat, TY);
   fx.flock = new Flock(scene);
   fx.cones = new LampCones(scene, world.lampHeads);
-  for (const b of fx.flock.birds) world.hideInReflection.push(b.mesh);
-  world.hideInReflection.push(fx.butterflies.mesh);
+  for (const b of fx.flock.birds) hideRefl(b.mesh);
+  hideRefl(fx.butterflies.mesh);
   atmos.hour = 15.5; atmos.update(0);
   setQualityLabel();
   $('best').textContent = bestScore();
@@ -2556,14 +3292,21 @@ function init() {
   });
   updateCoopBtn();
   if (QS.has('debug')) window.__dbgKill = () => { toSpawn = 0; zombies.forEach((z) => { if (z.state !== 'dead') killZombie(z, 0); }); };
-  if (QS.has('debug')) window.__dbg = () => ({ phase, hour: +atmos.hour.toFixed(2), weather: atmos.kind, hud: [$('night').textContent, $('atmo').textContent, $('left').textContent, $('msg-title').textContent, $('q-text').textContent], mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2), z.aggro ? 1 : 0]), player: [+player.x.toFixed(1), +player.z.toFixed(1), Math.round(player.hp), Math.round(player.food), Math.round(player.water)], bag: { ...player.bag }, weapon: player.weapon, guns: player.guns.map((g) => [g.owned, g.ammo]), target: interact.target ? [interact.target.id, interact.target.info.label, interact.target.info.can, +interact.t.toFixed(2)] : null, quest: { ...Q, heli: Q.heli ? Q.heli.stage : null }, power, looted: player.looted.size, inf: Math.ceil(player.infected), zombie: player.zombie, net: { active: net.active, host: net.host, code: net.code, peers: net.players.size, me: net.me, hostPeer: net.hostPeer, remote: [...net.players.values()].map((r) => [r.name, +r.x.toFixed(1), +r.z.toFixed(1), r.flags, r.hp]) }, kills });
+  if (QS.has('debug')) window.__dbg = () => ({ phase, hour: +atmos.hour.toFixed(2), weather: atmos.kind, hud: [$('night').textContent, $('atmo').textContent, $('left').textContent, $('msg-title').textContent, $('q-text').textContent], mode: state.mode, gtime: +gtime.toFixed(1), wave, toSpawn, zombies: zombies.map((z) => [z.type, z.state, +z.x.toFixed(2), +z.z.toFixed(2), +(z.y || 0).toFixed(2), z.aggro ? 1 : 0]), player: [+player.x.toFixed(1), +player.z.toFixed(1), Math.round(player.hp), Math.round(player.food), Math.round(player.water)], bag: { ...player.bag }, weapon: player.weapon, guns: player.guns.map((g) => [g.owned, g.ammo]), target: interact.target ? [interact.target.id, interact.target.info.label, interact.target.info.can, +interact.t.toFixed(2)] : null, quest: { ...Q, heli: Q.heli ? Q.heli.stage : null }, power, zone: ZONE.id, links: ZONE.linkIds, exit: player.exit, wait: zt.wait, drops: drops.map((d) => [d.id, d.it, d.n]), light: [player.bag.flashlight, player.flashOn, Math.round(player.battery), Math.round(player.torchT)], looted: player.looted.size, inf: Math.ceil(player.infected), zombie: player.zombie, net: { active: net.active, host: net.host, code: net.code, peers: net.players.size, me: net.me, hostPeer: net.hostPeer, remote: [...net.players.values()].map((r) => [r.name, +r.x.toFixed(1), +r.z.toFixed(1), r.flags, r.hp]) }, kills });
   if (QS.has('debug')) window.__dbgTp = (x, z) => { player.x = x; player.z = z; };
+  if (QS.has('debug')) window.__zoneCross = () => (ZONE.cross === undefined ? null : ZONE.cross);
+  if (QS.has('debug')) window.__give = (it, n) => { addItem(it, n); hud.dirty = true; };
   if (QS.has('debug')) window.__dbgGive = (it, n) => addItem(it, n);
   if (QS.has('debug')) window.__dbgGod = () => { player.hp = player.maxHp = 1e5; };
+  if (QS.has('debug')) window.__dbgHurt = (n) => { player.hp = Math.max(1, player.hp - n); };
+  if (QS.has('debug')) window.__hostZone = (id, entry) => { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = entry; net.zoneSeqSeen = net.zoneSeq; requestZone(id, entry); };
+  if (QS.has('debug')) window.__net = () => { const hp = net.room && net.room.peers().find((q) => q.peer === net.hostPeer); return { host: net.host, hostPeer: net.hostPeer, me: net.me, seen: net.zoneSeqSeen, seq: net.zoneSeq, zn: hp && hp.presence && hp.presence.w ? hp.presence.w.zn : null, busy: zt.busy, zone: ZONE.id }; };
   if (QS.has('debug')) window.__dbgDown = () => { player.maxHp = 100; player.hp = 0; playerDied(); };
   if (QS.has('debug')) window.__dbgInfect = (sec) => { player.infected = sec; };
   if (QS.has('debug')) window.__dbgFlowers = () => flowers.map((f) => [f.id, f.x, f.z, f.mesh.visible]);
   if (QS.has('debug')) window.__dbgSpawn = (x, z, variant, aggro = true) => { newZombie('walker', x, 0, z, 'walk', { variant, aggro }); };
+  if (QS.has('debug')) window.__dbgSpecial = (type, x, z, aggro = true) => { const o = newZombie(type, x, 0, z, 'walk', { aggro }); if (type === 'weeper' && !aggro) o.sprite.xr.visible = false; return o.id; };
+  if (QS.has('debug')) window.__fx = () => ({ pinned: player.pinned, bile: +(player.bile || 0).toFixed(1), kx: +(player.kx || 0).toFixed(2), stun: +(player.stunT || 0).toFixed(2), acid: acidPools.length, globs: globs.length, hp: Math.round(player.hp), z: zombies.filter((o) => o.state !== 'dead').map((o) => [o.type, o.state, o.aggro ? 1 : 0, +o.x.toFixed(1)]) });
   if (QS.has('debug')) window.__dbgAimAt = (x, z) => { tmpV.set(x, 1, z).project(camera); mouse.x = (tmpV.x * 0.5 + 0.5) * W; mouse.y = (-tmpV.y * 0.5 + 0.5) * H; mouse.has = true; };
   if (QS.has('debug')) window.__dbgQuest = (o, pw) => { Object.assign(Q, o); if (pw !== undefined) power = pw; hud.dirty = true; };
   if (QS.has('debug')) window.__dbgClear = () => { for (const z of zombies) releaseSprite(z); zombies = []; toSpawn = 0; strayT = 999; };
@@ -2601,6 +3344,7 @@ function frame(now) {
     const steps = QS.has('debug') ? (+QS.get('speed') || 1) : 1;
     for (let k = 0; k < steps && state.mode === 'play'; k++) {
       if (k) { gtime += dt; U.time.value = gtime; }
+      if (zt.busy) break;
       updatePlayer(dt);
       if (state.mode === 'play') updateZombies(dt);
       if (state.mode === 'play') {
@@ -2633,13 +3377,22 @@ function frame(now) {
   updateCamera(dt);
   const A = applyAtmos(dt, gtime);
   for (const fn of world.animated) fn(dt, gtime, A.wind);
-  flashlight.intensity = state.mode === 'loading' || player.zombie ? 0 : 40 * A.flash;
+  updatePlayerLights(dt, A);
+  lastFlash = A.flash;
+  if (state.mode === 'play') { updateAcid(dt); noticeSpecials(); }
+  const fOn = state.mode === 'play' ? flashActive() && !player.zombie : state.mode === 'title' || state.mode === 'view';
+  flashlight.intensity = state.mode === 'loading' || !fOn ? 0 : 40 * A.flash;
+  if (camReveal > 0 && state.mode === 'play') {
+    camReveal -= dt;
+    for (const z of zombies) if (z.state !== 'dead') z.sprite.xr.visible = camReveal > 0 || z.aggro;
+  }
   // nhiễm virus: màn hình ngả xanh dần; khi là zombie: nhạt màu, ánh lục
   if (state.mode === 'play' && player.zombie) { post.params.tint = [0.82, 1.08, 0.78]; post.params.sat *= 0.55; post.params.vignette = Math.min(1, post.params.vignette + 0.35); }
+  else if (state.mode === 'play' && player.bile > 0) { post.params.tint = [0.85, 1.12, 0.7]; post.params.vignette = Math.min(1, post.params.vignette + 0.3); }
   else if (state.mode === 'play' && player.infected > 0) { const k = 1 - player.infected / INFECT_TIME; post.params.tint = [1 - 0.14 * k, 1 + 0.04 * k, 1 - 0.2 * k]; post.params.vignette = Math.min(1, post.params.vignette + 0.3 * k + 0.08 * k * Math.sin(gtime * 3)); }
   else post.params.tint = [1, 1, 1];
-  aura.position.set(player.x, 2.2, player.z + 0.6); aura.intensity = 3.5 * A.flash;
-  beam.visible = state.mode === 'play';
+  aura.position.set(player.x, 2.2, player.z + 0.6); aura.intensity = (fOn || player.torchT > 0 ? 3.5 : 2.2) * A.flash;
+  beam.visible = state.mode === 'play' && fOn;
   beam.position.set(player.x + Math.cos(player.aim) * 0.45, 1.12, player.z + Math.sin(player.aim) * 0.45);
   beam.rotation.set(0, -player.aim, -0.11, 'YZX');
   beam.material.uniforms.uI.value = (0.028 + A.rain * 0.035 + A.mist * 0.05) * A.flash;
@@ -2687,7 +3440,7 @@ $('px-btn').addEventListener('click', cyclePixel);
 $('dur-btn').addEventListener('click', () => {
   const keys = Object.keys(DURATIONS);
   durKey = keys[(keys.indexOf(durKey) + 1) % keys.length];
-  store.set('deadnight_dur', durKey);
+  store.set('deadnight_dur2', durKey);
   DAY_LEN = DURATIONS[durKey].day; NIGHT_LEN = DURATIONS[durKey].night;
   setQualityLabel();
 });
@@ -2707,9 +3460,12 @@ $('go-btn').addEventListener('click', () => { if (net.host) startCoop(true); });
 $('leave-btn').addEventListener('click', () => { leaveRoom(); setCoopNote('Đã rời phòng.'); });
 $('lobby-close').addEventListener('click', closeLobby);
 $('bag-close').addEventListener('click', () => toggleBag(false));
+$('map-close').addEventListener('click', () => toggleMap(false));
+$('t-map').addEventListener('touchstart', (e) => { e.preventDefault(); toggleMap(); }, { passive: false });
+$('t-map').addEventListener('click', () => toggleMap());
 $('t-bag').addEventListener('touchstart', (e) => { e.preventDefault(); toggleBag(); }, { passive: false });
 $('t-bag').addEventListener('click', () => toggleBag());
-$('t-use').addEventListener('touchstart', (e) => { e.preventDefault(); interact.touchHold = true; }, { passive: false });
+$('t-use').addEventListener('touchstart', (e) => { e.preventDefault(); if (player && player.pinned) { player.struggle = (player.struggle || 0) + 1; return; } interact.touchHold = true; }, { passive: false });
 $('t-use').addEventListener('touchend', (e) => { e.preventDefault(); interact.touchHold = false; }, { passive: false });
 $('t-use').addEventListener('touchcancel', () => { interact.touchHold = false; });
 $('resume-btn').addEventListener('click', togglePause);
@@ -2726,8 +3482,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
 $('help').innerHTML = isTouch
-  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn · Giữ LỤC: lục soát<br>R: nạp đạn · ⇄: đổi vũ khí · TÚI: túi đồ & chế thuốc giải · Nên xoay ngang màn hình'
-  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát<br>R: nạp đạn · 1-4/Q: đổi vũ khí · F: băng bó · C: ăn/uống · V: chế/tiêm thuốc giải · I: túi đồ';
+  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn · Giữ LỤC: lục soát/nhặt<br>R: nạp đạn · ⇄: đổi vũ khí · TÚI: túi đồ, chế tạo, vứt/cho đồ · MAP: bản đồ · Nên xoay ngang màn hình'
+  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát/nhặt<br>R: nạp đạn · 1-4/Q: đổi vũ khí · F: băng bó · C: ăn/uống · V: thuốc giải · T: đuốc · L: đèn pin · I: túi đồ · M: bản đồ';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

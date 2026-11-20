@@ -586,6 +586,10 @@ export function backdropTex() {
 // tường & sàn bên trong nhà
 // ======================================================================
 const GLYPH = {
+  '←': ['.....', '..#..', '.#...', '#####', '.#...', '..#..', '.....'],
+  '→': ['.....', '..#..', '...#.', '#####', '...#.', '..#..', '.....'],
+  '↑': ['..#..', '.###.', '#.#.#', '..#..', '..#..', '..#..', '..#..'],
+  '↓': ['..#..', '..#..', '..#..', '..#..', '#.#.#', '.###.', '..#..'],
   A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
   B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
   C: ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
@@ -857,7 +861,10 @@ export function townFacadeTex(o) {
       }
   }
   // vạch xanh đồn cảnh sát
-  if (kind === 'police') { const y0 = wallH - floorH - 6; P.rect(0, y0, W, 4, (x, y) => (y === y0 ? '#4a7ac8' : '#2a4a8a'), 1.1); }
+  if (kind === 'police' || o.stripe) {
+    const y0 = wallH - floorH - 6, sc = o.stripe || ['#4a7ac8', '#2a4a8a'];
+    P.rect(0, y0, W, 4, (x, y) => (y === y0 ? sc[0] : sc[1]), 1.1);
+  }
   // biển hiệu
   if (o.sign) {
     const s = o.sign, tw = textWidth(s.text);
@@ -915,11 +922,20 @@ export function roomWallTex(o) {
         const row = Math.floor(y / 8), off = (row & 1) * 8;
         c = y % 8 === 7 || (x + off) % 16 === 0 ? '#3a3a3c' : ramp(['#55575a', '#626468', '#707276'], hash((x + off) >> 4, row, 5), x, y, 0.5);
       } else {
-        c = ramp(k === 'police' ? ['#7a8494', '#8a94a4', '#9aa4b4'] : ['#b8b0a0', '#c8c0b0', '#d8d0c0'], 0.5 + (fbm(x * 0.06, y * 0.06, 4, 2) - 0.5) * 0.6, x, y, 0.5);
+        c = ramp(k === 'police' ? ['#7a8494', '#8a94a4', '#9aa4b4'] : k === 'class' ? ['#b8c0a0', '#c8d0b0', '#d8dcc0'] : ['#b8b0a0', '#c8c0b0', '#d8d0c0'], 0.5 + (fbm(x * 0.06, y * 0.06, 4, 2) - 0.5) * 0.6, x, y, 0.5);
       }
       P.set(x, y, c, h);
     }
   if (k === 'police') P.rect(0, H - 34, W, 3, '#2a4a8a', 0.6);
+  if (o.board) {
+    // bảng đen + chữ phấn (lớp học)
+    const bw = Math.min(W - 20, 64), bx = Math.round((W - bw) / 2), by = Math.round(H * 0.22), bh = 22;
+    P.rect(bx - 2, by - 2, bw + 4, bh + 4, '#6a4a30', 1);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) P.set(bx + x, by + y, ramp(['#1e3a2a', '#244232', '#2a4a38'], hash(x >> 2, y >> 2, 9), x, y, 0.3), 0.2);
+    drawText(P, bx + 3, by + 3, o.board, '#e8e8dc');
+    for (let i = 0; i < 3; i++) P.rect(bx + 4 + Math.floor(r() * (bw - 20)), by + 13 + i * 3, 8 + Math.floor(r() * 10), 1, '#c8c8bc', 0.2);
+    P.rect(bx, by + bh + 2, bw, 2, '#8a7a6a', 0.8);
+  }
   // tranh, đồng hồ, áp phích, bảng tin
   const deco = Math.max(1, Math.floor(o.w / 2.5));
   for (let i = 0; i < deco; i++) {

@@ -92,13 +92,26 @@
     #room-code { font-size: 48px; }
   }
   #bag h2 { margin: 0 0 8px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); }
-  #bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
+  #bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .bi .acts { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .bi .acts button { margin-left: 0; }
+  .bi:has(.acts) { flex-wrap: wrap; }
   .bi { display: flex; align-items: center; gap: 6px; background: #1a1620; border: 2px solid #000; padding: 4px 6px; font-size: 18px; line-height: 1.05; }
   .bi img { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
   .bi .n { color: var(--gold); }
   .bi button { margin-left: auto; font-family: inherit; font-size: 16px; color: #fff; background: #2c5a6a; border: 2px solid #9ad8e8; padding: 0 6px; cursor: pointer; }
   .bi.zero { opacity: .35; }
   .bi.craft { grid-column: 1 / -1; border-color: #3a8a4a; background: #14201a; }
+  .bi button + button { margin-left: 4px; }
+  .bi button.drop { background: #4a2a2a; border-color: #c88a7a; }
+  .bi button.give { background: #2a4a2a; border-color: #8ad87a; }
+  #zone-tag { font-size: 16px; color: var(--gold); line-height: 1.1; margin-top: 1px; }
+  #zfade { position: fixed; inset: 0; z-index: 7; background: #000; opacity: 0; pointer-events: none; transition: opacity .32s; }
+  #zfade.on { opacity: 1; }
+  #citymap .card { max-width: 720px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #map-svg svg { display: block; margin: 6px auto 0; }
+  #map-note { font-size: 17px; color: var(--ink-dim); margin-top: 6px; line-height: 1.2; }
+  #t-map { right: calc(120px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 14px; }
   .bi button:disabled { opacity: .35; cursor: default; }
   #inf-row { font-size: 17px; color: #c8ffb8; }
   #inf-row.low #inf-time { color: #ff6a5a; animation: blink .4s infinite alternate; }
@@ -228,7 +241,7 @@
     <div class="row hidden" id="inf-row" style="margin-top:4px"><span class="lbl" style="color:#9aff7a">VIRUS</span><span id="inf-time"></span></div>
   </div>
   <div id="zbanner" class="hidden">BẠN ĐANG LÀ ZOMBIE · chờ đồng đội cho ăn <b>hoa bỉ ngạn</b> · gầm để gọi họ</div>
-  <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div></div>
+  <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div><div id="zone-tag"></div></div>
   <div id="quest-box" class="win"><div id="q-title">NHIỆM VỤ</div><div id="q-text"></div><div id="q-sub"></div></div>
   <div id="quick" class="win"></div>
   <div id="team"></div>
@@ -246,6 +259,8 @@
 <button class="tbtn" id="t-pause" aria-label="Tạm dừng">❚❚</button>
 <button class="tbtn off" id="t-use" aria-label="Lục soát">LỤC</button>
 <button class="tbtn" id="t-bag" aria-label="Túi đồ">TÚI</button>
+<button class="tbtn" id="t-map" aria-label="Bản đồ">MAP</button>
+<div id="zfade"></div>
 <div id="lobby" class="screen hidden"><div class="card win">
   <h2>CHƠI CÙNG BẠN BÈ</h2>
   <div id="lobby-main">
@@ -263,6 +278,12 @@
   </div>
   <div id="lobby-note"></div>
   <div class="btns"><button class="btn ghost" id="lobby-close">Đóng</button></div>
+</div></div>
+<div id="citymap" class="screen hidden"><div class="card win">
+  <h2>BẢN ĐỒ THÀNH PHỐ VÂN LÂM</h2>
+  <div id="map-svg"></div>
+  <div id="map-note"></div>
+  <div class="btns" style="margin-top:10px"><button class="btn ghost" id="map-close">ĐÓNG (M)</button></div>
 </div></div>
 <div id="bag" class="screen hidden"><div class="card win">
   <h2>TÚI ĐỒ</h2>

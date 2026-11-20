@@ -50,6 +50,37 @@
   .bar.st { height: 8px; background: #1a1608; }
   .bar.st > i { background: repeating-linear-gradient(90deg, var(--stam) 0 6px, #b0902e 6px 8px); }
   #hp-box.low #hp-fill { animation: pulse .6s infinite alternate; }
+  .bar.fd, .bar.wt { height: 7px; background: #141008; }
+  .bar.fd > i { background: repeating-linear-gradient(90deg, #d88a3a 0 6px, #a0602a 6px 8px); }
+  .bar.wt > i { background: repeating-linear-gradient(90deg, #4aa8e8 0 6px, #2a78b0 6px 8px); }
+  .bar.low > i { animation: pulse .5s infinite alternate; }
+  #quest-box { position: absolute; right: calc(14px + var(--sr)); top: calc(12px + var(--st)); padding: 6px 12px 7px; width: min(300px, 34vw); }
+  #q-title { font-size: 16px; letter-spacing: 2px; color: var(--gold); line-height: 1; }
+  #q-text { font-size: 19px; line-height: 1.1; color: var(--ink); margin-top: 3px; }
+  #q-sub { font-size: 15px; line-height: 1.1; color: var(--ink-dim); margin-top: 2px; }
+  #quick { position: absolute; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); padding: 6px 8px; display: flex; gap: 6px; pointer-events: auto; }
+  .qi { position: relative; width: 44px; height: 46px; display: grid; place-items: center; background: #1a1620; border: 2px solid #000; cursor: pointer; }
+  .qi img { width: 32px; height: 32px; image-rendering: pixelated; }
+  .qi b { position: absolute; right: 2px; bottom: -1px; font-weight: 400; font-size: 17px; color: #fff; text-shadow: 0 1px 0 #000, 1px 0 0 #000; }
+  .qi i { position: absolute; left: 2px; top: -1px; font-style: normal; font-size: 14px; color: var(--gold); text-shadow: 0 1px 0 #000; }
+  .qi.zero { opacity: .35; }
+  #loot-feed { position: absolute; left: calc(14px + var(--sl)); top: 34%; display: flex; flex-direction: column; gap: 4px; }
+  .lf { display: flex; align-items: center; gap: 6px; font-size: 20px; color: #fff; background: rgba(10,8,14,.72); border-left: 3px solid var(--gold); padding: 1px 10px 2px 4px; text-shadow: 0 1px 0 #000; animation: lfIn 3.2s ease forwards; }
+  .lf img { width: 24px; height: 24px; image-rendering: pixelated; }
+  .lf.bad { border-left-color: var(--blood); color: #f0c0b0; }
+  @keyframes lfIn { 0% { opacity: 0; transform: translateX(-10px); } 8% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
+  #bag { background: rgba(4,4,8,.55); z-index: 7; }
+  #bag .card { max-width: 620px; text-align: left; }
+  #bag h2 { margin: 0 0 8px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); }
+  #bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
+  .bi { display: flex; align-items: center; gap: 6px; background: #1a1620; border: 2px solid #000; padding: 4px 6px; font-size: 18px; line-height: 1.05; }
+  .bi img { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+  .bi .n { color: var(--gold); }
+  .bi button { margin-left: auto; font-family: inherit; font-size: 16px; color: #fff; background: #2c5a6a; border: 2px solid #9ad8e8; padding: 0 6px; cursor: pointer; }
+  .bi.zero { opacity: .35; }
+  #bag-quest { margin-top: 10px; font-size: 19px; line-height: 1.25; color: var(--ink); }
+  #bag-quest .done { color: #7fe07f; text-decoration: line-through; }
+  #bag-quest .cur { color: var(--gold); }
   @keyframes pulse { to { filter: brightness(1.8); } }
   #night-box { position: absolute; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); text-align: center; padding: 4px 18px 6px; }
   #night { font-size: 30px; color: var(--blood); letter-spacing: 3px; line-height: 1; text-shadow: 0 0 10px rgba(210,58,42,.5); }
@@ -103,9 +134,15 @@
   body.touch.playing .tbtn { display: grid; }
   #t-reload { right: calc(18px + var(--sr)); bottom: calc(132px + var(--sb)); }
   #t-swap { right: calc(86px + var(--sr)); bottom: calc(170px + var(--sb)); }
-  #t-pause { right: calc(16px + var(--sr)); top: calc(86px + var(--st)); width: 42px; height: 42px; font-size: 18px; }
+  #t-pause { right: calc(16px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 18px; }
+  #t-use { right: calc(150px + var(--sr)); bottom: calc(118px + var(--sb)); width: 76px; height: 76px; font-size: 22px; background: rgba(140,100,20,.7); border-color: var(--gold); }
+  #t-use.off { display: none !important; }
+  #t-bag { right: calc(66px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 15px; }
+  body.touch #quick { bottom: auto; top: calc(108px + var(--st)); left: calc(14px + var(--sl)); padding: 4px; gap: 4px; }
+  body.touch .qi { width: 40px; height: 42px; }
   body.touch #weapon-box { right: auto; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); min-width: 0; }
   body.touch #weapon-box #slots { display: none; }
+  body:not(.touch) .qi i { display: block; }
 
   .btn.alt { background: #2c5a6a; border-color: #9ad8e8; outline-color: #0c2028; box-shadow: 0 4px 0 #0c2028, 0 0 22px rgba(90,180,210,.35); }
   .btn.alt:hover { background: #3a7488; }
@@ -134,7 +171,8 @@
     .lbl { width: 36px; font-size: 16px; }
     #night-box { padding: 2px 12px 4px; }
     #night { font-size: 24px; } #atmo, #left { font-size: 15px; }
-    #score { font-size: 24px; } #kills { font-size: 14px; }
+    #q-text { font-size: 16px; } #q-sub { font-size: 13px; }
+    #quest-box { width: min(250px, 30vw); padding: 4px 8px; }
     #weapon-box { padding: 5px 10px; }
     #ammo-line { font-size: 30px; }
     #wname { font-size: 17px; }
@@ -144,8 +182,7 @@
     .lbl { width: 34px; font-size: 15px; }
     #night { font-size: 24px; } #atmo, #left { font-size: 15px; }
     #night-box { top: calc(8px + var(--st)); padding: 3px 10px; }
-    #score { font-size: 24px; } #kills { font-size: 14px; }
-    #score-box { padding: 4px 8px; }
+    #quest-box { width: 34vw; }
     #ammo-line { font-size: 32px; }
   }
 </style>
@@ -157,14 +194,18 @@
 <div id="hud">
   <div id="hp-box" class="win">
     <div class="row"><span class="lbl">MÁU</span><div class="bar"><i id="hp-fill"></i></div></div>
-    <div class="row" style="margin-top:6px"><span class="lbl">SỨC</span><div class="bar st"><i id="st-fill"></i></div></div>
+    <div class="row" style="margin-top:5px"><span class="lbl">SỨC</span><div class="bar st"><i id="st-fill"></i></div></div>
+    <div class="row" style="margin-top:5px"><span class="lbl">ĐÓI</span><div class="bar fd" id="fd-bar"><i id="fd-fill"></i></div></div>
+    <div class="row" style="margin-top:4px"><span class="lbl">KHÁT</span><div class="bar wt" id="wt-bar"><i id="wt-fill"></i></div></div>
   </div>
   <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div></div>
-  <div id="score-box" class="win"><div id="score">0</div><div id="kills">0 hạ gục</div></div>
+  <div id="quest-box" class="win"><div id="q-title">NHIỆM VỤ</div><div id="q-text"></div><div id="q-sub"></div></div>
+  <div id="quick" class="win"></div>
+  <div id="loot-feed"></div>
   <div id="weapon-box" class="win">
     <div class="row" style="justify-content:space-between"><span id="wname">SÚNG LỤC</span><span id="reload-tag">NẠP ĐẠN…</span></div>
     <div id="ammo-line"><span id="ammo">12</span> <span id="reserve">∞</span></div>
-    <div id="slots"><div class="slot">1</div><div class="slot">2</div><div class="slot">3</div></div>
+    <div id="slots"><div class="slot">1</div><div class="slot">2</div><div class="slot">3</div><div class="slot">4</div></div>
   </div>
 </div>
 <div id="msg"><div id="msg-title"></div><div id="msg-sub"></div></div>
@@ -172,6 +213,14 @@
 <button class="tbtn" id="t-reload" aria-label="Nạp đạn">R</button>
 <button class="tbtn" id="t-swap" aria-label="Đổi súng">⇄</button>
 <button class="tbtn" id="t-pause" aria-label="Tạm dừng">❚❚</button>
+<button class="tbtn off" id="t-use" aria-label="Lục soát">LỤC</button>
+<button class="tbtn" id="t-bag" aria-label="Túi đồ">TÚI</button>
+<div id="bag" class="screen hidden"><div class="card win">
+  <h2>TÚI ĐỒ</h2>
+  <div id="bag-grid"></div>
+  <div id="bag-quest"></div>
+  <div class="btns" style="margin-top:12px"><button class="btn ghost" id="bag-close">ĐÓNG (I)</button></div>
+</div></div>
 
 <div id="title" class="screen hidden">
   <div class="card">

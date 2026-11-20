@@ -465,7 +465,8 @@ export function groundTex(L) {
     for (let x = 0; x < W; x++) {
       const js = PPU / 16;
       const jx = (vnoise(x * 0.14 / js, y * 0.14 / js, 3) - 0.5) * 7 * js, jy = (vnoise(x * 0.14 / js + 40, y * 0.14 / js, 4) - 0.5) * 7 * js;
-      const k = kindAt(x + jx, y + jy);
+      const k0 = kindAt(x, y);
+      const k = k0 >= 7 ? k0 : kindAt(x + jx, y + jy);
       let c, h = 0;
       if (k === 0 || k === 5) {
         const n = fbm(x * 0.03, y * 0.03, 1, 3) * 0.65 + vnoise(x * 0.45, y * 0.45, 2) * 0.35;
@@ -493,6 +494,24 @@ export function groundTex(L) {
         else { c = ramp(cob, 0.2 + id * 0.6 + (d1 < 1.6 ? 0.1 : 0), x, y, 0.5); h = 1 - Math.min(1, d1 / (C * 0.8)) * 0.4; if (id > 0.88) c = mixc(c, '#6a5a44', 0.35); }
       } else if (k === 3) {
         c = ramp(['#1a1c14', '#22241a', '#2a2c20'], hash(x, y, 3), x, y, 0.8); h = 0.1;
+      } else if (k === 7 || k === 9) {
+        // nhựa đường nứt nẻ, ổ gà, cỏ mọc qua khe nứt, vết dầu
+        const n = fbm(x * 0.05, y * 0.05, 11, 3);
+        c = ramp(['#1e1f22', '#26272a', '#2e2f33', '#37383c'], 0.25 + n * 0.55 + (hash(x, y, 12) - 0.5) * 0.25, x, y, 0.7);
+        h = 0.3;
+        const cr = Math.abs(vnoise(x * 0.09, y * 0.09, 13) - 0.5);
+        if (cr < 0.018) { c = '#121214'; h = -0.4; if (hash(x, y, 14) > 0.8) c = '#3a5a22'; }
+        const pot = fbm(x * 0.03 + 50, y * 0.03, 15, 2);
+        if (pot > 0.7) { c = pot > 0.74 ? '#121316' : '#3a3a3e'; h = pot > 0.74 ? -0.8 : 0.1; }
+        if (fbm(x * 0.04 + 9, y * 0.04 + 3, 16, 2) > 0.7) c = mixc(c, '#0a0a10', 0.45);
+        if (k === 9 && fbm(x * 0.2, y * 0.2, 17, 2) < 0.68) { c = ramp(['#9a9488', '#b8b2a4', '#cac4b6'], hash(x, y, 18), x, y, 0.5); h = 0.5; }
+      } else if (k === 8) {
+        const bx = Math.floor(x / 8), by = Math.floor(y / 8);
+        const edge = x % 8 === 0 || y % 8 === 0;
+        const n = hash(bx, by, 19);
+        c = edge ? (hash(x, y, 20) > 0.7 ? '#2e4a1e' : '#2a2a2c') : ramp(['#4a4a4e', '#56565a', '#626266', '#6e6e72'], 0.25 + n * 0.55, x, y, 0.5);
+        if (n > 0.93 && !edge) c = mixc(c, '#141416', 0.6);
+        h = edge ? 0 : 0.8;
       } else if (k === 4) {
         const furrow = Math.floor(y / 6) % 2 === 0;
         c = ramp(['#2a1c12', '#3a281a', '#4a3424', '#5a4230'], (furrow ? 0.7 : 0.25) + hash(x, y, 4) * 0.3, x, y, 0.8);
@@ -560,4 +579,411 @@ export function backdropTex() {
   });
   const t = tex(P, { srgb: false });
   return t;
+}
+
+// ======================================================================
+// THỊ TRẤN HẬU TẬN THẾ: chữ pixel có dấu, mặt tiền cửa hàng / đồn cảnh sát,
+// tường & sàn bên trong nhà
+// ======================================================================
+const GLYPH = {
+  A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  C: ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
+  D: ['####.', '#...#', '#...#', '#...#', '#...#', '#...#', '####.'],
+  'Đ': ['.###.', '.#..#', '.#..#', '###.#', '.#..#', '.#..#', '.###.'],
+  E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  F: ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  G: ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.###.'],
+  H: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  I: ['.###.', '..#..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  J: ['..###', '...#.', '...#.', '...#.', '#..#.', '#..#.', '.##..'],
+  K: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  L: ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+  M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  N: ['#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#', '#...#'],
+  O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+  Q: ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+  S: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  V: ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+  W: ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+  X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  0: ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  1: ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  2: ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  3: ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+  4: ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  5: ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  6: ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],
+  7: ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  8: ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  9: ['.###.', '#...#', '#...#', '.####', '....#', '....#', '.###.'],
+  '-': ['.....', '.....', '.....', '.###.', '.....', '.....', '.....'],
+  '.': ['.....', '.....', '.....', '.....', '.....', '.....', '..#..'],
+  ':': ['.....', '..#..', '.....', '.....', '.....', '..#..', '.....'],
+  '!': ['..#..', '..#..', '..#..', '..#..', '..#..', '.....', '..#..'],
+  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
+  '/': ['....#', '...#.', '...#.', '..#..', '.#...', '.#...', '#....'],
+  ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+};
+// dấu tiếng Việt (toạ độ tương đối so với góc trên-trái của chữ)
+const MARK = {
+  '́': [[3, -2], [2, -1]],
+  '̀': [[1, -2], [2, -1]],
+  '̉': [[1, -3], [2, -3], [3, -2], [2, -1]],
+  '̃': [[0, -1], [1, -2], [2, -1], [3, -2], [4, -2]],
+  '̂': [[2, -2], [1, -1], [3, -1]],
+  '̆': [[1, -2], [3, -2], [2, -1]],
+  '̣': [[2, 8]],
+  '̛': [[5, -1], [5, 0]],
+};
+export function textWidth(text, scale = 1) { return [...text.normalize('NFD')].filter((c) => !MARK[c]).length * 6 * scale - scale; }
+// vẽ chữ: (x, y) là góc trên-trái của hàng chữ cao 7px (dấu nằm phía trên)
+export function drawText(P, x, y, text, color, { scale = 1, shadow = null, glow = null, spray = 0, rng = null } = {}) {
+  let cx = x, first = true, hat = false;
+  const put = (px, py) => {
+    for (let j = 0; j < scale; j++) for (let i = 0; i < scale; i++) {
+      const X = cx + px * scale + i, Y = y + py * scale + j;
+      if (shadow) P.set(X + scale, Y + scale, shadow, 1.1);
+      P.set(X, Y, color, 1.4);
+      if (glow) P.glow(X, Y, glow);
+    }
+  };
+  for (const ch of text.toUpperCase().normalize('NFD')) {
+    if (MARK[ch]) {
+      const stack = hat && ch !== '\u0323' && ch !== '\u031B' && ch !== '\u0302' && ch !== '\u0306';
+      for (const [mx, my] of MARK[ch]) put(mx + (stack ? 1 : 0), my - (stack ? 2 : 0));
+      if (ch === '\u0302' || ch === '\u0306') hat = true;
+      continue;
+    }
+    if (!first) cx += 6 * scale;
+    first = false; hat = false;
+    const g = GLYPH[ch] || GLYPH[' '];
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 5; i++) if (g[j][i] === '#') {
+      if (spray && rng && rng() < spray * 0.12) continue;
+      put(i, j);
+    }
+    // sơn xịt chảy giọt
+    if (spray && rng) for (let i = 0; i < 5; i++) if (g[6][i] === '#' && rng() < spray * 0.4) { let dy = 7; while (rng() < 0.65 && dy < 11) put(i, dy++); }
+  }
+}
+
+// lớp hư hại dùng chung: vết bẩn từ chân tường, muội khói, vết nứt, lỗ đạn, máu
+function grime(P, x0, y0, w, h, seed, amt = 1) {
+  const r = makeRng(seed + 911);
+  for (let y = y0; y < y0 + h; y++)
+    for (let x = x0; x < x0 + w; x++) {
+      const c = P.get(x, y);
+      if (!c) continue;
+      const fromBottom = (y - y0) / h;
+      const n = fbm(x * 0.08, y * 0.05, seed, 3);
+      let k = Math.max(0, (fromBottom - 0.55) * 1.6) * (0.6 + n * 0.6) * amt;
+      k += Math.max(0, n - 0.62) * 1.2 * amt;
+      if (k > 0.05) P.set(x, y, mixc(c, '#1c1812', Math.min(0.55, k * 0.5)), P.hgt[y * P.w + x]);
+    }
+  // vết nứt
+  for (let k = 0; k < Math.round(3 * amt * w / 60); k++) {
+    let x = x0 + Math.floor(r() * w), y = y0 + Math.floor(r() * h * 0.6);
+    for (let i = 0; i < 18 + r() * 20; i++) {
+      x += Math.round((r() - 0.5) * 2); y += r() < 0.7 ? 1 : 0;
+      if (x < x0 || x >= x0 + w || y >= y0 + h) break;
+      const c = P.get(x, y); if (c) P.set(x, y, mixc(c, '#141210', 0.6), -0.4);
+    }
+  }
+  // lỗ đạn
+  for (let k = 0; k < Math.round(5 * amt * w / 60); k++) {
+    const x = x0 + 2 + Math.floor(r() * (w - 4)), y = y0 + 4 + Math.floor(r() * (h - 8));
+    P.set(x, y, '#0e0c0c', -0.8); P.set(x + 1, y, '#3a3430', -0.3); P.set(x, y + 1, '#3a3430', -0.3);
+  }
+}
+function bloodSmear(P, x, y, r, seed) {
+  const rr = makeRng(seed);
+  for (let i = 0; i < 6; i++) {
+    const bx = x + (rr() - 0.5) * 5, by = y + (rr() - 0.5) * 3;
+    P.ellipse(bx, by, 1 + rr() * 2, 0.8 + rr(), rr() < 0.5 ? '#5a0e0c' : '#7a1410');
+    let dy = by; for (let k = 0; k < 2 + rr() * 6; k++) P.set(bx, dy++, '#4a0a0a');
+  }
+}
+function poster(P, x, y, w, h, kind, seed) {
+  const rr = makeRng(seed);
+  const paper = kind === 'missing' ? '#e8e0c8' : kind === 'wanted' ? '#d8c89a' : '#c8d8e8';
+  P.rect(x, y, w, h, paper, 0.3);
+  for (let i = 0; i < 3; i++) P.rect(x + 1, y + 1 + i * 2, w - 2, 1, '#2a2a30', 0.3);
+  P.rect(x + 2, y + 7, w - 4, h - 10, kind === 'missing' ? '#8a7a6a' : '#5a6a7a', 0.3);
+  if (rr() < 0.6) P.rect(x + w - 2, y, 2, 3, mixc(paper, '#000', 0.25));
+}
+
+// mặt tiền nhà / cửa hàng / đồn cảnh sát thời hậu tận thế (16px = 1m)
+// o: { w, h, floors, kind, wall, door:{x,w,h}, sign, seed, shop:[x0,x1], lit }
+export function townFacadeTex(o) {
+  const W = Math.round(o.w * PPU), H = Math.round(o.h * PPU);
+  const P = new Pix(W, H, { emissive: true });
+  const r = makeRng(o.seed || 1);
+  const FH = 8;
+  const kind = o.kind || 'house';
+  const wall = o.wall || 'plaster';
+  const pal = o.plaster || ['#a89c88', '#c4b8a0', '#d8ceb8'];
+  // nền tường
+  for (let y = 0; y < H - FH; y++)
+    for (let x = 0; x < W; x++) {
+      let c, h = 0.4;
+      if (wall === 'brick') {
+        const row = Math.floor(y / 4), off = (row & 1) * 4, bx = Math.floor((x + off) / 8);
+        const edge = y % 4 === 3 || (x + off) % 8 === 0;
+        const n = hash(bx, row, o.seed);
+        c = edge ? '#4a3a32' : ramp(o.brick || ['#6a2e22', '#7e3a2a', '#8e4632', '#a0563c'], 0.2 + n * 0.6, x, y, 0.4);
+        h = edge ? 0 : 0.8;
+      } else if (wall === 'concrete') {
+        const n = fbm(x * 0.05, y * 0.05, o.seed, 3);
+        c = ramp(pal, 0.5 + (n - 0.5) * 0.8 + (y % 24 === 0 ? -0.25 : 0), x, y, 0.6);
+        if (x % 40 === 0) c = mixc(c, '#000', 0.25);
+        h = y % 24 === 0 || x % 40 === 0 ? 0 : 0.5;
+      } else if (wall === 'plank') {
+        const row = Math.floor(y / 5), n = vnoise(x * 0.12 + row * 7, row, o.seed);
+        c = y % 5 === 4 ? '#221810' : ramp(['#3e2c1e', '#4e3828', '#5e4632', '#6c523c'], 0.3 + n * 0.55, x, y, 0.5);
+        h = y % 5 === 4 ? 0 : 0.5;
+      } else {
+        const n = fbm(x * 0.07, y * 0.07, o.seed, 3);
+        c = ramp(pal, 0.55 + (n - 0.5) * 0.7, x, y, 0.6);
+        // mảng vữa bong lộ gạch
+        const peel = fbm(x * 0.05 + 30, y * 0.06, o.seed + 5, 3);
+        if (peel > 0.68) {
+          const row = Math.floor(y / 4), off = (row & 1) * 4;
+          c = y % 4 === 3 || (x + off) % 8 === 0 ? '#3e302a' : ramp(['#6a3a2a', '#7a4632', '#8a523a'], hash(x >> 3, row, 3), x, y, 0.4);
+          h = 0.1;
+        }
+      }
+      P.set(x, y, c, h);
+    }
+  for (let y = H - FH; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const n = hash(x >> 2, y >> 1, o.seed + 9);
+      P.set(x, y, y === H - FH ? '#5a5650' : ramp(['#2e2c2a', '#3a3836', '#46423e', '#524e48'], 0.3 + n * 0.5, x, y, 0.5), y === H - FH ? 1 : 0.6);
+    }
+  const floors = o.floors || 1;
+  const wallH = H - FH, floorH = wallH / floors;
+  // viền tầng
+  for (let f = 1; f < floors; f++) {
+    const y = Math.round(wallH - f * floorH);
+    P.rect(0, y - 1, W, 3, (x, yy) => (yy === y - 1 ? '#8a8478' : yy === y + 1 ? '#3a3632' : '#6a645a'), 1.2);
+  }
+  const wins = [];
+  const door = o.door ? { x: Math.round((o.door.x - o.door.w / 2) * PPU), w: Math.round(o.door.w * PPU), h: Math.round((o.door.h || 2.1) * PPU) } : null;
+  if (door) door.y = H - door.h;
+  // cửa sổ các tầng
+  for (let f = 0; f < floors; f++) {
+    if (f === 0 && o.shop) continue;
+    const n = o.winPerFloor || Math.max(1, Math.floor((o.w - 1) / 2.6));
+    const top = Math.round(wallH - (f + 1) * floorH + floorH * 0.26);
+    for (let i = 0; i < n; i++) {
+      const cxp = Math.round(W * (i + 1) / (n + 1));
+      if (f === 0 && door && cxp + 9 > door.x - 3 && cxp - 9 < door.x + door.w + 3) continue;
+      const roll = r();
+      const state = kind === 'police' && f === 0 ? 'barred' : roll < (o.litChance || 0.06) ? 'lit' : roll < 0.4 ? 'dark' : roll < 0.7 ? 'boarded' : 'broken';
+      wins.push({ x: cxp - 7, y: top, w: 14, h: 18, state, f });
+    }
+  }
+  for (const w of wins) {
+    for (let y = w.y - 1; y < w.y + w.h + 2; y++) for (let x = w.x - 1; x < w.x + w.w + 1; x++) P.set(x, y, o.trim || '#5a5048', 0.9);
+    for (let y = w.y; y < w.y + w.h; y++)
+      for (let x = w.x; x < w.x + w.w; x++) {
+        const fx = x - w.x, fy = y - w.y;
+        if (fx === 6 || fx === 7 || fy === 8) { P.set(x, y, '#2a2420', 0.7); continue; }
+        if (w.state === 'lit') { const c = ramp(['#c86a2a', '#f09a40', '#ffc870'], 0.3 + fy / w.h * 0.6, x, y, 0.5); P.set(x, y, c, -0.5); P.glow(x, y, c); }
+        else if (w.state === 'dark' || w.state === 'barred') P.set(x, y, (fx + fy) % 11 < 2 ? '#3a4658' : '#141a26', -0.5);
+        else if (w.state === 'broken') P.set(x, y, hash(fx, fy, w.x) > 0.7 && (fx * 2 + fy) % 5 < 2 ? '#56647a' : '#08090c', -0.8);
+        else P.set(x, y, '#0c0c0e', -0.8);
+      }
+    if (w.state === 'boarded') {
+      for (const [a, b, c] of [[2, 1, '#8a6040'], [w.h - 7, -1, '#7a5434'], [8, 0, '#94704a']]) {
+        for (let i = -2; i < w.w + 2; i++) {
+          const yy = w.y + a + Math.round(i * b * 0.25);
+          for (let t = 0; t < 3; t++) P.set(w.x + i, yy + t, t === 0 ? mixc(c, '#ffffff', 0.15) : c, 1.3);
+        }
+      }
+    }
+    if (w.state === 'barred') for (let x = w.x + 1; x < w.x + w.w; x += 3) for (let y = w.y - 1; y < w.y + w.h + 1; y++) P.set(x, y, '#2a2a30', 1.4);
+    for (let x = w.x - 2; x < w.x + w.w + 2; x++) { P.set(x, w.y + w.h + 1, '#8a8478', 1.2); P.set(x, w.y + w.h + 2, '#4a4640', 1); }
+    // vệt muội khói phía trên cửa sổ vỡ
+    if (w.state === 'broken' && r() < 0.6) for (let y = w.y - 14; y < w.y; y++) for (let x = w.x; x < w.x + w.w; x++) {
+      const c = P.get(x, y); if (!c) continue;
+      const k = (1 - (w.y - y) / 14) * (0.5 + 0.5 * vnoise(x * 0.3, y * 0.2, w.x)) * 0.7;
+      P.set(x, y, mixc(c, '#141210', k));
+    }
+  }
+  // tủ kính cửa hàng + cửa cuốn kéo xuống một nửa
+  if (o.shop) {
+    const sx0 = Math.round(o.shop[0] * PPU), sx1 = Math.round(o.shop[1] * PPU);
+    const top = Math.round(wallH - floorH + floorH * 0.18), bot = H - FH - 2;
+    for (let y = top - 2; y < bot + 2; y++) for (let x = sx0 - 2; x < sx1 + 2; x++) P.set(x, y, '#3a3a40', 1);
+    const roll = Math.round(top + (bot - top) * (0.3 + r() * 0.35));
+    for (let y = top; y < bot; y++)
+      for (let x = sx0; x < sx1; x++) {
+        if (door && x >= door.x - 2 && x < door.x + door.w + 2) continue;
+        const fx = x - sx0;
+        if (y < roll) {
+          // cửa cuốn tôn
+          const rib = (y - top) % 3;
+          let c = rib === 0 ? '#8a8e94' : rib === 1 ? '#6a6e74' : '#4e5258';
+          const rust = fbm(x * 0.1, y * 0.15, o.seed + 2, 3);
+          if (rust > 0.62) c = mixc(c, '#7a4a2a', (rust - 0.62) * 2.2);
+          P.set(x, y, c, rib === 0 ? 1 : 0.6);
+        } else {
+          const shelf = (y - roll) % 7 === 0;
+          const goods = !shelf && hash(fx >> 1, (y - roll) / 7 | 0, o.seed) > 0.55;
+          const crack = hash(fx, y, 5) > 0.97;
+          let c = shelf ? '#2a2a2e' : goods ? r.pick(['#5a2a22', '#2a4a5a', '#5a5a2a', '#3a2a4a']) : '#0e1014';
+          if ((fx + (y - roll)) % 13 < 2 && !goods) c = '#2e3644';
+          if (crack) c = '#8a9aaa';
+          P.set(x, y, c, -0.5);
+        }
+      }
+    for (let x = sx0; x < sx1; x++) P.set(x, roll, '#2a2a2e', 1.2);
+  }
+  // cửa ra vào (mở toang, bên trong tối)
+  if (door) {
+    for (let y = door.y - 2; y < H; y++) for (let x = door.x - 2; x < door.x + door.w + 2; x++) P.set(x, y, o.trim || '#4a4038', 1);
+    for (let y = door.y; y < H; y++)
+      for (let x = door.x; x < door.x + door.w; x++) {
+        const fx = x - door.x;
+        let c = '#08070a';
+        if (fx < 4) c = fx === 3 ? '#2a1c12' : ramp(['#3a2a1c', '#4a3626', '#5a4430'], hash(fx, y >> 2, 3), x, y, 0.5);
+        P.set(x, y, c, fx < 4 ? 0.8 : -1);
+      }
+  }
+  // vạch xanh đồn cảnh sát
+  if (kind === 'police') { const y0 = wallH - floorH - 6; P.rect(0, y0, W, 4, (x, y) => (y === y0 ? '#4a7ac8' : '#2a4a8a'), 1.1); }
+  // biển hiệu
+  if (o.sign) {
+    const s = o.sign, tw = textWidth(s.text);
+    const bw = Math.max(tw + 10, Math.round((s.w || 0) * PPU)), bh = 16;
+    const bx = Math.round((s.x !== undefined ? s.x * PPU : W / 2) - bw / 2);
+    const by = Math.round(s.y !== undefined ? s.y * PPU : wallH - floorH + 2);
+    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) {
+      const edge = y === by || y === by + bh - 1 || x === bx || x === bx + bw - 1;
+      P.set(x, y, edge ? (s.edge || '#d8d0c0') : s.bg || '#1e4a8a', edge ? 1.4 : 1.1);
+      if (s.lit && !edge) P.glow(x, y, mixc(s.bg || '#1e4a8a', '#000', 0.4));
+    }
+    drawText(P, bx + Math.round((bw - tw) / 2), by + 5, s.text, s.fg || '#f8f0d8', { shadow: '#0a0a0a', glow: s.lit ? (s.fg || '#f8f0d8') : null });
+    o.signBox = { x: bx, y: by, w: bw, h: bh };
+    if (s.cross) { const cx = bx - 9, cy = by + 1; P.rect(cx, cy, 8, 11, '#e8e8e0', 1.2); P.rect(cx + 3, cy + 2, 2, 7, '#2a9a4a', 1.4); P.rect(cx + 1, cy + 4, 6, 3, '#2a9a4a', 1.4); }
+  }
+  grime(P, 0, 0, W, H - FH, o.seed || 1, o.damage === undefined ? 1 : o.damage);
+  // áp phích, vết máu, graffiti
+  for (let k = 0; k < (o.posters || 0); k++) {
+    const x = 6 + Math.floor(r() * (W - 22)), y = Math.round(wallH - floorH * 0.55);
+    if (door && x + 12 > door.x - 2 && x < door.x + door.w + 2) continue;
+    poster(P, x, y, 10, 14, r() < 0.6 ? 'missing' : 'notice', o.seed + k);
+  }
+  if (o.blood) bloodSmear(P, Math.round(o.blood * W), Math.round(wallH - 20), 3, o.seed);
+  for (const gr of o.graffiti || []) {
+    drawText(P, Math.round(gr.x * PPU), Math.round(gr.y * PPU), gr.text, gr.col || '#c8241c', { scale: gr.scale || 2, spray: 0.6, rng: makeRng(o.seed + 77) });
+  }
+  return {
+    map: tex(P, { mip: true, aniso: 4 }),
+    emissiveMap: tex(P.emissiveCanvas(), { mip: true }),
+    normalMap: tex(P.normalCanvas(1.8), { srgb: false, mip: true }),
+    wins, door,
+  };
+}
+
+// tường bên trong (giấy dán tường, gạch men, bê tông...)
+export function roomWallTex(o) {
+  const W = Math.round(o.w * PPU), H = Math.round(o.h * PPU);
+  const P = new Pix(W, H);
+  const r = makeRng(o.seed || 3);
+  const k = o.kind || 'house';
+  const wain = k === 'house' ? 14 : k === 'garage' ? 0 : 18;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      let c, h = 0.3;
+      const fy = H - 1 - y;
+      if (fy < 2) c = '#2a2420';
+      else if (fy < wain) {
+        if (k === 'house') c = (x % 6 === 0) ? '#4a3220' : ramp(['#5a3e28', '#6a4a30', '#7a5638'], hash(x >> 1, 3, o.seed), x, y, 0.4);
+        else c = (x % 8 === 0 || fy % 8 === 0) ? '#8a9090' : ramp(k === 'pharmacy' ? ['#c8d8d0', '#d8e8e0', '#e8f4ee'] : ['#b8c0c4', '#c8d0d4', '#d8e0e4'], hash(x >> 3, fy >> 3, 7), x, y, 0.4);
+      } else if (k === 'house') {
+        const st = (x % 12 < 6) ? 0 : 1;
+        c = ramp(o.paper || (st ? ['#6a7a5a', '#7a8a68', '#8a9a76'] : ['#7a8a68', '#8a9a76', '#9aaa84']), 0.5 + (hash(x, y >> 2, 2) - 0.5) * 0.4, x, y, 0.5);
+        if ((x + y) % 12 === 0 && st) c = '#a8b890';
+      } else if (k === 'garage') {
+        const row = Math.floor(y / 8), off = (row & 1) * 8;
+        c = y % 8 === 7 || (x + off) % 16 === 0 ? '#3a3a3c' : ramp(['#55575a', '#626468', '#707276'], hash((x + off) >> 4, row, 5), x, y, 0.5);
+      } else {
+        c = ramp(k === 'police' ? ['#7a8494', '#8a94a4', '#9aa4b4'] : ['#b8b0a0', '#c8c0b0', '#d8d0c0'], 0.5 + (fbm(x * 0.06, y * 0.06, 4, 2) - 0.5) * 0.6, x, y, 0.5);
+      }
+      P.set(x, y, c, h);
+    }
+  if (k === 'police') P.rect(0, H - 34, W, 3, '#2a4a8a', 0.6);
+  // tranh, đồng hồ, áp phích, bảng tin
+  const deco = Math.max(1, Math.floor(o.w / 2.5));
+  for (let i = 0; i < deco; i++) {
+    const x = Math.floor(8 + r() * (W - 26)), y = Math.floor(H * 0.2 + r() * H * 0.15);
+    if (k === 'house') {
+      const fw = 10 + Math.floor(r() * 6), fh = 8 + Math.floor(r() * 4);
+      P.rect(x, y, fw, fh, '#4a3020', 1); P.rect(x + 1, y + 1, fw - 2, fh - 2, r.pick(['#5a7a9a', '#8a6a4a', '#6a8a5a', '#9a8a6a']), 0.8);
+      P.rect(x + 2, y + fh - 4, fw - 4, 2, '#3a5a3a', 0.8);
+    } else if (k === 'police') {
+      poster(P, x, y, 10, 14, 'wanted', o.seed + i);
+    } else if (k === 'garage') {
+      P.rect(x, y, 22, 14, '#6a5a3a', 0.6);
+      for (let t = 0; t < 4; t++) P.rect(x + 2 + t * 5, y + 2, 2, 8 - (t % 2) * 3, '#2a2a2e', 1);
+    } else {
+      P.rect(x, y, 14, 9, r.pick(['#c83a2a', '#2a6ac8', '#e8c040']), 0.6);
+      drawText(P, x + 2, y + 1, '%', '#ffffff');
+    }
+  }
+  grime(P, 0, 0, W, H, (o.seed || 3) + 40, 0.8);
+  if (r() < 0.7) bloodSmear(P, Math.floor(W * (0.2 + r() * 0.6)), Math.floor(H * 0.55), 3, o.seed + 5);
+  const map = tex(P, { mip: true, aniso: 4 });
+  return { map, normalMap: tex(P.normalCanvas(1.2), { srgb: false, mip: true }) };
+}
+
+// sàn trong nhà (tile lặp 2x2m)
+export function floorTex(kind, seed = 1) {
+  const S = 32, P = new Pix(S, S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      let c, h = 0.4;
+      if (kind === 'wood') {
+        const row = Math.floor(y / 4), off = (row * 11) % 32;
+        const n = vnoise((x + off) * 0.2, row * 2.3, seed);
+        c = y % 4 === 3 || (x + off) % 32 === 0 ? '#2a1c12' : ramp(['#4e3624', '#5e4430', '#6e523a', '#7e6044'], 0.25 + n * 0.6, x, y, 0.5);
+        h = y % 4 === 3 ? 0 : 0.6;
+      } else if (kind === 'tile') {
+        const t = ((x >> 3) + (y >> 3)) & 1;
+        c = x % 8 === 0 || y % 8 === 0 ? '#5a5a58' : t ? ramp(['#b8b4a8', '#c8c4b8', '#d4d0c4'], hash(x, y, seed), x, y, 0.4) : ramp(['#3e5a5a', '#4a6868', '#567474'], hash(x, y, seed), x, y, 0.4);
+        h = x % 8 === 0 || y % 8 === 0 ? 0 : 0.7;
+      } else if (kind === 'lino') {
+        c = ramp(['#4a5260', '#545c6a', '#5e6674', '#6a7280'], hash(x >> 1, y >> 1, seed) * 0.6 + fbm(x * 0.1, y * 0.1, seed, 2) * 0.4, x, y, 0.6);
+        if (x % 16 === 0 || y % 16 === 0) c = '#3a404c';
+      } else {
+        const n = fbm(x * 0.12, y * 0.12, seed, 3);
+        c = ramp(['#3e3e40', '#4a4a4c', '#565658', '#626264'], n, x, y, 0.6);
+        if (x % 32 === 0 || y % 32 === 0) c = '#2e2e30';
+        if (fbm(x * 0.08 + 20, y * 0.08, seed + 3, 2) > 0.66) c = mixc(c, '#141418', 0.5);
+      }
+      if (hash(x, y, seed + 9) > 0.992) c = mixc(c, '#6a1a14', 0.6);
+      P.set(x, y, c, h);
+    }
+  return { map: tex(P, { repeat: true, mip: true, aniso: 4 }), normalMap: tex(P.normalCanvas(1.4), { repeat: true, srgb: false, mip: true }) };
+}
+
+// mặt sơn phẳng có chữ (biển hiệu rời, vạch chữ H bãi đáp...)
+export function signTex(text, { bg = '#1e4a8a', fg = '#f8f0d8', edge = '#d8d0c0', pad = 5, lit = false, h = 16 } = {}) {
+  const tw = textWidth(text), W = tw + pad * 2, H = h;
+  const P = new Pix(W, H, { emissive: true });
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const e = y === 0 || x === 0 || y === H - 1 || x === W - 1;
+    P.set(x, y, e ? edge : bg, e ? 1.2 : 1);
+    if (lit && !e) P.glow(x, y, mixc(bg, '#000', 0.5));
+  }
+  drawText(P, pad, Math.round((H - 7) / 2) + 1, text, fg, { shadow: '#0a0a0a', glow: lit ? fg : null });
+  if (!edge) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (P.get(x, y) && P.get(x, y).join() === rgb(bg).join()) P.data[(y * W + x) * 4 + 3] = 0;
+  return { map: tex(P, { mip: true }), emissiveMap: tex(P.emissiveCanvas(), { mip: true }), w: W / PPU, h: H / PPU };
 }

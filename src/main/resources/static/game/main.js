@@ -1,7 +1,7 @@
 // DEAD NIGHT — game sinh tồn zombie phong cách HD-2D: sprite pixel trong diorama 3D,
 // camera thấp nhìn ngang, cuộn theo nhân vật dọc con phố của ngôi làng.
 import * as THREE from 'three';
-import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND } from './world.js';
+import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND, ZB, BUILDINGS, buildingAt, HELIPAD } from './world.js';
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
@@ -41,7 +41,7 @@ scene.fog = new THREE.Fog(0x000000, 30, 100);
 // camera thấp kiểu diorama: nhìn gần như ngang vào mặt tiền các ngôi nhà
 const CAM = { y: 9.6, back: 26, lookY: 3.0, lookZ: -3.2, fov: 30 };
 const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
-let camScale = 1;
+let camScale = 1, camInside = 0;
 const post = new Post(renderer);
 post.setPixel(pixelK);
 const overlay = $('fx2d');
@@ -97,7 +97,7 @@ const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 function placeCamera(shake = 0) {
   const r = () => (Math.random() - 0.5) * shake;
-  const cs = camScale * (state.mode === 'view' ? view.zoom : 1);
+  const cs = camScale * (state.mode === 'view' ? view.zoom : 1) * (1 - 0.1 * camInside);
   camera.position.set(camTarget.x + r(), CAM.lookY + (CAM.y - CAM.lookY) * cs + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * cs);
   camera.lookAt(camTarget.x + r() * 0.3, CAM.lookY, CAM.lookZ);
 }
@@ -239,9 +239,10 @@ const planeH = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1), planeV = new THR
 function aimPoint(sx, sy) {
   ndc.set(sx / W * 2 - 1, -(sy / H) * 2 + 1);
   ray.setFromCamera(ndc, camera);
+  const zmin = curBuilding ? ZB + 0.2 : WALL_Z - 0.4;
   const p = ray.ray.intersectPlane(planeH, tmpV2);
-  if (p && p.z > BOUNDS.z0 - 0.4) return p;
-  planeV.constant = -(BOUNDS.z0 - 0.4);
+  if (p && p.z > zmin) return p;
+  planeV.constant = -zmin;
   return ray.ray.intersectPlane(planeV, tmpV2);
 }
 
@@ -273,7 +274,6 @@ function collide(o) {
   return hit;
 }
 function bulletBlocked(x, z) {
-  if (z < WALL_Z + 0.1) return true;
   const C = world.colliders;
   for (const c of C.circles) { if (c.low) continue; const dx = x - c.x, dz = z - c.z; if (dx * dx + dz * dz < c.r * c.r) return true; }
   for (const b of C.boxes) if (!b.low && x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return true;
@@ -297,8 +297,7 @@ function navBuild() {
   for (let j = 0; j < NAV.h; j++)
     for (let i = 0; i < NAV.w; i++) {
       const x = BOUNDS.x0 + i * NAV.res, z = BOUNDS.z0 + j * NAV.res;
-      if (z < WALL_Z + 0.3) continue;
-      if (insideSolid(x, z, 0.3) && !(z < WALL_Z + 0.6)) NAV.block[j * NAV.w + i] = 1;
+      if (insideSolid(x, z, 0.3)) NAV.block[j * NAV.w + i] = 1;
     }
   NAV.cell = -1;
 }
@@ -441,28 +440,37 @@ function newZombie(type, x, y, z, st) {
   return zz;
 }
 // chọn điểm nhảy/bậc thang gần người chơi cho zombie đi trên thềm
+// các đoạn bậc thềm không có toà nhà (zombie đi trên thềm rồi nhảy xuống / xuống bậc thang)
+const TERRACE_SEGS = (() => {
+  const out = []; let x = BOUNDS.x0;
+  for (const b of [...BUILDINGS].sort((a, c) => a.x0 - c.x0)) { if (b.x0 - x > 2.4) out.push([x + 0.6, b.x0 - 0.6]); x = b.x1; }
+  if (BOUNDS.x1 - x > 2.4) out.push([x + 0.6, BOUNDS.x1 - 0.6]);
+  return out;
+})();
+const segOf = (x) => TERRACE_SEGS.find(([a, b]) => x >= a && x <= b);
 function terracePlan(z) {
-  const near = STAIRS.filter((s) => Math.abs(s.x - player.x) < 9);
-  if (near.length && Math.random() < 0.45) {
+  const seg = segOf(z.x) || TERRACE_SEGS[0];
+  const near = STAIRS.filter((s) => s.x > seg[0] && s.x < seg[1]);
+  if (near.length && Math.random() < 0.5) {
     const s = near[Math.floor(Math.random() * near.length)];
     z.tx = s.x; z.stair = s;
   } else {
-    let tx = player.x + rand(-5, 5);
-    for (let k = 0; k < 6 && STAIRS.some((s) => Math.abs(s.x - tx) < 1.6); k++) tx += 2;
-    z.tx = clamp(tx, BOUNDS.x0 + 1, BOUNDS.x1 - 1); z.stair = null;
+    let tx = clamp(player.x + rand(-5, 5), seg[0], seg[1]);
+    for (let k = 0; k < 6 && STAIRS.some((s) => Math.abs(s.x - tx) < 1.6); k++) tx = clamp(tx + 2 * (k % 2 ? -k : k), seg[0], seg[1]);
+    z.tx = tx; z.stair = null;
   }
 }
 function spawnZombie(stray = false) {
   const type = stray ? 'walker' : pickType();
   const roll = stray ? 1 : Math.random();
   const nearPond = Math.abs(player.x - POND.cx) < 18;
-  const nearCem = player.x > 22;
-  if (roll < 0.34) {
+  const nearCem = player.x > 36;
+  const segs = TERRACE_SEGS.filter(([a, b]) => b > player.x - 24 && a < player.x + 24);
+  if (roll < 0.34 && segs.length) {
     // đi trên bậc thềm phía sau rồi nhảy xuống / xuống bậc thang
-    const side = Math.random() < 0.5 ? -1 : 1;
-    let x = player.x + side * rand(13, 18);
-    if (x < BOUNDS.x0 + 1 || x > BOUNDS.x1 - 1) x = player.x - side * rand(13, 18);
-    x = clamp(x, BOUNDS.x0 + 1, BOUNDS.x1 - 1);
+    const [a, b] = segs[Math.floor(Math.random() * segs.length)];
+    let x = rand(a, b);
+    if (Math.abs(x - player.x) < 6) x = Math.abs(a - player.x) > Math.abs(b - player.x) ? a : b;
     const z = newZombie(type, x, TY, WALL_Z - 1.3 - Math.random() * 0.9, 'terrace');
     terracePlan(z);
     return true;
@@ -488,8 +496,8 @@ function spawnZombie(stray = false) {
   let x = player.x + side * rand(15, 21);
   if (x < BOUNDS.x0 || x > BOUNDS.x1) x = player.x - side * rand(15, 21);
   x = clamp(x, BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5);
-  let z = rand(BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.4);
-  for (let k = 0; k < 8 && insideSolid(x, z, 0.5); k++) z = rand(BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.4);
+  let z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
+  for (let k = 0; k < 8 && insideSolid(x, z, 0.5); k++) z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
   newZombie(type, x, 0, z, 'walk');
   return true;
 }
@@ -631,7 +639,8 @@ function updateHud() {
 }
 
 // ================= ÁNH SÁNG, KHÍ QUYỂN =================
-const emitterMul = { lamp: 1, window: 1, fire: 1 };
+const emitterMul = { lamp: 1, window: 1, fire: 1, inner: 1, power: 0, siren: 1 };
+let power = false, curBuilding = null;
 function flick(e, t) {
   if (e.flicker === 'fire') return 0.78 + 0.14 * Math.sin(t * 11 + e.phase) * Math.sin(t * 6.3 + e.phase * 2) + 0.08 * Math.sin(t * 23 + e.phase);
   if (e.flicker === 'broken') {
@@ -641,16 +650,28 @@ function flick(e, t) {
     return slow > 0.75 ? (n > 0.5 ? 0.05 : 0.6) : n > 0.94 ? 0.15 : 1;
   }
   if (e.flicker === 'lamp') return 0.97 + 0.03 * Math.sin(t * 50 + e.phase);
+  if (e.flicker === 'sirenR') return Math.sin(t * 7.5) > 0.2 ? 1 : 0.04;
+  if (e.flicker === 'sirenB') return Math.sin(t * 7.5 + Math.PI) > 0.2 ? 1 : 0.04;
+  if (e.flicker === 'dead') return 0;
   return 1;
 }
 function updateLights(t, A) {
-  emitterMul.lamp = A.lamps; emitterMul.window = A.windows; emitterMul.fire = A.fires;
+  emitterMul.lamp = A.lamps; emitterMul.window = A.windows; emitterMul.fire = A.fires; emitterMul.power = power ? 1 : 0;
+  emitterMul.siren = 0.35 + 0.65 * A.night;
   const n = quality === 'high' ? 10 : 6;
   for (const e of world.emitters) {
     e.cur = e.base * flick(e, t) * emitterMul[e.kind];
     const d = Math.hypot(e.pos.x - camTarget.x, (e.pos.z - camTarget.z) * 0.8);
     e.w = e.cur * (1 - clamp((d - 14) / 8, 0, 1));
+    // đèn trong nhà chỉ bật khi người chơi đang ở trong toà nhà đó (tránh hắt sáng ra phố)
+    if (e.building) e.w *= curBuilding && curBuilding.id === e.building ? 1.6 : 0;
   }
+  for (const sr of world.sirens) {
+    const k = emitterMul.siren;
+    sr.mR.color.setRGB(0.3 + 3.8 * flick(sr.eR, t) * k, 0.15, 0.1);
+    sr.mB.color.setRGB(0.1, 0.25, 0.4 + 4.6 * flick(sr.eB, t) * k);
+  }
+  for (const pm of world.powerMats) pm.m.emissiveIntensity = power ? pm.k : 0;
   const sorted = world.emitters.filter((e) => e.w > 0.05).sort((a, b) => b.w - a.w);
   for (let i = 0; i < pool.length; i++) {
     const l = pool[i], e = i < n ? sorted[i] : null;
@@ -698,16 +719,6 @@ function applyAtmos(dt, t) {
   fx.butterflies.update(t, A.butterflies, camTarget.x);
   U.win.value = A.windows;
   world.bulbMat.color.setScalar(0.15 + A.lamps * 1.6);
-  world.jackMat.emissiveIntensity = 3 * Math.max(0.15, A.lamps);
-  // diều chỉ bay khi trời còn sáng
-  const k = world.kite;
-  k.visible = world.kiteLine.visible = A.kite > 0.5;
-  if (k.visible) {
-    k.position.set(camTarget.x * 0.55 + 9 + Math.sin(t * 0.3) * 1.5, 15.5 + Math.sin(t * 0.7) * 0.8, -26);
-    k.rotation.z = Math.sin(t * 1.3) * 0.25;
-    const lp = world.kiteLine.geometry.attributes.position;
-    lp.setXYZ(0, k.position.x, k.position.y - 0.4, k.position.z); lp.setXYZ(1, k.position.x - 9, 3.6, -19); lp.needsUpdate = true;
-  }
   if (A.lightning > 0.5 && state.mode !== 'loading') {
     lightningT -= dt;
     if (lightningT <= 0) { lightningT = rand(6, 14); lightning = 1; thunderQ.push(rand(0.3, 1.6)); }
@@ -1076,6 +1087,10 @@ function updateCamera(dt) {
   camTarget.x += (tx - camTarget.x) * k;
   camTarget.z = 1;
   shake = Math.max(0, shake - dt * 1.8);
+  // toà nhà người chơi đang đứng trong: tường trước tự "cắt" như nhà búp bê
+  curBuilding = state.mode === 'title' ? null : buildingAt(player.x, player.z);
+  for (const b of world.buildings) b.cut.value += ((curBuilding === b ? 1 : 0) - b.cut.value) * Math.min(1, dt * 6);
+  camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
   placeCamera(shake);
   sound.setListener(camTarget.x, camTarget.z);
   tmpV.set(player.x, 1.0, player.z).project(camera);
@@ -1175,8 +1190,7 @@ function startGame() {
     if (QS.has('pz')) player.z = +QS.get('pz');
     player.hp = player.maxHp = 1e6; toSpawn = 0;
     const types = ['walker', 'runner', 'walker', 'brute', 'walker'];
-    types.forEach((t, i) => spawnAt(t, player.x + (i % 2 ? 1 : -1) * rand(3, 7), rand(BOUNDS.z0 + 0.3, BOUNDS.z1 - 0.3)));
-    const tz = newZombie('walker', player.x + 5, TY, WALL_Z - 1.4, 'terrace'); tz.tx = player.x + 2; tz.stair = null; tz.speed *= 0.3;
+    types.forEach((t, i) => spawnAt(t, player.x + (i % 2 ? 1 : -1) * rand(3, 7), rand(WALL_Z + 0.5, BOUNDS.z1 - 0.3)));
     camTarget.x = player.x;
     window.__dn = { get zombies() { return zombies; }, get player() { return player; }, camera, size: () => [W, H] };
     window.__setHour = (h, w) => { atmos.hour = h; if (w && w !== atmos.kind) atmos.setWeather(w, true); };

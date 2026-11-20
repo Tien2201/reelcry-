@@ -210,8 +210,11 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
       rect(cx + 4, sy, cx + 5, sy + 1, pal.skin);
       const w = o.weapon;
       const gl = w === 'shotgun' ? 9 : w === 'smg' ? 6 : 4;
+      if (w === 'knife') { rect(cx + 6, sy, cx + 9, sy, pal.gunL); put(cx + 10, sy, pal.gunL); put(cx + 5, sy, pal.gun); put(cx + 5, sy + 1, pal.gun); }
+      else {
       rect(cx + 5, sy - 1, cx + 5 + gl, sy, (x, y) => (y === sy - 1 ? pal.gunL : pal.gun));
       rect(cx + 5, sy + 1, cx + 6, sy + 2, pal.gun);
+      }
       if (w === 'shotgun') { rect(cx + 8, sy + 1, cx + 11, sy + 1, pal.wood); rect(cx + 1, sy - 1, cx + 4, sy - 1, pal.wood); put(cx + 9, sy + 2, pal.skin); }
       if (w === 'smg') { rect(cx + 8, sy + 1, cx + 9, sy + 3, pal.gun); put(cx + 10, sy + 1, pal.skin); }
     }
@@ -301,18 +304,69 @@ function buildAtlas(spec, pal, o) {
   };
 }
 
-export function makeCharacterSprites() {
-  const player = {
-    pistol: buildAtlas(SPEC.normal, PAL_SURVIVOR, { weapon: 'pistol' }),
-    shotgun: buildAtlas(SPEC.normal, PAL_SURVIVOR, { weapon: 'shotgun' }),
-    smg: buildAtlas(SPEC.normal, PAL_SURVIVOR, { weapon: 'smg' }),
+// bảng màu người sống sót cho từng người chơi co-op
+const SURVIVOR_VARIANTS = [
+  {},
+  { hair: '#2a2a32', hairS: '#16161c', hairL: '#4a4a58', top: '#3a7ac8', topS: '#2a5a96', topL: '#6aa0e8', scarf: '#c8a030', scarfS: '#8a6a1a' },
+  { hair: '#e8c86a', hairS: '#b8943a', hairL: '#fff0a8', top: '#58a048', topS: '#3a7a30', topL: '#88c870', scarf: '#c83a3a', scarfS: '#8a2424' },
+  { hair: '#6a3a2a', hairS: '#4a2418', hairL: '#8a5a44', top: '#a84ac8', topS: '#7a2a96', topL: '#c88ae8', scarf: '#e8e0d0', scarfS: '#a8a090' },
+];
+export const PLAYER_COLORS = ['#f2c14e', '#6aa0e8', '#88c870', '#c88ae8'];
+function survivorSet(pal) {
+  return {
+    knife: buildAtlas(SPEC.normal, { ...pal, gun: '#4a2e1e', gunL: '#dce0e8' }, { weapon: 'knife' }),
+    pistol: buildAtlas(SPEC.normal, pal, { weapon: 'pistol' }),
+    shotgun: buildAtlas(SPEC.normal, pal, { weapon: 'shotgun' }),
+    smg: buildAtlas(SPEC.normal, pal, { weapon: 'smg' }),
   };
+}
+const playerCache = [];
+export function playerSprites(i) {
+  const k = i % 4;
+  if (!playerCache[k]) playerCache[k] = survivorSet({ ...PAL_SURVIVOR, ...SURVIVOR_VARIANTS[k] });
+  return playerCache[k];
+}
+export function makeCharacterSprites() {
+  const player = playerSprites(0);
+  const uni = (seed, top, pants) => ({ ...zombiePalette(seed, 'walker'), top: top[0], topS: top[1], topL: top[2], pants: pants[0], pantsS: pants[1] });
   const zombies = {
     walker: [1, 2, 3, 4].map((s) => buildAtlas(SPEC.normal, zombiePalette(s, 'walker'), { zombie: true, kind: 'walker' })),
     runner: [11, 12].map((s) => buildAtlas(SPEC.thin, zombiePalette(s, 'runner'), { zombie: true, kind: 'runner' })),
     brute: [21].map((s) => buildAtlas(SPEC.brute, zombiePalette(s, 'brute'), { zombie: true, kind: 'brute' })),
+    cop: [31, 32].map((s) => buildAtlas(SPEC.normal, uni(s, ['#2a3a5a', '#1a2640', '#4a5a7a'], ['#1e2230', '#12141e']), { zombie: true, kind: 'walker' })),
+    soldier: [41, 42].map((s) => buildAtlas(SPEC.normal, uni(s, ['#4a5a3a', '#34402a', '#66764e'], ['#3a4a2e', '#28321e']), { zombie: true, kind: 'walker' })),
   };
   return { player, zombies };
+}
+
+// ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
+export function makeItemIcons() {
+  const N = 11, P = new Pix(16 * N, 16);
+  const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
+  // 0 đạn 9mm
+  { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
+  // 1 đạn ghém
+  { const r = at(1); for (let i = 0; i < 3; i++) { r(2 + i * 4, 3, 3, 9, '#c8281e'); r(2 + i * 4, 3, 1, 9, '#e84a3a'); r(2 + i * 4, 11, 3, 3, '#d8b050'); } }
+  // 2 băng gạc
+  { const r = at(2); r(2, 5, 12, 7, '#ece8e0'); r(2, 5, 12, 1, '#ffffff'); r(3, 7, 10, 1, '#c8c4bc'); r(3, 9, 10, 1, '#c8c4bc'); r(11, 5, 3, 7, '#d8d4cc'); }
+  // 3 hộp cứu thương
+  { const r = at(3); r(1, 4, 14, 10, '#e8e4dc'); r(1, 4, 14, 1, '#ffffff'); r(6, 2, 4, 2, '#8a8680'); r(7, 6, 2, 6, '#d02a22'); r(5, 8, 6, 2, '#d02a22'); }
+  // 4 đồ hộp
+  { const r = at(4); r(3, 3, 10, 11, '#a8acb0'); r(3, 3, 10, 2, '#d8dce0'); r(3, 6, 10, 5, '#c8402a'); r(5, 7, 6, 3, '#e8c040'); r(3, 12, 10, 2, '#7a7e82'); }
+  // 5 nước suối
+  { const r = at(5); r(6, 1, 4, 2, '#2a5aa8'); r(5, 3, 6, 11, '#8ac8f0'); r(5, 3, 1, 11, '#c8ecff'); r(5, 7, 6, 3, '#3a7ac8'); r(5, 13, 6, 1, '#5a9ad8'); }
+  // 6 can xăng
+  { const r = at(6); r(3, 4, 10, 10, '#c8281e'); r(3, 4, 10, 1, '#e84a3a'); r(5, 1, 6, 3, '#8a1a14'); r(11, 1, 2, 4, '#3a3a3e'); r(5, 7, 6, 1, '#8a1a14'); r(5, 10, 6, 1, '#8a1a14'); }
+  // 7 linh kiện bộ đàm
+  { const r = at(7); r(2, 4, 12, 9, '#2a6a3a'); r(2, 4, 12, 1, '#3a8a4a'); r(4, 6, 3, 3, '#1a1a1e'); r(9, 6, 3, 2, '#d8b050'); r(9, 9, 4, 2, '#c8c8c8'); r(4, 11, 1, 2, '#d8b050'); r(7, 11, 1, 2, '#d8b050'); r(12, 1, 1, 3, '#8a8a8a'); }
+  // 8 chìa khoá
+  { const r = at(8); r(2, 4, 6, 6, '#e8c040'); r(4, 6, 2, 2, '#00000000'); r(8, 6, 7, 2, '#e8c040'); r(12, 8, 2, 3, '#e8c040'); r(10, 8, 1, 2, '#e8c040'); r(2, 4, 6, 1, '#fff0a0'); }
+  // 9 shotgun
+  { const r = at(9); r(1, 7, 10, 2, '#2a2a30'); r(1, 6, 10, 1, '#6a6a7c'); r(10, 7, 5, 3, '#7a4a2a'); r(5, 9, 3, 2, '#7a4a2a'); r(9, 9, 2, 3, '#2a2a30'); }
+  // 10 tiểu liên
+  { const r = at(10); r(1, 6, 11, 3, '#2a2a30'); r(1, 6, 11, 1, '#6a6a7c'); r(6, 9, 2, 5, '#2a2a30'); r(10, 9, 2, 3, '#2a2a30'); r(12, 7, 3, 2, '#3a3a40'); }
+  for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
+  return P.canvas();
 }
 
 // ---------- lửa (6 khung) ----------

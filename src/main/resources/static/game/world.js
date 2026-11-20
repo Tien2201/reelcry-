@@ -671,7 +671,7 @@ export function buildWorld(scene, quality) {
       lantern.position.set(lx, ly, z + d / 2 + 0.3);
       g.add(lantern);
       const e = emit(lx, ly, z + d / 2 + 0.7, '#ffae5a', 8, 7.5, 'lamp', 'lamp');
-      lampHeads.push({ x: lx, y: ly, z: z + d / 2 + 0.3, mat: lantern.material, e });
+      lampHeads.push({ x: lx, y: ly, z: z + d / 2 + 0.3, mat: lantern.material, e, cone: { y0: h.by, r: 0.8, k: 0.6, dz: 0.3 } });
       addGlow(lx, ly, z + d / 2 + 0.34, '#ffb060', 1.1, 0.8);
     }
     const litCount = fac.wins.filter((wn) => wn.state === 'lit').length;
@@ -806,7 +806,7 @@ export function buildWorld(scene, quality) {
     root.add(lantern);
     const e = emit(x, y0 + h - 0.1, z + 0.1, color, 11, 9, 'lamp', rng.chance(0.15) ? 'broken' : 'lamp');
     addGlow(x, y0 + h, z + 0.05, color, 1.3, 0.75);
-    lampHeads.push({ x, y: y0 + h, z, mat: lantern.material, e });
+    lampHeads.push({ x, y: y0 + h, z, mat: lantern.material, e, cone: { y0, r: 1.35, k: 1 } });
     perches.push({ x, y: y0 + h + 0.28, z });
     if (y0 === 0) addCircle(x, z, 0.2, true);
   }
@@ -820,7 +820,7 @@ export function buildWorld(scene, quality) {
     ln.position.set(x, 1.2, WALL_Z + 0.22);
     root.add(ln);
     const e = emit(x, 1.15, WALL_Z + 0.6, '#ffb050', 6, 6, 'lamp', 'lamp');
-    lampHeads.push({ x, y: 1.2, z: WALL_Z + 0.22, mat: ln.material, e });
+    lampHeads.push({ x, y: 1.2, z: WALL_Z + 0.22, mat: ln.material, e, cone: { y0: 0, r: 0.62, k: 0.55, dz: 0.38 } });
     addGlow(x, 1.2, WALL_Z + 0.3, '#ffb060', 0.9, 0.7);
   }
   function festoon(x0, x1, y, z) {
@@ -1032,7 +1032,7 @@ export function buildWorld(scene, quality) {
     misc.add(44, TY + 0.7, -3.3, 0.1, 1.4, 0.1, '#26262c');
     const gl = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.22), lamb({ color: '#202a20', emissive: new THREE.Color('#9adf8a'), emissiveIntensity: 3.5 }));
     gl.position.set(44, TY + 1.5, -3.3); root.add(gl);
-    lampHeads.push({ x: 44, y: TY + 1.5, z: -3.3, mat: gl.material, e });
+    lampHeads.push({ x: 44, y: TY + 1.5, z: -3.3, mat: gl.material, e, cone: { y0: TY, r: 0.95, k: 0.9 } });
     addGlow(44, TY + 1.5, -3.2, '#9adf8a', 1.3, 0.8);
   }
 

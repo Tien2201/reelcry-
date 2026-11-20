@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND } from './world.js';
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
-import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock } from './fx.js';
+import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW } from './sprites.js';
 import { spriteLit, softDisc } from './pixel.js';
 import { Sound } from './audio.js';
@@ -22,6 +22,8 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } },
 };
 let quality = store.get('deadnight_q', isTouch ? 'low' : 'high');
+// chế độ pixel hoá 1x / 2x / 3x (dựng cảnh ở độ phân giải thấp rồi phóng to sắc nét)
+let pixelK = clamp(Math.round(+(QS.get('pix') || store.get('deadnight_px', '1'))) || 1, 1, 3);
 
 // Giới hạn độ sáng khi vật đứng sát đèn (tránh sprite bị cháy trắng cạnh lửa/đèn)
 THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace(
@@ -41,6 +43,7 @@ const CAM = { y: 9.6, back: 26, lookY: 3.0, lookZ: -3.2, fov: 30 };
 const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
 let camScale = 1;
 const post = new Post(renderer);
+post.setPixel(pixelK);
 const overlay = $('fx2d');
 const g2 = overlay.getContext('2d');
 let W = 1, H = 1, PR = 1, ODPR = 1;
@@ -677,8 +680,11 @@ function applyAtmos(dt, t) {
   U.wet.value = A.wet; U.wind.value = A.wind;
   if (world.water.material.uniforms) world.water.material.uniforms.uRain.value = A.rain;
   updateLights(t, A);
-  const px = renderer.getDrawingBufferSize(tmpV2).y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  const px = post.h / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+  fx.cones.update(0.24 + A.mist * 0.6 + A.rain * 0.5, camTarget.x);
+  fx.rain.setLamps(A.rain > 0.01 ? fx.cones.near : []);
   fx.rain.update(camTarget, A.rain, A.wind, px);
+  P.ssr = A.wet; P.rain = A.rain; P.ssrSteps = quality === 'high' ? 36 : 18; P.sky.copy(A.skyHor).lerp(A.fog, 0.4);
   fx.fireflies.update(A.fireflies, null, px);
   fx.ash.update(A.ash, camTarget, px);
   fx.mist.update(dt, t, A.mist, A.fog, camTarget.x);
@@ -752,11 +758,12 @@ function viewAction(a) {
   else if (a === 'bloom') view.bloom = !view.bloom;
   else if (a === 'hud') { view.ui = !view.ui; $('view-ui').classList.toggle('hidden', !view.ui); $('view-show').classList.toggle('hidden', view.ui); }
   else if (a === 'shot') view.shot = true;
+  else if (a === 'pixel') toast('Pixel hoá: ' + cyclePixel() + 'x' + (pixelK === 1 ? ' (tắt)' : ''));
   else if (a === 'exit') exitView();
   syncView();
 }
 function viewKey(code) {
-  const map = { Digit1: 'golden', Digit2: 'blue', Digit3: 'day', Digit4: 'night', Digit5: 'dawn', KeyR: 'rain', KeyT: 'storm', KeyF: 'fog', KeyN: 'auto', KeyG: 'dof', KeyB: 'bloom', KeyH: 'hud', KeyP: 'shot', Escape: 'exit' };
+  const map = { Digit1: 'golden', Digit2: 'blue', Digit3: 'day', Digit4: 'night', Digit5: 'dawn', KeyR: 'rain', KeyT: 'storm', KeyF: 'fog', KeyN: 'auto', KeyG: 'dof', KeyB: 'bloom', KeyH: 'hud', KeyP: 'shot', KeyX: 'pixel', Escape: 'exit' };
   if (map[code]) viewAction(map[code]);
 }
 function syncView() {
@@ -771,6 +778,7 @@ function syncView() {
     else if (v === 'auto') on = view.auto;
     else if (v === 'dof') on = view.dof;
     else if (v === 'bloom') on = view.bloom;
+    else if (v === 'pixel') on = pixelK > 1;
     b.classList.toggle('on', on);
   });
 }
@@ -1070,10 +1078,9 @@ function updateCamera(dt) {
   shake = Math.max(0, shake - dt * 1.8);
   placeCamera(shake);
   sound.setListener(camTarget.x, camTarget.z);
-  const s = renderer.getDrawingBufferSize(tmpV2);
   tmpV.set(player.x, 1.0, player.z).project(camera);
-  U.seeCenter.value.set((tmpV.x * 0.5 + 0.5) * s.x, (tmpV.y * 0.5 + 0.5) * s.y);
-  U.seeRadius.value = s.y * 0.13;
+  U.seeCenter.value.set((tmpV.x * 0.5 + 0.5) * post.w, (tmpV.y * 0.5 + 0.5) * post.h);
+  U.seeRadius.value = post.h * 0.13;
   tmpV.set(player.x, 1.0, player.z).applyMatrix4(camera.matrixWorldInverse);
   U.seeDepth.value = -tmpV.z - 1.0;
   U.seeZ.value = state.mode === 'title' ? 999 : player.z;
@@ -1188,7 +1195,19 @@ function gameOver() {
   $('ov-night').textContent = wave; $('ov-kills').textContent = kills; $('ov-score').textContent = score; $('ov-best').textContent = best;
   setTimeout(() => $('over').classList.remove('hidden'), 900);
 }
-function setQualityLabel() { $('q-btn').textContent = 'Đồ hoạ: ' + (quality === 'high' ? 'Cao' : 'Nhẹ'); }
+function setQualityLabel() {
+  $('q-btn').textContent = 'Đồ hoạ: ' + (quality === 'high' ? 'Cao' : 'Nhẹ');
+  $('px-btn').textContent = 'Pixel: ' + pixelK + 'x';
+  const vb = document.querySelector('#view-bar .vb[data-v="pixel"]');
+  if (vb) vb.textContent = 'Pixel ' + pixelK + 'x';
+}
+function cyclePixel() {
+  pixelK = pixelK % 3 + 1;
+  store.set('deadnight_px', String(pixelK));
+  post.setPixel(pixelK);
+  setQualityLabel();
+  return pixelK;
+}
 
 // ================= KHỞI TẠO =================
 function init() {
@@ -1247,6 +1266,7 @@ function init() {
   camTarget.set(player.x, 1, 1);
   fx.butterflies = new Butterflies(scene, camQuat, TY);
   fx.flock = new Flock(scene);
+  fx.cones = new LampCones(scene, world.lampHeads);
   for (const b of fx.flock.birds) world.hideInReflection.push(b.mesh);
   world.hideInReflection.push(fx.butterflies.mesh);
   atmos.hour = 15.5; atmos.update(0);
@@ -1367,6 +1387,7 @@ function frame(now) {
 // ================= NÚT BẤM =================
 $('start-btn').addEventListener('click', startGame);
 $('view-btn').addEventListener('click', startView);
+$('px-btn').addEventListener('click', cyclePixel);
 document.querySelectorAll('#view-bar .vb').forEach((b) => b.addEventListener('click', () => viewAction(b.dataset.v)));
 $('view-show').addEventListener('click', () => viewAction('hud'));
 $('again-btn').addEventListener('click', startGame);

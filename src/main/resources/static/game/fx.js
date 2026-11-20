@@ -135,13 +135,31 @@ export class Rain {
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
     g.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
-    this.u = { uTime: U.time, uCenter: { value: new THREE.Vector3() }, uAmount: { value: 0 }, uWind: { value: new THREE.Vector2(0.25, 0.05) }, uColor: { value: new THREE.Color(0.55, 0.62, 0.75) } };
+    this.u = {
+      uTime: U.time, uCenter: { value: new THREE.Vector3() }, uAmount: { value: 0 }, uWind: { value: new THREE.Vector2(0.25, 0.05) }, uColor: { value: new THREE.Color(0.55, 0.62, 0.75) },
+      uLamp: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -99, 0, 0)) }, uLampCol: { value: Array.from({ length: 8 }, () => new THREE.Color()) },
+      uLampH: { value: new Float32Array(8) },
+    };
     const m = new THREE.ShaderMaterial({
       uniforms: this.u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: `
         attribute vec4 aSeed; attribute float aEnd;
         uniform float uTime, uAmount; uniform vec3 uCenter; uniform vec2 uWind;
-        varying float vA;
+        varying float vA; varying vec3 vLit;
+        uniform vec4 uLamp[8]; uniform vec3 uLampCol[8]; uniform float uLampH[8];
+        vec3 lampLit(vec3 p){
+          vec3 lit = vec3(0.0);
+          for (int i = 0; i < 8; i++) {
+            vec4 L = uLamp[i];
+            float dy = L.y - p.y, H = max(uLampH[i], 0.1);
+            float rad = 0.2 + max(dy, 0.0) * 0.52;
+            float dh = length(p.xz - L.xz);
+            float cone = smoothstep(rad, rad * 0.3, dh) * smoothstep(-0.3, 0.15, dy) * smoothstep(H + 0.25, H - 0.1, dy);
+            vec3 d = p - L.xyz;
+            lit += uLampCol[i] * L.w * (cone * (1.0 - 0.5 * clamp(dy / H, 0.0, 1.0)) + exp(-dot(d, d) * 1.1) * 1.2);
+          }
+          return lit;
+        }
         void main(){
           float t = fract(aSeed.z + uTime * (0.85 + aSeed.w * 0.35));
           vec3 p = vec3(uCenter.x + (aSeed.x - 0.5) * 40.0, mix(15.0, -0.2, t), uCenter.z + (aSeed.y - 0.5) * 34.0);
@@ -149,9 +167,10 @@ export class Rain {
           vec3 dir = normalize(vec3(uWind.x, -1.0, uWind.y));
           p -= dir * aEnd * 0.75;
           vA = step(aSeed.w, uAmount) * (1.0 - aEnd * 0.85) * smoothstep(-0.2, 0.6, p.y);
+          vLit = lampLit(p);
           gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
         }`,
-      fragmentShader: `uniform vec3 uColor; varying float vA; void main(){ gl_FragColor = vec4(uColor * vA * 0.55, 1.0); }`,
+      fragmentShader: `uniform vec3 uColor; varying float vA; varying vec3 vLit; void main(){ gl_FragColor = vec4((uColor * 0.55 + vLit * 1.5) * vA, 1.0); }`,
     });
     this.mesh = new THREE.LineSegments(g, m);
     this.mesh.frustumCulled = false;
@@ -163,12 +182,26 @@ export class Rain {
     const g2 = new THREE.BufferGeometry();
     g2.setAttribute('position', new THREE.BufferAttribute(sp, 3));
     g2.setAttribute('aSeed', new THREE.BufferAttribute(ss, 3));
-    this.u2 = { uTime: U.time, uCenter: this.u.uCenter, uAmount: this.u.uAmount, uPx: { value: 800 }, uColor: this.u.uColor };
+    this.u2 = { uTime: U.time, uCenter: this.u.uCenter, uAmount: this.u.uAmount, uPx: { value: 800 }, uColor: this.u.uColor, uLamp: this.u.uLamp, uLampCol: this.u.uLampCol, uLampH: this.u.uLampH };
     const m2 = new THREE.ShaderMaterial({
       uniforms: this.u2, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: `
         attribute vec3 aSeed; uniform float uTime, uAmount, uPx; uniform vec3 uCenter;
-        varying float vT; varying float vA;
+        varying float vT; varying float vA; varying vec3 vLit;
+        uniform vec4 uLamp[8]; uniform vec3 uLampCol[8]; uniform float uLampH[8];
+        vec3 lampLit(vec3 p){
+          vec3 lit = vec3(0.0);
+          for (int i = 0; i < 8; i++) {
+            vec4 L = uLamp[i];
+            float dy = L.y - p.y, H = max(uLampH[i], 0.1);
+            float rad = 0.2 + max(dy, 0.0) * 0.52;
+            float dh = length(p.xz - L.xz);
+            float cone = smoothstep(rad, rad * 0.3, dh) * smoothstep(-0.3, 0.15, dy) * smoothstep(H + 0.25, H - 0.1, dy);
+            vec3 d = p - L.xyz;
+            lit += uLampCol[i] * L.w * (cone * (1.0 - 0.5 * clamp(dy / H, 0.0, 1.0)) + exp(-dot(d, d) * 1.1) * 1.2);
+          }
+          return lit;
+        }
         void main(){
           float t = fract(aSeed.z + uTime * 1.6);
           float cyc = floor(aSeed.z + uTime * 1.6);
@@ -176,24 +209,75 @@ export class Rain {
           vT = t;
           vA = step(fract(aSeed.x * 13.7 + aSeed.y * 7.3), uAmount);
           vec3 p = vec3(uCenter.x + (j.x - 0.5) * 32.0, 0.04, uCenter.z + (j.y - 0.5) * 26.0);
+          vLit = lampLit(p);
           vec4 mv = viewMatrix * vec4(p, 1.0);
           gl_Position = projectionMatrix * mv;
           gl_PointSize = max(2.0, (0.12 + t * 0.32) * uPx / -mv.z);
         }`,
       fragmentShader: `
-        uniform vec3 uColor; varying float vT; varying float vA;
+        uniform vec3 uColor; varying float vT; varying float vA; varying vec3 vLit;
         void main(){
           vec2 c = gl_PointCoord - 0.5;
           float r = length(c * vec2(1.0, 2.0)) * 2.0;
           float ring = smoothstep(0.18, 0.0, abs(r - (0.3 + vT * 0.7)));
           float a = ring * (1.0 - vT) * vA * 0.7;
           if (a < 0.02) discard;
-          gl_FragColor = vec4(uColor * a * 0.9, 1.0);
+          gl_FragColor = vec4((uColor * 0.9 + vLit * 1.2) * a, 1.0);
         }`,
     });
     this.splash = new THREE.Points(g2, m2);
     this.splash.frustumCulled = false;
     parent.add(this.splash);
+    // hạt mưa trong cột sáng của 8 đèn gần nhất: vệt mưa ánh vàng như phim
+    const per = 56, n3 = per * 8;
+    const s3 = new Float32Array(n3 * 8), e3 = new Float32Array(n3 * 2), l3 = new Float32Array(n3 * 2), p3 = new Float32Array(n3 * 6);
+    for (let i = 0; i < n3; i++) {
+      const s = [Math.random(), Math.random(), Math.random(), Math.random()];
+      s3.set(s, i * 8); s3.set(s, i * 8 + 4);
+      e3[i * 2] = 0; e3[i * 2 + 1] = 1;
+      l3[i * 2] = l3[i * 2 + 1] = Math.floor(i / per);
+    }
+    const g3 = new THREE.BufferGeometry();
+    g3.setAttribute('position', new THREE.BufferAttribute(p3, 3));
+    g3.setAttribute('aSeed', new THREE.BufferAttribute(s3, 4));
+    g3.setAttribute('aEnd', new THREE.BufferAttribute(e3, 1));
+    g3.setAttribute('aLamp', new THREE.BufferAttribute(l3, 1));
+    const m3 = new THREE.ShaderMaterial({
+      uniforms: this.u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute vec4 aSeed; attribute float aEnd; attribute float aLamp;
+        uniform float uTime, uAmount; uniform vec2 uWind;
+        uniform vec4 uLamp[8]; uniform vec3 uLampCol[8]; uniform float uLampH[8];
+        varying vec3 vC;
+        void main(){
+          int li = int(aLamp + 0.5);
+          vec4 L = uLamp[li]; float H = max(uLampH[li], 0.1);
+          float t = fract(aSeed.z + uTime * (0.55 + aSeed.w * 0.25) * 4.0 / (H + 0.4));
+          float dy = t * (H + 0.35) - 0.35;
+          float rad = 0.2 + max(dy, 0.0) * 0.52;
+          float ang = aSeed.x * 6.2832, rr = sqrt(aSeed.y) * rad;
+          vec3 p = vec3(L.x + cos(ang) * rr, L.y - dy, L.z + sin(ang) * rr);
+          vec3 dir = normalize(vec3(uWind.x, -1.0, uWind.y));
+          p -= dir * aEnd * 0.42;
+          float fall = 1.0 - 0.65 * clamp(dy / H, 0.0, 1.0);
+          float edge = 1.0 - rr / max(rad, 0.01);
+          vC = uLampCol[li] * L.w * fall * (0.3 + 0.7 * edge) * (1.0 - aEnd * 0.85)
+             * step(aSeed.w, uAmount * 1.15) * smoothstep(-0.35, 0.05, dy) * smoothstep(H, H - 0.25, dy);
+          gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: `varying vec3 vC; void main(){ gl_FragColor = vec4(vC * 1.25, 1.0); }`,
+    });
+    this.coneRain = new THREE.LineSegments(g3, m3);
+    this.coneRain.frustumCulled = false;
+    this.coneRain.renderOrder = 5;
+    parent.add(this.coneRain);
+  }
+  setLamps(list) {
+    const L = this.u.uLamp.value, C = this.u.uLampCol.value, Hh = this.u.uLampH.value;
+    for (let i = 0; i < 8; i++) {
+      const e = list[i];
+      if (e) { L[i].set(e.x, e.y, e.z, e.w); C[i].copy(e.color); Hh[i] = e.h; } else L[i].set(0, -99, 0, 0);
+    }
   }
   update(center, amount, wind, px) {
     if (px) this.u2.uPx.value = px;
@@ -591,5 +675,81 @@ export class Flock {
       b.mesh.scale.x = this.dir;
     }
     if ((this.x - camX) * this.dir > 36) { this.active = false; this.t = 14 + Math.random() * 20; }
+  }
+}
+
+// Cột sáng dưới đèn: hình nón mở, cộng sáng (additive), mép mềm theo góc nhìn,
+// đậm khi có sương / mưa — kiểu "thể tích ánh sáng" của HD-2D.
+export class LampCones {
+  constructor(parent, lamps) {
+    this.list = lamps.filter((L) => L.cone);
+    const n = this.list.length;
+    const geo = new THREE.CylinderGeometry(0.16, 1, 1, 22, 10, true);
+    geo.translate(0, -0.5, 0);
+    this.aI = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    this.aI.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aI', this.aI);
+    this.u = { uTime: U.time, uAmount: { value: 0 } };
+    const m = new THREE.ShaderMaterial({
+      uniforms: this.u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      vertexShader: `
+        attribute float aI;
+        varying float vT; varying float vI; varying float vEdge; varying vec3 vW; varying vec3 vCol;
+        void main(){
+          vT = -position.y;
+          vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+          vW = wp.xyz;
+          vec2 nr = normalize(position.xz + 1e-5);
+          vec2 vv = normalize((cameraPosition - wp.xyz).xz + 1e-5);
+          vEdge = abs(dot(nr, vv));
+          vI = aI;
+          vCol = instanceColor;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: `
+        uniform float uTime, uAmount;
+        varying float vT; varying float vI; varying float vEdge; varying vec3 vW; varying vec3 vCol;
+        float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+        void main(){
+          float top = smoothstep(0.0, 0.14, vT);
+          float fall = exp(-vT * 1.7);
+          float bottom = mix(0.35, 1.0, smoothstep(1.0, 0.7, vT));
+          float edge = pow(vEdge, 3.2);
+          float n = vn(vec2(vW.x * 2.2 + vW.z * 1.3, vW.y * 2.6 - uTime * 0.35)) * 0.6 + vn(vec2(vW.x * 5.1 - uTime * 0.2, vW.y * 4.3 + vW.z)) * 0.4;
+          float a = top * fall * bottom * edge * (0.55 + 0.9 * n) * vI * uAmount;
+          gl_FragColor = vec4(vCol * a * 0.5, 1.0);
+        }`,
+    });
+    this.mesh = new THREE.InstancedMesh(geo, m, n);
+    const M = new THREE.Matrix4();
+    this.list.forEach((L, i) => {
+      const top = L.y - 0.1, h = top - L.cone.y0;
+      M.makeScale(L.cone.r, h, L.cone.r).setPosition(L.x, top, L.z + (L.cone.dz || 0));
+      this.mesh.setMatrixAt(i, M);
+      this.mesh.setColorAt(i, L.e.color);
+    });
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 4;
+    parent.add(this.mesh);
+    this.near = [];
+  }
+  update(amount, camX) {
+    this.u.uAmount.value = amount;
+    let mx = 0;
+    const arr = this.aI.array;
+    this.list.forEach((L, i) => {
+      const v = Math.min(1.2, L.e.cur / Math.max(0.01, L.e.base)) * L.cone.k;
+      arr[i] = v; mx = Math.max(mx, v);
+    });
+    this.aI.needsUpdate = true;
+    this.mesh.visible = mx * amount > 0.01;
+    // 8 đèn gần camera nhất để hạt mưa sáng lên khi rơi qua
+    this.near = this.list
+      .map((L, i) => ({ x: L.x, y: L.y - 0.1, z: L.z + (L.cone.dz || 0), h: L.y - 0.1 - L.cone.y0, w: arr[i], color: L.e.color, d: Math.abs(L.x - camX) }))
+      .filter((o) => o.w > 0.02 && o.d < 24)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
   }
 }

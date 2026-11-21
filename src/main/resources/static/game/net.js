@@ -150,6 +150,8 @@ class FireRoom {
     return list;
   }
   onPeers(fn) { this.handlers.add(fn); setTimeout(() => this.alive && fn({ peers: this.peers(), joined: this.peers(), left: [], updated: [] }), 0); return () => this.handlers.delete(fn); }
+  // sau khi nối lại mạng: đăng ký lại việc tự xoá khi rớt mạng và ghi lại trạng thái của mình
+  rearm() { if (!this.alive) return; this.t.D.onDisconnect(this.myRef).remove().catch(() => {}); this._write(); }
   connected() { return this.t.online; }
   leave() {
     if (!this.alive) return Promise.resolve();
@@ -177,6 +179,9 @@ class FireTransport {
     return t;
   }
   now() { return Date.now() + this.offset; }
+  // ngắt hẳn kết nối khi không ở phòng chờ / phòng co-op (không chiếm suất kết nối của dự án)
+  sleep() { if (this.asleep) return; this.asleep = true; this.D.goOffline(this.db); }
+  wake() { if (!this.asleep) return; this.asleep = false; this.D.goOnline(this.db); this.lobby.rearm(); }
   fail(e) {
     const code = String((e && (e.code || e.message)) || e);
     this.failed = /permission/i.test(code)
@@ -202,8 +207,7 @@ async function signIn(A, auth) {
   return uid;
 }
 
-// Trả về kênh co-op, hoặc null nếu trang này không mở được kênh nào.
-// Thứ tự: giả lập (?mockroom) → kênh room của Claude → Firebase (khi chạy trên web riêng).
+// Kênh có sẵn ngay khi mở trang: giả lập (?mockroom) hoặc kênh room của Claude; không có thì null.
 export let transportError = '';
 export async function openTransport(mock) {
   if (mock && typeof BroadcastChannel !== 'undefined') return new MockTransport();
@@ -213,12 +217,17 @@ export async function openTransport(mock) {
       if (room) return new RoomTransport(room);
     }
   } catch (e) { /* không có kênh */ }
-  const local = /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname) && !/[?&]fb\b/.test(location.search);
-  if (/^https?:$/.test(location.protocol) && !window.claude && !local) {
-    try { return await FireTransport.create(); }
-    catch (e) { transportError = 'Không kết nối được máy chủ online (' + ((e && (e.code || e.message)) || 'lỗi') + ')'; }
-  }
   return null;
+}
+// Firebase chỉ dùng khi chạy trên web riêng (GitHub Pages…), và chỉ kết nối khi người chơi mở phần co-op.
+// Trên localhost bỏ qua (trừ khi thêm ?fb) để chạy thử không đụng vào dữ liệu thật.
+export function canUseFirebase() {
+  const local = /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname) && !/[?&]fb\b/.test(location.search);
+  return /^https?:$/.test(location.protocol) && !window.claude && !local;
+}
+export async function openFirebase() {
+  try { transportError = ''; return await FireTransport.create(); }
+  catch (e) { transportError = 'Không kết nối được máy chủ online (' + ((e && (e.code || e.message)) || 'lỗi') + ')'; return null; }
 }
 
 // tên phòng ngắn, dễ đọc cho bạn bè nhập tay (bỏ các ký tự dễ nhầm)

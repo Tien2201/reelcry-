@@ -8,7 +8,7 @@ import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite, charSprites, charPortrait, npcAtlas, npcZombieAtlas } from './sprites.js';
 import { CHARS, SKILLS, computeMod, xpNeed } from './chars.js';
 import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME, MELEE, MELEE_ORDER, BOOKS, ARMOR_PTS } from './items.js';
-import { openTransport, makeCode, roomName, cleanCode, cleanName, transportError } from './net.js';
+import { openTransport, openFirebase, canUseFirebase, makeCode, roomName, cleanCode, cleanName, transportError } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
 import { cinema } from './cinema.js';
@@ -998,10 +998,24 @@ function setCoopNote(t) { $('lobby-note').textContent = t; }
 function updateCoopBtn() {
   const b = $('coop-btn');
   b.querySelector('b').textContent = net.pending ? 'CHƠI CÙNG BẠN BÈ…' : 'CHƠI CÙNG BẠN BÈ';
-  b.querySelector('small').textContent = net.pending ? 'Đang kết nối máy chủ online…' : net.transport ? 'Co-op 2–4 người · thiếu người thì bot' : 'Chưa kết nối được máy chủ online';
-  b.classList.toggle('dim', !net.pending && !net.transport);
+  b.querySelector('small').textContent = net.pending ? 'Đang kết nối máy chủ online…' : net.transport || net.fbLazy ? 'Co-op 2–4 người · thiếu người thì bot' : 'Chưa kết nối được máy chủ online';
+  b.classList.toggle('dim', !net.pending && !net.transport && !net.fbLazy);
 }
+// web riêng: nối Firebase lúc mở phần co-op, ngắt khi đóng (nếu không ở trong phòng)
+function fbConnect() {
+  if (net.transport && net.transport.kind === 'firebase') { net.transport.wake(); return; }
+  if (!net.fbLazy || net.pending) return;
+  net.pending = true; updateCoopBtn();
+  openFirebase().then((t) => {
+    net.pending = false;
+    if (t) { net.transport = t; t.onError = (m) => setCoopNote(m); watchLobby(); }
+    updateCoopBtn();
+    if (!$('lobby').classList.contains('hidden')) openLobby();
+  });
+}
+function fbSleep() { if (net.transport && net.transport.kind === 'firebase' && !net.room) net.transport.sleep(); }
 function openLobby() {
+  fbConnect();
   $('title').classList.add('hidden');
   $('lobby').classList.remove('hidden');
   $('nick').value = net.name || store.get('deadnight_nick', '') || ('Người sống sót ' + (10 + Math.floor(Math.random() * 89)));
@@ -1011,7 +1025,7 @@ function openLobby() {
   else setCoopNote('Tạo phòng rồi gửi MÃ PHÒNG cho bạn bè, hoặc bấm vào phòng đang mở bên dưới.');
   renderOpenGames();
 }
-function closeLobby() { $('lobby').classList.add('hidden'); if (state.mode === 'title') $('title').classList.remove('hidden'); }
+function closeLobby() { $('lobby').classList.add('hidden'); if (state.mode === 'title') $('title').classList.remove('hidden'); fbSleep(); }
 function showLobbyPane(which) { $('lobby-main').classList.toggle('hidden', which !== 'main'); $('lobby-room').classList.toggle('hidden', which !== 'room'); }
 function watchLobby() {
   if (!net.transport || net.lobbyUnsub) return;
@@ -1065,6 +1079,7 @@ async function leaveRoom() {
   net.lastAd = '';
   if (r) await r.leave().catch(() => {});
   showLobbyPane('main');
+  if ($('lobby').classList.contains('hidden')) fbSleep();
 }
 function roomMembers() {
   if (!net.room) return [];
@@ -4949,8 +4964,9 @@ function init() {
   requestAnimationFrame(frame);
   if (QS.has('shot')) setTimeout(startGame, 50);
   openTransport(QS.has('mockroom')).then((t) => {
-    net.transport = t; net.pending = false; updateCoopBtn(); watchLobby();
-    if (t && t.kind === 'firebase') t.onError = (m) => setCoopNote(m);
+    net.transport = t; net.pending = false;
+    net.fbLazy = !t && canUseFirebase();   // web riêng: chỉ nối Firebase khi mở phần co-op
+    updateCoopBtn(); watchLobby();
     if (!$('lobby').classList.contains('hidden')) openLobby();
   });
   updateCoopBtn();

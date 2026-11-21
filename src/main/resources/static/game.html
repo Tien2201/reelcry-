@@ -342,16 +342,22 @@
   /* thanh công cụ: góc trên phải, dùng chung cho máy tính (có phím tắt) và điện thoại */
   #toolbar { display: flex; gap: 4px; padding: 4px; pointer-events: auto;
     background: var(--panel); border: 2px solid var(--edge); outline: 2px solid var(--edge-dark); }
-  .tb { position: relative; min-width: 60px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    font-family: inherit; font-size: 15px; line-height: 1; color: var(--ink); background: #1e1a24; border: 2px solid #4a4050; padding: 3px 5px 2px; cursor: pointer; white-space: nowrap; }
+  .tb { position: relative; width: 38px; height: 38px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-family: inherit; font-size: 15px; line-height: 1; color: var(--ink); background: #1e1a24; border: 2px solid #4a4050; padding: 0; cursor: pointer; white-space: nowrap; }
+  .tb span { display: none; }
+  #toolbar { gap: 3px; padding: 3px; }
+  /* nút ít dùng gom vào "⋯" */
+  #tb-extra { display: none; gap: 3px; }
+  #toolbar.open #tb-extra { display: flex; }
+  #toolbar.open #tb-more { border-color: var(--edge); background: #2a2430; }
   .tb:hover { border-color: var(--edge); background: #2a2430; }
   .tb:active { transform: translateY(1px); background: #3a3040; }
-  .tb img { width: 24px; height: 24px; image-rendering: pixelated; }
-  .tb kbd { position: absolute; left: 2px; top: 1px; font-family: inherit; font-size: 13px; line-height: 1; color: var(--gold); }
+  .tb img { width: 22px; height: 22px; image-rendering: pixelated; }
+  .tb kbd { position: absolute; left: 1px; top: 0; font-family: inherit; font-size: 11px; line-height: 1; color: var(--gold); opacity: .85; }
   .tb .dot { position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: #ff5a3a; border: 2px solid #000; border-radius: 50%; animation: pulse .6s infinite alternate; }
 
   /* cụm nút hành động cho điện thoại: vòng cung quanh chỗ đặt ngón cái phải (vùng ngắm/bắn) */
-  #tpad { position: fixed; right: var(--sr); bottom: var(--sb); width: 0; height: 0; z-index: 5; display: none; --u: 1; }
+  #tpad { position: fixed; right: var(--sr); bottom: var(--sb); width: 0; height: 0; z-index: 5; display: none; --u: .84; }
   body.touch.playing #tpad { display: block; }
   .tbtn { position: absolute; width: calc(54px * var(--u)); height: calc(54px * var(--u)); border-radius: 50%; display: grid; place-items: center; padding: 0;
     font-family: inherit; font-size: calc(19px * var(--u)); letter-spacing: 1px; color: var(--ink); background: rgba(14,12,20,.62); border: 2px solid rgba(217,192,138,.75);
@@ -366,7 +372,7 @@
   #t-use.off { opacity: .4; background: rgba(14,12,20,.55); border-color: rgba(217,192,138,.5); }
   #t-shove { right: calc(67px * var(--u)); bottom: calc(140px * var(--u)); background: rgba(160,90,20,.72); }
   #t-throw { right: calc(11px * var(--u)); bottom: calc(111px * var(--u)); background: rgba(170,50,20,.72); }
-  #t-shove.off, #t-throw.off { display: none; }
+  #t-shove.off, #t-throw.off, #t-reload.off { display: none; }
 
   /* bố cục cảm ứng */
   body.touch #hud-top { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(6px + var(--st)); gap: 8px; }
@@ -380,7 +386,7 @@
   body.touch .qi { width: 42px; height: 42px; }
   body.touch #team { font-size: 16px; }
   body.touch #toolbar { padding: 3px; gap: 3px; }
-  body.touch .tb { min-width: 52px; height: 44px; font-size: 14px; padding: 2px 3px; }
+  body.touch .tb { width: 36px; height: 36px; }
   body.touch .tb img { width: 22px; height: 22px; }
   body.touch .tb kbd { display: none; }
   body.touch #quest-box { width: min(290px, 34vw); padding: 4px 9px 5px; }
@@ -443,7 +449,7 @@
   }
   /* điện thoại ngang thấp (iPhone SE, mini…) */
   @media (max-height: 420px) {
-    body.touch .tb { height: 40px; font-size: 13px; gap: 1px; }
+    body.touch .tb { width: 34px; height: 34px; }
     body.touch .tb img { width: 20px; height: 20px; }
     body.touch #q-title { display: none; }
     body.touch #q-text { margin-top: 0; }
@@ -456,17 +462,14 @@
     #night { font-size: 21px; } #atmo, #left, #zone-tag { font-size: 14px; }
     body.touch #quest-box #q-text { font-size: 15px; } body.touch #q-sub { font-size: 13px; }
     body.touch #team { font-size: 15px; }
-    #tpad { --u: .9; }
+    #tpad { --u: .76; }
   }
   /* điện thoại ngang hẹp: thu gọn thanh công cụ */
   @media (max-width: 760px) {
-    body.touch .tb { min-width: 44px; font-size: 13px; }
     body.touch #hp-box, body.touch #quick { width: auto; max-width: 31vw; }
     body.touch #hp-box { width: 31vw; }
   }
   @media (max-width: 660px) and (orientation: landscape) {
-    body.touch .tb { min-width: 0; width: 36px; height: 36px; padding: 0; }
-    body.touch .tb span { display: none; }
     body.touch #hp-box { width: 29vw; }
     body.touch #night-box { max-width: 27vw; padding: 2px 8px 3px; }
     body.touch #quest-box { width: 36vw; }
@@ -475,8 +478,8 @@
   }
   /* máy tính bảng: nút to hơn */
   @media (min-height: 620px) and (min-width: 900px) {
-    #tpad { --u: 1.2; }
-    body.touch .tb { min-width: 58px; height: 52px; font-size: 15px; }
+    #tpad { --u: 1.0; }
+    body.touch .tb { width: 44px; height: 44px; }
     body.touch .tb img { width: 26px; height: 26px; }
     body.touch .qi { width: 48px; height: 48px; }
   }
@@ -494,9 +497,7 @@
     body.touch #weapon-box { bottom: calc(96px + var(--sb)); }
     body.touch #loot-feed { align-items: flex-start; bottom: calc(146px + var(--sb)); }
     body.touch #toolbar { gap: 2px; padding: 2px; }
-    body.touch .tb { min-width: 0; width: 34px; height: 36px; padding: 0; }
-    body.touch .tb span { display: none; }
-    body.touch .tb img { width: 22px; height: 22px; }
+    body.touch .tb { width: 34px; height: 34px; }
   }
   /* ---------- HUD: vòng máu, vòng sức, chỉ số % ---------- */
   #hp-box { width: auto !important; padding: 6px 10px 7px; gap: 4px; }
@@ -729,9 +730,12 @@
     <div id="hud-r">
       <div id="toolbar">
         <button class="tb" id="tb-bag" title="Túi đồ (I)"><img alt=""><span>Túi đồ</span><kbd>I</kbd></button>
-        <button class="tb" id="tb-craft" title="Chế đồ (B)"><img alt=""><span>Chế đồ</span><kbd>B</kbd><em class="dot hidden"></em></button>
-        <button class="tb" id="tb-skill" title="Kỹ năng (K)"><img alt=""><span>Kỹ năng</span><kbd>K</kbd><em class="dot hidden"></em></button>
-        <button class="tb" id="tb-view" title="Góc nhìn (Z)"><img alt=""><span>Góc nhìn</span><kbd>Z</kbd></button>
+        <div id="tb-extra">
+          <button class="tb" id="tb-craft" title="Chế đồ (B)"><img alt=""><span>Chế đồ</span><kbd>B</kbd><em class="dot hidden"></em></button>
+          <button class="tb" id="tb-skill" title="Kỹ năng (K)"><img alt=""><span>Kỹ năng</span><kbd>K</kbd><em class="dot hidden"></em></button>
+          <button class="tb" id="tb-view" title="Góc nhìn (Z)"><img alt=""><span>Góc nhìn</span><kbd>Z</kbd></button>
+        </div>
+        <button class="tb" id="tb-more" title="Thêm: chế đồ, kỹ năng, góc nhìn" aria-expanded="false"><img alt=""><span>Thêm</span><em class="dot hidden"></em></button>
         <button class="tb" id="tb-pause" title="Tạm dừng (P)"><img alt=""><span>Dừng</span><kbd>P</kbd></button>
       </div>
       <div id="quest-box" class="win" title="Bấm để xem chi tiết"><div id="q-title">NHIỆM VỤ <i>▾</i></div><div id="q-text"></div><div id="q-sub"></div></div>

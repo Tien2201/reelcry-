@@ -1950,6 +1950,9 @@ function buildIcons() {
 const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L'], ['molotov', 'X']];
 // icon pixel 12×12 cho thanh công cụ
 const UI_PIX = {
+  more: { pal: { '#': '#140e0a', 1: '#f0ece0' }, rows: [
+    '............', '............', '............', '............', '.###.###.###', '.#1#.#1#.#1#',
+    '.###.###.###', '............', '............', '............', '............', '............'] },
   view: { pal: { '#': '#140e0a', 1: '#f0ece0', 2: '#4a8ac8', x: '#101018' }, rows: [
     '............', '............', '...######...', '..#111111#..', '.#11#22#11#.', '#11#2xx2#11#',
     '#11#2xx2#11#', '.#11#22#11#.', '..#111111#..', '...######...', '............', '............'] },
@@ -3441,6 +3444,8 @@ function updateHud() {
   $('quick').classList.toggle('empty', !anyQuick);
   $('tb-skill').querySelector('.dot').classList.toggle('hidden', !(player.sp > 0));
   $('tb-craft').querySelector('.dot').classList.toggle('hidden', !RECIPES.some((R) => player.recipes.has(R.id) && canCraft(R)));
+  $('tb-more').querySelector('.dot').classList.toggle('hidden', $('tb-skill').querySelector('.dot').classList.contains('hidden') && $('tb-craft').querySelector('.dot').classList.contains('hidden'));
+  $('t-reload').classList.toggle('off', !!WEAPONS[player.weapon].melee);
   setText('zone-tag', ZONE.name);
   setText('char-tag', `${CHARS[player.char].name} · cấp ${player.level}` + (player.sp ? ` · ${player.sp} điểm KN` : ''));
   $('xp-fill').style.width = Math.min(100, player.xp / xpNeed(player.level) * 100).toFixed(1) + '%';
@@ -4989,7 +4994,7 @@ function renderSettings() {
       pane.appendChild(n);
     }
     pane.append(
-      sRow('Góc nhìn', (isTouch ? 'Nút GÓC NHÌN trên thanh công cụ' : 'Phím ' + KN('view')) + ' để đổi nhanh khi đang chơi', sSeg([['tp', 'Thứ ba · diorama'], ['fp', 'Thứ nhất']], () => settings.view, (v) => { settings.view = v; })),
+      sRow('Góc nhìn', (isTouch ? 'Nút ⋯ → GÓC NHÌN trên thanh công cụ' : 'Phím ' + KN('view')) + ' để đổi nhanh khi đang chơi', sSeg([['tp', 'Thứ ba · diorama'], ['fp', 'Thứ nhất']], () => settings.view, (v) => { settings.view = v; })),
       sRow('Độ pixel', 'Dựng cảnh ở độ phân giải thấp rồi phóng to sắc nét', sSeg([[1, '1x'], [2, '2x'], [3, '3x']], () => pixelK, (v) => { pixelK = v; store.set('deadnight_px', String(v)); post.setPixel(v); setQualityLabel(); })),
       sRow('Độ sáng', '', sRange(60, 160, () => settings.bright, (v) => { settings.bright = v; })),
       sRow('Rung màn hình', 'Khi bắn, nổ, bị đánh', sToggle(() => settings.shake, (v) => { settings.shake = v; })),
@@ -5696,6 +5701,16 @@ $('minimap').addEventListener('touchstart', (e) => { e.preventDefault(); e.stopP
 tapBind('tb-skill', () => toggleSkills());
 tapBind('tb-pause', () => togglePause());
 tapBind('tb-view', () => { if (state.mode === 'play') toggleView(); });
+// "⋯": mở / gom các nút ít dùng; tự gom lại sau vài giây
+let tbMoreT = 0;
+function setToolbarOpen(on) {
+  $('toolbar').classList.toggle('open', on);
+  $('tb-more').setAttribute('aria-expanded', on ? 'true' : 'false');
+  clearTimeout(tbMoreT);
+  if (on) tbMoreT = setTimeout(() => setToolbarOpen(false), 6000);
+}
+tapBind('tb-more', () => setToolbarOpen(!$('toolbar').classList.contains('open')));
+for (const id of ['tb-craft', 'tb-skill', 'tb-view']) for (const ev of ['click', 'touchstart']) $(id).addEventListener(ev, () => setTimeout(() => setToolbarOpen(false), 150), { passive: true });
 // cụm nút hành động trên điện thoại
 tapBind('t-reload', reload);
 (() => {

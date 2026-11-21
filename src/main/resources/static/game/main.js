@@ -11,6 +11,7 @@ import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_T
 import { openTransport, makeCode, roomName, cleanCode, cleanName } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
+import { cinema } from './cinema.js';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -196,7 +197,7 @@ function gainXP(n, why) {
   if (why) floaters.push({ x: player.x, y: 2.75, z: player.z, text: `+${n} XP`, t: 0.9, color: '#b8a8ff' });
   let up = false;
   while (player.xp >= xpNeed(player.level)) { player.xp -= xpNeed(player.level); player.level++; player.sp++; up = true; }
-  if (up) { showMsg(`LÊN CẤP ${player.level}`, `${CHARS[player.char].name} có điểm kỹ năng mới · ` + (isTouch ? 'bấm KN' : 'phím K')); sound.revive(); }
+  if (up) { showMsg(`LÊN CẤP ${player.level}`, `${CHARS[player.char].name} có điểm kỹ năng mới · ` + (isTouch ? 'bấm Kỹ năng' : 'phím ' + KN('skills'))); sound.revive(); }
   saveProgress(); hud.dirty = true;
 }
 const CORPSE_LIFE = 60;
@@ -247,35 +248,48 @@ const keys = {};
 const mouse = { x: 0, y: 0, down: false, has: false };
 const sticks = { move: null, aim: null };
 addEventListener('keydown', (e) => {
+  if (quitted) return;
+  if (cinema.active) {
+    if (e.code === 'Escape') cinema.skip();
+    else if (['Space', 'Enter', 'KeyE', 'NumpadEnter'].includes(e.code) && !e.repeat) cinema.advance();
+    e.preventDefault();
+    return;
+  }
+  if (rebinding) { captureRebind(e); return; }
+  if (!$('confirm').classList.contains('hidden')) { if (e.code === 'Escape') closeConfirm(); else if (e.code === 'Enter') $('cf-yes').click(); return; }
+  if (settingsOpen) { if (e.code === 'Escape') closeSettings(); return; }
+  if ((state.mode === 'title' || !$('pause').classList.contains('hidden')) && menuNav(e)) { e.preventDefault(); return; }
   keys[e.code] = true;
-  if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'Tab') e.preventDefault();
   if (state.mode === 'view') { viewKey(e.code); return; }
   if (state.mode !== 'play') return;
-  if (player.pinned && (e.code === 'KeyE' || e.code === 'Space') && !e.repeat) { player.struggle = (player.struggle || 0) + 1; return; }
-  if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); if (craftUI.open) toggleCraft(false); toggleBag(); return; }
-  if (e.code === 'KeyB') { toggleCraft(); return; }
+  const act = actionOf(e.code);
+  if (!$('pause').classList.contains('hidden')) { if (act === 'pause') togglePause(); return; }
+  if (player.pinned && (act === 'use' || e.code === 'Space') && !e.repeat) { player.struggle = (player.struggle || 0) + 1; return; }
+  if (act === 'bag') { if (craftUI.open) toggleCraft(false); toggleBag(); return; }
+  if (act === 'craft') { toggleCraft(); return; }
   if (craftUI.open) { if (e.code === 'Escape') toggleCraft(false); return; }
-  if (mapOpen) { if (e.code === 'KeyM' || e.code === 'Escape') toggleMap(false); return; }
-  if (skillsOpen) { if (e.code === 'KeyK' || e.code === 'Escape') toggleSkills(false); return; }
-  if (bagOpen) return;
-  if (e.code === 'KeyR') reload();
+  if (mapOpen) { if (act === 'map' || e.code === 'Escape') toggleMap(false); return; }
+  if (skillsOpen) { if (act === 'skills' || e.code === 'Escape') toggleSkills(false); return; }
+  if (bagOpen) { if (e.code === 'Escape') toggleBag(false); return; }
+  if (act === 'reload') reload();
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'Digit3') switchWeapon(2);
   if (e.code === 'Digit4') switchWeapon(3);
   if (e.code === 'Digit5') switchWeapon(4);
-  if (e.code === 'KeyG') shove();
-  if (e.code === 'KeyK') toggleSkills();
-  if (e.code === 'KeyQ') cycleWeapon();
-  if (e.code === 'KeyF') quickHeal();
-  if (e.code === 'KeyC') quickEat();
-  if (e.code === 'KeyV') quickAntidote();
-  if (e.code === 'KeyL') toggleFlashlight();
-  if (e.code === 'KeyT') useItem('torch');
-  if (e.code === 'KeyX') throwMolotov();
-  if (e.code === 'KeyM') toggleMap();
-  if (e.code === 'KeyN') sound.muted = !sound.muted;
-  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (act === 'shove') shove();
+  if (act === 'skills') toggleSkills();
+  if (act === 'swap') cycleWeapon();
+  if (act === 'heal') quickHeal();
+  if (act === 'eat') quickEat();
+  if (act === 'cure') quickAntidote();
+  if (act === 'light') toggleFlashlight();
+  if (act === 'torch') useItem('torch');
+  if (act === 'throw') throwMolotov();
+  if (act === 'map') toggleMap();
+  if (act === 'mute') { settings.mute = !settings.mute; sound.muted = settings.mute; saveSettings(); toast(settings.mute ? 'Đã tắt tiếng' : 'Đã bật tiếng'); }
+  if (act === 'pause') togglePause();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 canvas.addEventListener('mousemove', (e) => {
@@ -294,7 +308,7 @@ function onTouch(e) {
   e.preventDefault(); sound.init();
   for (const t of e.changedTouches) {
     const st = { id: t.identifier, ox: t.clientX, oy: t.clientY, x: t.clientX, y: t.clientY, lx: t.clientX };
-    if (t.clientX < W / 2) { if (!sticks.move) sticks.move = st; } else if (!sticks.aim) sticks.aim = st;
+    if ((t.clientX < W / 2) !== !!settings.lefty) { if (!sticks.move) sticks.move = st; } else if (!sticks.aim) sticks.aim = st;
   }
 }
 function onTouchMove(e) {
@@ -889,7 +903,8 @@ function netEvent(...ev) { net.out.push({ t: performance.now(), ev: [++net.seq, 
 function setCoopNote(t) { $('lobby-note').textContent = t; }
 function updateCoopBtn() {
   const b = $('coop-btn');
-  b.textContent = net.pending ? 'CO-OP…' : 'CO-OP';
+  b.querySelector('b').textContent = net.pending ? 'CHƠI CÙNG BẠN BÈ…' : 'CHƠI CÙNG BẠN BÈ';
+  b.querySelector('small').textContent = net.pending ? 'Đang kết nối kênh co-op…' : net.transport ? 'Co-op 2–5 người · thiếu người thì bot' : 'Chỉ chạy khi mở bằng link trên Claude';
   b.classList.toggle('dim', !net.pending && !net.transport);
 }
 function openLobby() {
@@ -1173,7 +1188,7 @@ function applySnapshot(w) {
   const q = Array.isArray(w.q) ? w.q : [];
   if (q[0] && !Q.found) { Q.found = true; showMsg('BỘ ĐÀM HỎNG', 'Cần xăng cho máy phát & 2 linh kiện để gọi cứu hộ'); }
   if ((q[1] | 0) > Q.parts) { Q.parts = q[1] | 0; lootFeed('part', `Đã lắp linh kiện (${Q.parts}/2)`); }
-  if (q[2] && !Q.called) { Q.called = true; showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh!'); sound.radio(); }
+  if (q[2] && !Q.called) { Q.called = true; showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh!'); sound.radio(); playStory('call'); }
   if (!q[2] && Q.called && !q[3]) Q.called = false;
   if (w.pw && !power) powerOn(false);
   if (w.ar && !Q.armory) unlockArmory(false);
@@ -1345,7 +1360,7 @@ function infectPlayer(z) {
   if (player.infected > 0) { player.infected = Math.max(20, player.infected - 15); return; }
   if (Math.random() >= (BITE_CHANCE[z.type] || 0.35) * player.mod.bite) return;
   player.infected = player.infMax = player.mod.infectTime;
-  showMsg('BỊ CẮN — NHIỄM VIRUS!', `Có ${Math.round(player.infMax / 60)} phút chế thuốc giải: Kháng sinh + Ống tiêm` + (isTouch ? '' : ' (phím V)'));
+  showMsg('BỊ CẮN — NHIỄM VIRUS!', `Có ${Math.round(player.infMax / 60)} phút chế thuốc giải: Kháng sinh + Ống tiêm` + (isTouch ? '' : ' (phím ' + KN('cure') + ')'));
   sound.infect();
   hud.dirty = true;
 }
@@ -1404,10 +1419,10 @@ function setZombieLook(on) {
 }
 function updateZombieForm(dt) {
   let mx = 0, mz = 0;
-  if (keys.KeyW || keys.ArrowUp) mz -= 1;
-  if (keys.KeyS || keys.ArrowDown) mz += 1;
-  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (held('up')) mz -= 1;
+  if (held('down')) mz += 1;
+  if (held('left')) mx -= 1;
+  if (held('right')) mx += 1;
   let mag = Math.hypot(mx, mz);
   if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
   const ms = stickVec(sticks.move);
@@ -1421,7 +1436,7 @@ function updateZombieForm(dt) {
   zlook.group.position.set(player.x, 0, player.z);
   player.firing = false; player.searching = false; interact.target = null;
   player.groanT = Math.max(0, player.groanT - dt);
-  if ((keys.KeyE || keys.Space || interact.touchHold || sticks.aim) && player.groanT <= 0) {
+  if ((held('use') || keys.Space || interact.touchHold || sticks.aim) && player.groanT <= 0) {
     player.groanT = 4;
     sound.groan(player.x, player.z, false);
     netEvent('gr', 0);
@@ -1534,7 +1549,7 @@ function questApply(act, n, rp, predicted = false) {
     lootFeed('part', `Đã lắp linh kiện (${Q.parts}/2)`);
     if (Q.parts >= 2 && power) showMsg('BỘ ĐÀM ĐÃ SẴN SÀNG', 'Gọi trực thăng cứu hộ ngay!');
   } else if (act === 'call' && power && Q.parts >= 2 && !Q.called) {
-    Q.called = true; sound.radio();
+    Q.called = true; sound.radio(); setTimeout(() => playStory('call'), 600);
     showMsg('ĐÃ GỌI CỨU HỘ', 'Trực thăng tới lúc bình minh · tín hiệu đang kéo zombie tới!');
     if (!predicted && world.pois.radio) makeNoise(world.pois.radio.x, world.pois.radio.z, 40);
   } else if (act === 'gen' && !power) {
@@ -1547,14 +1562,14 @@ function questText() {
   if (Q.won) return ['ĐÃ ĐƯỢC GIẢI CỨU', ''];
   if (player.zombie) return ['BẠN ĐANG LÀ ZOMBIE', 'Chờ đồng đội cho ăn hoa bỉ ngạn · ' + (isTouch ? 'GẦM' : 'E') + ': gầm gọi họ'];
   if (net.active) { const zf = [...net.players.values()].find((r) => r.flags & 128); if (zf) return [`CỨU ${zf.name.toUpperCase()}!`, player.bag.flower > 0 ? 'Mang hoa bỉ ngạn tới cho bạn ăn' : 'Tìm HOA BỈ NGẠN (đỏ, phát sáng) rồi cho bạn ăn']; }
-  if (player.infected > 0) return ['NHIỄM VIRUS · CHẾ THUỐC GIẢI', 'Kháng sinh + Ống tiêm · nhà thuốc, xe cứu thương' + (isTouch ? '' : ' · phím V')];
+  if (player.infected > 0) return ['NHIỄM VIRUS · CHẾ THUỐC GIẢI', 'Kháng sinh + Ống tiêm · nhà thuốc, xe cứu thương' + (isTouch ? '' : ' · phím ' + KN('cure'))];
   const toDT = routeHint('downtown');
   if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · ` + (toDT || 'bãi đáp cuối phố →')];
   if (Q.heli) return ['Trực thăng đang tới…', toDT || 'Chạy về bãi đáp cuối phố →'];
   if (Q.called) return ['Cầm cự tới bình minh', 'Trực thăng cứu hộ sẽ tới lúc 6:00' + (toDT ? ' · ' + toDT : '')];
   const armed = player.melee !== 'fist' || player.guns.some((g, i) => i > 0 && g.owned);
   if (!Q.found && ZONE.id === 'school' && !player.books.has('basic')) return ['Lục lọi các phòng học', 'Tìm SÁCH CHẾ ĐỒ trên bàn giáo viên · nhặt gỗ, vải, băng keo, phế liệu…'];
-  if (!Q.found && ZONE.id === 'school' && !armed) return ['Chế vũ khí đầu tiên', 'Mở ' + (isTouch ? 'nút CHẾ ĐỒ (góc trên phải)' : 'bàn chế đồ (phím B)') + ' · 2 thanh gỗ = gậy gỗ'];
+  if (!Q.found && ZONE.id === 'school' && !armed) return ['Chế vũ khí đầu tiên', 'Mở ' + (isTouch ? 'nút CHẾ ĐỒ (góc trên phải)' : 'bàn chế đồ (phím ' + KN('craft') + ')') + ' · 2 thanh gỗ = gậy gỗ'];
   if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', toDT ? 'Ở Trung tâm thành phố · ' + toDT : 'Đồn cảnh sát ở cuối phố phía đông →'];
   if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', toDT || 'Bàn bộ đàm trong đồn cảnh sát'];
   const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (Trung tâm, Phố chợ)');
@@ -1667,7 +1682,10 @@ function winGame() {
   store.set('deadnight_days', String(best));
   document.body.classList.remove('playing');
   $('win-stats').innerHTML = `Sống sót <b>${dayNo} ngày</b> · hạ gục <b>${kills}</b> zombie<br>Lục soát <b>${player.lootCount}</b> chỗ · thời gian <b>${Math.floor((gtime - playStart) / 60)} phút</b>`;
-  setTimeout(() => $('win').classList.remove('hidden'), 400);
+  if (!net.active) deleteSave();
+  const show = () => setTimeout(() => $('win').classList.remove('hidden'), 400);
+  if (settings.cine && !story.seen.has('ending')) { story.seen.add('ending'); markSeen('ending'); sound.init(); cinema.play('ending').then(show); }
+  else show();
 }
 
 // ================= LỤC SOÁT, TÚI ĐỒ =================
@@ -1725,7 +1743,7 @@ function updateInteract(dt) {
   if (best && best.info.done && best.d > 0.95) best = null;
   if (!best || !interact.target || best.id !== interact.target.id) interact.t = 0;
   interact.target = best;
-  const holding = (keys.KeyE || interact.touchHold) && !bagOpen;
+  const holding = (held('use') || interact.touchHold) && !bagOpen;
   player.searching = !!(best && best.info.can && holding);
   if (player.searching) {
     interact.t += dt;
@@ -1778,7 +1796,7 @@ function learnBook(book) {
   player.books.add(book);
   const list = RECIPES.filter((R) => R.book === book);
   for (const R of list) player.recipes.add(R.id);
-  showMsg('ĐÃ ĐỌC: ' + BOOKS[book].name.toUpperCase(), `Học ${list.length} công thức · ` + (isTouch ? 'bấm CHẾ' : 'phím B') + ' để chế đồ');
+  showMsg('ĐÃ ĐỌC: ' + BOOKS[book].name.toUpperCase(), `Học ${list.length} công thức · ` + (isTouch ? 'bấm Chế đồ' : 'phím ' + KN('craft')) + ' để chế đồ');
   gainXP(10, true); hud.dirty = true;
 }
 const capOf = (it) => (ITEMS[it].quest || ITEMS[it].book ? ITEMS[it].max : Math.round(ITEMS[it].max * ((player && player.mod && player.mod.carry) || 1) * (player && player.pack ? 1.35 : 1)));
@@ -1920,7 +1938,7 @@ function renderBag() {
   const top = document.createElement('div');
   top.className = 'bi craft';
   top.innerHTML = `<img alt="" src="${ICON.book_basic}"><span>Chế đồ · ${player.recipes.size}/${RECIPES.length} công thức<br><span class="n">Đặt nguyên liệu vào lưới 3×3 · đọc sách để biết công thức</span></span>`;
-  const tb = document.createElement('button'); tb.textContent = 'MỞ BÀN CHẾ' + (isTouch ? '' : ' (B)');
+  const tb = document.createElement('button'); tb.textContent = 'MỞ BÀN CHẾ' + (isTouch ? '' : ` (${KN('craft')})`);
   tb.addEventListener('click', () => toggleCraft(true));
   top.appendChild(tb); grid.appendChild(top);
   let any = false;
@@ -2453,7 +2471,7 @@ function releasePin(z, stun, fromVictim = false) {
 function setPinned(id) {
   if (player.pinned === id) return;
   player.pinned = id; player.struggle = 0; player.pinDmgT = 0.6; player.action = null; player.searching = false;
-  showMsg('BỊ ZOMBIE VỒ!', isTouch ? 'Bấm VÙNG liên tục để thoát' : 'Bấm E liên tục để vùng ra');
+  showMsg('BỊ ZOMBIE VỒ!', isTouch ? 'Bấm VÙNG liên tục để thoát' : 'Bấm ' + KN('use') + ' liên tục để vùng ra');
 }
 function breakPin() {
   const id = player.pinned;
@@ -2653,6 +2671,8 @@ function loadZone(id, entry) {
   hud.dirty = true;
   sound.generator(power && !!world.pois.generator);
   showMsg(ZONE.name.toUpperCase(), zoneSubtitle());
+  if (!net.active) saveT = Math.min(saveT, 3);
+  setTimeout(() => storyZone(id), 450);
 }
 function zoneSubtitle() {
   const L = ZONE.links || {};
@@ -3280,7 +3300,7 @@ function applyAtmos(dt, t) {
   sun.target.position.set(sx, 0, sz);
   sun.position.set(sx + A.sunDir.x * 50, A.sunDir.y * 50, sz + A.sunDir.z * 50);
   const P = post.params;
-  P.exposure = A.exposure; P.bloom = A.bloom; P.threshold = A.threshold; P.sat = A.sat; P.contrast = A.contrast; P.vignette = A.vignette;
+  P.exposure = A.exposure * settings.bright / 100; P.bloom = A.bloom; P.threshold = A.threshold; P.sat = A.sat; P.contrast = A.contrast; P.vignette = A.vignette;
   P.lift = A.lift; P.gain = A.gain;
   P.flash = [hurtFlash * 0.25 + lightning * 0.5, lightning * 0.55, lightning * 0.65];
   U.wet.value = A.wet; U.wind.value = A.wind;
@@ -3392,10 +3412,10 @@ function updateViewer(dt) {
   }
   // đi dạo tự do (không có zombie, không bắn)
   let mx = 0, mz = 0;
-  if (keys.KeyW || keys.ArrowUp) mz -= 1;
-  if (keys.KeyS || keys.ArrowDown) mz += 1;
-  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (held('up')) mz -= 1;
+  if (held('down')) mz += 1;
+  if (held('left')) mx -= 1;
+  if (held('right')) mx += 1;
   let mag = Math.hypot(mx, mz);
   if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
   const ms = stickVec(sticks.move);
@@ -3465,16 +3485,16 @@ function updatePlayer(dt) {
   if (player.stunT > 0) player.stunT -= dt;
   if (player.shoveT > 0) player.shoveT -= dt;
   let mx = 0, mz = 0;
-  if (keys.KeyW || keys.ArrowUp) mz -= 1;
-  if (keys.KeyS || keys.ArrowDown) mz += 1;
-  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (held('up')) mz -= 1;
+  if (held('down')) mz += 1;
+  if (held('left')) mx -= 1;
+  if (held('right')) mx += 1;
   let mag = Math.hypot(mx, mz);
   if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
   const ms = stickVec(sticks.move);
   if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
   if (player.stunT > 0) { mx = mz = 0; mag = 0; }
-  const sprint = (keys.ShiftLeft || keys.ShiftRight || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
+  const sprint = (held('run') || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
   player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22 * player.mod.stamina) * dt, 0, 1);
   const spd = player.speed * (sprint ? 1.55 : 1) * mag * (player.action || player.searching ? 0.45 : 1);
   player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
@@ -3767,7 +3787,7 @@ function updateCamera(dt) {
   curBuilding = state.mode === 'title' ? null : buildingAt(player.x, player.z);
   for (const b of world.buildings) b.cut.value += ((curBuilding === b ? 1 : 0) - b.cut.value) * Math.min(1, dt * 6);
   camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
-  placeCamera(shake);
+  placeCamera(settings.shake ? shake : 0);
   sound.setListener(camTarget.x, camTarget.z);
   tmpV.set(player.x, 1.0, player.z).project(camera);
   U.seeCenter.value.set((tmpV.x * 0.5 + 0.5) * post.w, (tmpV.y * 0.5 + 0.5) * post.h);
@@ -3864,7 +3884,7 @@ function draw2D() {
     const tg = interact.target, inf = tg.info;
     tmpV.set(tg.x, 1.7, tg.z).project(camera);
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
-    const text = inf.can ? (isTouch ? inf.label : '[E] ' + inf.label) : inf.label;
+    const text = inf.can ? (isTouch ? inf.label : '[' + KN('use') + '] ' + inf.label) : inf.label;
     g.font = '20px "VT323", monospace';
     const tw = Math.ceil(g.measureText(text).width) + 20;
     g.fillStyle = 'rgba(10,8,14,.8)'; g.fillRect(x - tw / 2, y - 17, tw, 25);
@@ -3876,7 +3896,7 @@ function draw2D() {
     }
   }
   if (state.mode === 'play' && player.pinned) {
-    const msg = (isTouch ? 'BỊ VỒ! Bấm VÙNG liên tục' : 'BỊ VỒ! Bấm E liên tục') + ` (${Math.min(10, player.struggle || 0)}/10)`;
+    const msg = (isTouch ? 'BỊ VỒ! Bấm VÙNG liên tục' : 'BỊ VỒ! Bấm ' + KN('use') + ' liên tục') + ` (${Math.min(10, player.struggle || 0)}/10)`;
     g.font = '24px "VT323", monospace';
     const tw = Math.ceil(g.measureText(msg).width) + 24;
     g.fillStyle = 'rgba(40,6,6,.85)'; g.fillRect(W / 2 - tw / 2, H * 0.36 - 20, tw, 30);
@@ -3920,8 +3940,9 @@ function draw2D() {
       const ha = clamp(1 - (gtime - playStart - 8) / 3, 0, 1);
       if (ha > 0) {
         g.font = '20px "VT323", monospace'; g.fillStyle = `rgba(255,240,210,${0.4 * ha})`;
-        if (!sticks.move) g.fillText('← kéo để di chuyển', W * 0.25, H * 0.56);
-        if (!sticks.aim) g.fillText('kéo để ngắm & bắn →', W * 0.75, H * 0.56);
+        const lf = settings.lefty ? 0.75 : 0.25;
+        if (!sticks.move) g.fillText(settings.lefty ? 'kéo để di chuyển →' : '← kéo để di chuyển', W * lf, H * 0.56);
+        if (!sticks.aim) g.fillText(settings.lefty ? '← kéo để ngắm & bắn' : 'kéo để ngắm & bắn →', W * (1 - lf), H * 0.56);
       }
     }
   }
@@ -3929,21 +3950,32 @@ function draw2D() {
 
 // ================= MÀN HÌNH =================
 function togglePause() {
-  if (state.mode !== 'play') return;
-  if (net.active) { toast('Không tạm dừng được khi chơi co-op'); return; }
-  state.paused = !state.paused;
-  $('pause').classList.toggle('hidden', !state.paused);
+  if (state.mode !== 'play' || cinema.active) return;
+  if (settingsOpen) { closeSettings(); return; }
+  const open = $('pause').classList.contains('hidden');
+  $('pause').classList.toggle('hidden', !open);
+  if (!net.active) state.paused = open || bagOpen || mapOpen || skillsOpen || craftUI.open;
+  if (open) {
+    if (!net.active) saveGame();
+    const S = !net.active && loadSave();
+    $('p-note').textContent = net.active ? 'Co-op: trận vẫn tiếp diễn khi mở menu' : S ? 'Đã lưu tự động · ' + saveLabel(S) : '';
+    $('p-save').querySelector('b').textContent = net.active ? 'RỜI PHÒNG · VỀ MENU' : 'LƯU VÀ VỀ MENU CHÍNH';
+    document.querySelectorAll('#pause .mbtn').forEach((b, i) => b.classList.toggle('sel', i === 0 && !isTouch));
+  }
 }
 function bestScore() { return +store.get('deadnight_days', '0') || 0; }
 const START_ZONE = 'school';
-function startGame() {
+function startGame(opts = {}) {
+  const L = opts.load || null;
   sound.init();
+  if (!L) story.seen = new Set();
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = [];
   clearDrops(); clearFlowers();
   for (const k in dropStore) delete dropStore[k];
   net.zoneSeq = 0; net.zoneSeqSeen = -1; net.zoneEntry = 'start'; net.grants = []; net.pickedDrops.clear();
-  if (ZONE.id !== START_ZONE && !QS.has('zone')) { disposeWorld(world); setZone(START_ZONE); buildZoneWorld(); }
+  const z0 = L && ZONES[L.zone] ? L.zone : START_ZONE;
+  if (ZONE.id !== z0 && (L || !QS.has('zone'))) { disposeWorld(world); setZone(z0); buildZoneWorld(); }
   camReveal = 0; zt.wait = ''; clearAcid(); clearFire(); seenSpecial.clear();
   if (craftUI.open) { craftUI.grid.fill(null); craftUI.open = false; $('craft').classList.add('hidden'); }
   for (const p of pickups) scene.remove(p.mesh);
@@ -3956,8 +3988,8 @@ function startGame() {
   setPlayerSprite();
   wave = 0; kills = 0; score = 0; shake = 0; hurtFlash = 0;
   state.mode = 'play'; state.paused = false; playStart = gtime;
-  for (const id of ['title', 'over', 'pause', 'win', 'bag', 'charsel', 'skills', 'citymap']) $(id).classList.add('hidden');
-  bagOpen = false; skillsOpen = false; mapOpen = false;
+  for (const id of ['title', 'over', 'pause', 'win', 'bag', 'charsel', 'skills', 'citymap', 'settings', 'confirm']) $(id).classList.add('hidden');
+  bagOpen = false; skillsOpen = false; mapOpen = false; settingsOpen = false;
   document.body.classList.add('playing');
   setTimeout(checkRotate, 60);
   hud.dirty = true;
@@ -3971,6 +4003,8 @@ function startGame() {
   if (!net.active || net.host) { spawnLurkers(); for (let i = 0; i < 3; i++) spawnStray(); }
   for (const k in gateStates) delete gateStates[k];
   if (!net.active || net.host) makeBots(); else clearBots();
+  if (L) applySave(L);
+  saveT = 60;
   net.gameId = Math.floor(Math.random() * 1e9);
   sound.generator(false); sound.heli(false);
   // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<giờ>&w=<rain|storm|fog|blood>&px=..
@@ -4001,25 +4035,25 @@ function gameOver(title) {
   document.body.classList.remove('playing');
   $('ov-night').textContent = dayNo; $('ov-kills').textContent = kills; $('ov-loot').textContent = player.lootCount; $('ov-best').textContent = best;
   $('ov-time').textContent = Math.max(1, Math.round((gtime - playStart) / 60));
+  $('ov-load').classList.toggle('hidden', net.active || !loadSave());
   setTimeout(() => $('over').classList.remove('hidden'), 900);
 }
 function toMenu() {
   clearBots();
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = []; floaters = [];
-  for (const id of ['over', 'win', 'pause', 'bag']) $(id).classList.add('hidden');
+  for (const id of ['over', 'win', 'pause', 'bag', 'craft', 'citymap', 'skills', 'settings', 'confirm']) $(id).classList.add('hidden');
+  bagOpen = false; mapOpen = false; skillsOpen = false; craftUI.open = false; settingsOpen = false;
+  if (cinema.active) cinema.skip();
   document.body.classList.remove('playing');
   state.mode = 'title'; state.paused = false; phase = 'title';
   player.zombie = false; player.infected = 0; setZombieLook(false); clearFlowers(); flowerDay = -1;
   sound.generator(false); sound.heli(false);
   if (heli) heli.group.visible = false;
-  $('best').textContent = bestScore();
+  refreshMenu();
   $('title').classList.remove('hidden');
 }
 function setQualityLabel() {
-  $('q-btn').textContent = 'Đồ hoạ: ' + (quality === 'high' ? 'Cao' : 'Nhẹ');
-  $('dur-btn').textContent = `Thời lượng: ${DURATIONS[durKey].name} (${DURATIONS[durKey].est})`;
-  $('px-btn').textContent = 'Pixel: ' + pixelK + 'x';
   const vb = document.querySelector('#view-bar .vb[data-v="pixel"]');
   if (vb) vb.textContent = 'Pixel ' + pixelK + 'x';
 }
@@ -4040,6 +4074,7 @@ function init() {
   camQuat.copy(camera.quaternion);
   setZone(QS.get('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : START_ZONE);
   SPR = makeCharacterSprites();
+  cinema.init({ sound, zombies: SPR.zombies });
   buildZoneWorld();
   pickupAtlas = makePickupAtlas();
   buildIcons(); buildQuickBar(); buildToolbarIcons();
@@ -4094,7 +4129,7 @@ function init() {
   hideRefl(fx.butterflies.mesh);
   atmos.hour = 15.5; atmos.update(0);
   setQualityLabel();
-  $('best').textContent = bestScore();
+  applySettings(); refreshMenu();
   if (DBG) renderer.info.autoReset = false;
   try { renderer.compile(scene, camera); } catch (e) { /* bỏ qua */ }
   state.mode = 'title';
@@ -4120,6 +4155,8 @@ function init() {
   if (QS.has('debug')) window.__sp = (n) => { player.sp += n; hud.dirty = true; };
   if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
   if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
+  if (QS.has('debug')) { window.__set = () => ({ settings, KB: { ...KB } }); window.__save = () => loadSave(); window.__saveNow = () => saveGame(true); window.__story = () => [...story.seen]; }
+  if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }
   if (QS.has('debug')) window.__post = () => ({ flash: post.params.flash, gain: post.params.gain, lift: post.params.lift, hour: +atmos.hour.toFixed(2), kind: atmos.kind, hurt: hurtFlash, mode: state.mode });
   if (QS.has('debug')) window.__conts = (kind) => world.containers.filter((c) => !kind || c.kind === kind).map((c) => [c.id, c.kind, +c.x.toFixed(2), +c.z.toFixed(2), player.looted.has(c.id)]);
   if (QS.has('debug')) window.__craft = () => ({ open: craftUI.open, grid: [...craftUI.grid], recipes: [...player.recipes], books: [...player.books], melee: player.melee, durs: { ...player.durs } });
@@ -4162,6 +4199,13 @@ function frame(now) {
   // khung đầu tiên có thể mang mốc thời gian sớm hơn lúc khởi tạo: không cho dt âm
   let dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  // đoạn phim: chơi một mình thì game đứng yên; co-op thì game vẫn chạy ngầm (nhân vật không bị đánh)
+  if (cinema.active) {
+    cinema.frame(dt);
+    sound.update(dt, cinema.amb());
+    if (!net.active || state.mode !== 'play') return;
+    player.inv = Math.max(player.inv, 0.4);
+  }
   if (state.paused) dt = 0;
   gtime += dt;
   U.time.value = gtime;
@@ -4178,6 +4222,7 @@ function frame(now) {
         updateHeli(dt); hostCheckWipe();
       }
     }
+    if (!net.active && state.mode === 'play' && !state.paused) { saveT -= dt; if (saveT <= 0) { saveT = 60; saveGame(); } }
   } else if (state.mode === 'title') {
     // màn hình tiêu đề: tua nhanh một vòng ngày đêm, có mưa và sương để khoe hiệu ứng
     atmos.hour += dt * 0.42;
@@ -4241,7 +4286,7 @@ function frame(now) {
     fx.spark.spawn(rand(wf.x0, wf.x1), wf.y + 0.05, wf.z + rand(0, 0.25), rand(-0.6, 0.6), rand(0.8, 2.2), rand(0.1, 0.9), rand(0.35, 0.8), rand(0.05, 0.09), new THREE.Color(c * 0.8, c * 0.9, c), { grav: 5, drag: 1.5, mode: 1 });
   }
   if (DBG) renderer.info.reset();
-  post.render(scene, camera, gtime);
+  if (!cinema.active) post.render(scene, camera, gtime);
   if (view.shot) {
     view.shot = false;
     try {
@@ -4258,23 +4303,369 @@ function frame(now) {
   draw2D();
 }
 
+// ================= CÀI ĐẶT · PHÍM · MENU · LƯU GAME · CỐT TRUYỆN =================
+const SET_KEY = 'deadnight_settings';
+const SET_DEF = { vol: { master: 85, music: 70, sfx: 90, amb: 75 }, mute: false, bright: 100, shake: true, cine: true, tsize: 100, talpha: 90, lefty: false, keys: {} };
+const settings = (() => {
+  try { const s = JSON.parse(store.get(SET_KEY, '{}')) || {}; return { ...SET_DEF, ...s, vol: { ...SET_DEF.vol, ...(s.vol || {}) }, keys: { ...(s.keys || {}) } }; }
+  catch (e) { return { ...SET_DEF, vol: { ...SET_DEF.vol }, keys: {} }; }
+})();
+function saveSettings() { store.set(SET_KEY, JSON.stringify(settings)); }
+// hành động bàn phím: [mã, tên, phím mặc định]; phím phụ cố định (mũi tên, Tab, Esc…) không đổi được
+const ACTIONS = [
+  ['up', 'Đi lên', 'KeyW'], ['down', 'Đi xuống', 'KeyS'], ['left', 'Sang trái', 'KeyA'], ['right', 'Sang phải', 'KeyD'], ['run', 'Chạy', 'ShiftLeft'],
+  ['use', 'Lục soát, nhặt đồ (giữ)', 'KeyE'], ['reload', 'Nạp đạn', 'KeyR'], ['swap', 'Đổi vũ khí', 'KeyQ'], ['heal', 'Băng bó', 'KeyF'], ['eat', 'Ăn, uống', 'KeyC'],
+  ['cure', 'Thuốc giải', 'KeyV'], ['torch', 'Đốt đuốc', 'KeyT'], ['light', 'Đèn pin', 'KeyL'], ['throw', 'Ném bom xăng', 'KeyX'], ['shove', 'Húc (Hamble)', 'KeyG'],
+  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'],
+];
+const ALT_KEYS = { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], run: ['ShiftRight'], bag: ['Tab'], pause: ['Escape'] };
+const KB = {};
+function loadKeys() { for (const [a, , d] of ACTIONS) KB[a] = settings.keys[a] || d; }
+loadKeys();
+const held = (a) => !!keys[KB[a]] || (ALT_KEYS[a] || []).some((c) => keys[c]);
+function actionOf(code) {
+  for (const [a] of ACTIONS) if (KB[a] === code) return a;
+  for (const a in ALT_KEYS) if (ALT_KEYS[a].includes(code)) return a;
+  return null;
+}
+const KEY_NAMES = { ShiftLeft: 'Shift', ShiftRight: 'Shift phải', ControlLeft: 'Ctrl', ControlRight: 'Ctrl phải', AltLeft: 'Alt', AltRight: 'Alt phải', Space: 'Space', Tab: 'Tab', Enter: 'Enter', CapsLock: 'Caps', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' };
+function keyName(code) {
+  if (!code) return '?';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+  return KEY_NAMES[code] || code;
+}
+const KN = (a) => keyName(KB[a]);
+const QUICK_ACT = { bandage: 'heal', medkit: 'heal', food: 'eat', water: 'eat', antidote: 'cure', torch: 'torch', flashlight: 'light', molotov: 'throw' };
+function helpHtml() {
+  if (isTouch) return 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên: Túi đồ, Chế đồ, Bản đồ, Kỹ năng, Dừng';
+  return `${KN('up')}${KN('left')}${KN('down')}${KN('right')}: đi · ${KN('run')}: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ ${KN('use')}: lục soát, nhặt đồ · ${KN('reload')}: nạp đạn · 1-5/${KN('swap')}: đổi vũ khí<br>`
+    + `${KN('bag')}: túi đồ · ${KN('craft')}: bàn chế · ${KN('map')}: bản đồ · ${KN('skills')}: kỹ năng · ${KN('heal')}: băng bó · ${KN('eat')}: ăn uống · ${KN('cure')}: thuốc giải · ${KN('torch')}: đuốc · ${KN('light')}: đèn pin · ${KN('throw')}: ném bom xăng · ${KN('shove')}: húc · ${KN('pause')}/Esc: menu`;
+}
+function refreshKeyHints() {
+  for (const [id, a] of [['tb-bag', 'bag'], ['tb-craft', 'craft'], ['tb-map', 'map'], ['tb-skill', 'skills'], ['tb-pause', 'pause']]) {
+    const b = $(id); if (!b) continue;
+    b.querySelector('kbd').textContent = KN(a);
+    b.title = b.querySelector('span').textContent + ' (' + KN(a) + ')';
+  }
+  document.querySelectorAll('#quick .qi').forEach((el) => { const i = el.querySelector('i'); if (i) i.textContent = KN(QUICK_ACT[el.dataset.it] || 'heal'); });
+  if (!isTouch) { $('map-close').textContent = `ĐÓNG (${KN('map')})`; $('bag-close').textContent = `ĐÓNG (${KN('bag')})`; $('sk-close').textContent = `ĐÓNG (${KN('skills')})`; }
+  else { $('map-close').textContent = 'ĐÓNG'; $('bag-close').textContent = 'ĐÓNG'; $('sk-close').textContent = 'ĐÓNG'; }
+}
+function applySettings() {
+  sound.setVolumes({ master: settings.vol.master / 100, music: settings.vol.music / 100, sfx: settings.vol.sfx / 100, amb: settings.vol.amb / 100 });
+  sound.muted = !!settings.mute;
+  const tp = $('tpad');
+  tp.style.setProperty('--ts', String(settings.tsize / 100));
+  tp.style.opacity = String(settings.talpha / 100);
+  document.body.classList.toggle('lefty', !!settings.lefty);
+  refreshKeyHints();
+}
+
+// ---------- bảng cài đặt ----------
+let settingsOpen = false, setTab = 'sound', rebinding = null, gfxNote = '';
+function openSettings(tab) {
+  settingsOpen = true; rebinding = null;
+  if (tab) setTab = tab;
+  $('settings').classList.remove('hidden');
+  renderSettings();
+}
+function closeSettings() {
+  settingsOpen = false; rebinding = null;
+  $('settings').classList.add('hidden');
+  saveSettings();
+}
+function sRow(label, sub, ctrl) {
+  const r = document.createElement('div'); r.className = 'srow';
+  const sp = document.createElement('span'); sp.innerHTML = label + (sub ? `<small>${sub}</small>` : ''); r.appendChild(sp);
+  if (ctrl) r.appendChild(ctrl);
+  return r;
+}
+function sRange(min, max, get, set, fmt = (v) => v + '%') {
+  const wrap = document.createElement('div'); wrap.style.display = 'flex'; wrap.style.alignItems = 'center'; wrap.style.gap = '8px';
+  const inp = document.createElement('input'); inp.type = 'range'; inp.min = min; inp.max = max; inp.value = get();
+  const em = document.createElement('em'); em.textContent = fmt(get());
+  inp.addEventListener('input', () => { set(+inp.value); em.textContent = fmt(+inp.value); applySettings(); });
+  inp.addEventListener('change', saveSettings);
+  inp.addEventListener('keydown', (e) => e.stopPropagation());
+  wrap.append(inp, em);
+  return wrap;
+}
+function sToggle(get, set, on = 'BẬT', off = 'TẮT') {
+  const b = document.createElement('button'); b.className = 'tog' + (get() ? ' on' : ''); b.textContent = get() ? on : off;
+  b.addEventListener('click', () => { set(!get()); b.className = 'tog' + (get() ? ' on' : ''); b.textContent = get() ? on : off; applySettings(); saveSettings(); });
+  return b;
+}
+function sSeg(opts, get, set) {
+  const d = document.createElement('div'); d.className = 'seg';
+  for (const [v, label] of opts) {
+    const b = document.createElement('button'); b.textContent = label; b.className = get() === v ? 'on' : '';
+    b.addEventListener('click', () => { set(v); d.querySelectorAll('button').forEach((x, i) => x.classList.toggle('on', opts[i][0] === get())); saveSettings(); });
+    d.appendChild(b);
+  }
+  return d;
+}
+function sButton(label, fn, cls = 'sbtn') { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.addEventListener('click', fn); return b; }
+function renderSettings() {
+  document.querySelectorAll('#settings .stab').forEach((b) => b.classList.toggle('on', b.dataset.tab === setTab));
+  document.querySelectorAll('#settings .spane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== setTab));
+  const pane = document.querySelector(`#settings .spane[data-pane="${setTab}"]`);
+  pane.innerHTML = '';
+  const V = settings.vol;
+  if (setTab === 'sound') {
+    pane.append(
+      sRow('Âm lượng chung', '', sRange(0, 100, () => V.master, (v) => { V.master = v; })),
+      sRow('Nhạc nền và phim', '', sRange(0, 100, () => V.music, (v) => { V.music = v; })),
+      sRow('Hiệu ứng', 'Súng, zombie, đánh, nhặt đồ', sRange(0, 100, () => V.sfx, (v) => { V.sfx = v; })),
+      sRow('Môi trường', 'Mưa, gió, côn trùng, máy phát', sRange(0, 100, () => V.amb, (v) => { V.amb = v; })),
+      sRow('Tắt tiếng', isTouch ? '' : 'Phím ' + KN('mute'), sToggle(() => settings.mute, (v) => { settings.mute = v; }, 'ĐANG TẮT', 'ĐANG BẬT')),
+    );
+  } else if (setTab === 'gfx') {
+    pane.append(
+      sRow('Chất lượng đồ hoạ', 'Nhẹ: mượt hơn trên điện thoại · Cao: bóng đổ, phản chiếu, hiệu ứng đầy đủ', sSeg([['low', 'Nhẹ'], ['high', 'Cao']], () => quality, (v) => {
+        if (v === quality) return;
+        quality = v; store.set('deadnight_q', v);
+        gfxNote = 'Đổi chất lượng cần tải lại game.'; renderSettings();
+      })),
+    );
+    if (gfxNote) {
+      const n = document.createElement('div'); n.className = 'srow';
+      n.innerHTML = `<span class="snote">${gfxNote}${state.mode === 'play' && !net.active ? ' Ván đang chơi sẽ được lưu trước.' : ''}</span>`;
+      n.appendChild(sButton('Tải lại ngay', () => { if (state.mode === 'play' && !net.active) saveGame(); location.reload(); }));
+      pane.appendChild(n);
+    }
+    pane.append(
+      sRow('Độ pixel', 'Dựng cảnh ở độ phân giải thấp rồi phóng to sắc nét', sSeg([[1, '1x'], [2, '2x'], [3, '3x']], () => pixelK, (v) => { pixelK = v; store.set('deadnight_px', String(v)); post.setPixel(v); setQualityLabel(); })),
+      sRow('Độ sáng', '', sRange(60, 160, () => settings.bright, (v) => { settings.bright = v; })),
+      sRow('Rung màn hình', 'Khi bắn, nổ, bị đánh', sToggle(() => settings.shake, (v) => { settings.shake = v; })),
+    );
+    if (state.mode === 'title') pane.append(sRow('Ngắm cảnh', 'Xem thử đồ hoạ: đổi giờ, thời tiết, chụp ảnh', sButton('Mở', () => { closeSettings(); startView(); })));
+  } else if (setTab === 'ctrl') {
+    if (isTouch) {
+      pane.append(
+        sRow('Cỡ nút bấm', 'Cụm nút LỤC, NẠP, ĐỔI, HÚC, NÉM', sRange(70, 150, () => settings.tsize, (v) => { settings.tsize = v; })),
+        sRow('Độ đậm nút', '', sRange(30, 100, () => settings.talpha, (v) => { settings.talpha = v; })),
+        sRow('Chơi tay trái', 'Đưa cụm nút sang trái, ngắm bằng ngón trái, đi bằng ngón phải', sToggle(() => settings.lefty, (v) => { settings.lefty = v; })),
+      );
+    } else {
+      const h = document.createElement('div'); h.className = 'shead'; h.textContent = 'PHÍM TẮT · bấm vào phím để đổi'; pane.appendChild(h);
+      for (const [a, label] of ACTIONS) {
+        const b = document.createElement('button'); b.className = 'keyb' + (rebinding === a ? ' wait' : '');
+        b.textContent = rebinding === a ? 'Bấm phím mới…' : KN(a);
+        b.addEventListener('click', () => { rebinding = rebinding === a ? null : a; renderSettings(); });
+        const alt = ALT_KEYS[a] ? 'Phím phụ: ' + ALT_KEYS[a].map(keyName).join(', ') : '';
+        pane.appendChild(sRow(label, alt, b));
+      }
+      pane.appendChild(sRow('Khôi phục phím mặc định', '', sButton('Mặc định', () => { settings.keys = {}; loadKeys(); saveSettings(); applySettings(); renderSettings(); })));
+    }
+    const hp = document.createElement('div'); hp.className = 'shelp'; hp.innerHTML = helpHtml(); pane.appendChild(hp);
+  } else if (setTab === 'game') {
+    pane.append(
+      sRow('Thời lượng ngày / đêm', 'Áp dụng từ ván mới', sSeg(Object.keys(DURATIONS).map((k) => [k, DURATIONS[k].name]), () => durKey, (v) => { durKey = v; store.set('deadnight_dur2', v); setQualityLabel(); })),
+      sRow('Phim cốt truyện', 'Tự chiếu khi bắt đầu và qua mỗi chương', sToggle(() => settings.cine, (v) => { settings.cine = v; })),
+    );
+    if (state.mode === 'title') {
+      const seen = seenGlobal();
+      const box = document.createElement('div'); box.className = 'seg';
+      for (const [id, label] of [['prologue', 'Mở đầu'], ['ch1', 'Chương 1'], ['lord', 'Zombie Chúa'], ['call', 'Gọi cứu hộ'], ['ending', 'Kết']]) {
+        if (id !== 'prologue' && !seen.has(id)) continue;
+        box.appendChild(sButton(label, () => { closeSettings(); $('title').classList.add('hidden'); sound.init(); cinema.play(id).then(() => { if (state.mode === 'title') $('title').classList.remove('hidden'); }); }));
+      }
+      pane.appendChild(sRow('Xem lại phim', 'Các đoạn đã mở khoá', box));
+    }
+    const S = loadSave();
+    pane.appendChild(sRow('Bản lưu', S ? saveLabel(S) : 'Chưa có bản lưu', S && state.mode === 'title' ? sButton('Xoá', () => askConfirm('Xoá bản lưu hiện tại? Không khôi phục được.', () => { deleteSave(); renderSettings(); refreshMenu(); }), 'sbtn warn') : null));
+  }
+}
+document.querySelectorAll('#settings .stab').forEach((b) => b.addEventListener('click', () => { setTab = b.dataset.tab; rebinding = null; renderSettings(); }));
+$('set-close').addEventListener('click', closeSettings);
+// đổi phím: bắt phím kế tiếp
+function captureRebind(e) {
+  e.preventDefault(); e.stopPropagation();
+  if (e.code === 'Escape') { rebinding = null; renderSettings(); return; }
+  const a = rebinding, old = KB[a];
+  const other = ACTIONS.find(([x]) => x !== a && KB[x] === e.code);
+  if (other) settings.keys[other[0]] = old;
+  settings.keys[a] = e.code;
+  loadKeys(); rebinding = null;
+  saveSettings(); applySettings(); renderSettings();
+}
+
+// ---------- hộp xác nhận ----------
+let confirmFn = null;
+function askConfirm(text, yes, yesLabel = 'ĐỒNG Ý') {
+  $('cf-text').textContent = text; $('cf-yes').textContent = yesLabel;
+  confirmFn = yes;
+  $('confirm').classList.remove('hidden');
+}
+function closeConfirm() { $('confirm').classList.add('hidden'); confirmFn = null; }
+$('cf-yes').addEventListener('click', () => { const f = confirmFn; closeConfirm(); if (f) f(); });
+$('cf-no').addEventListener('click', closeConfirm);
+
+// ---------- lưu game (chơi một mình) ----------
+const SAVE_KEY = 'deadnight_save1';
+const story = { seen: new Set() };
+let saveT = 60;
+function seenGlobal() { try { return new Set(JSON.parse(store.get('deadnight_seen', '[]'))); } catch (e) { return new Set(); } }
+function markSeen(id) { const s = seenGlobal(); s.add(id); store.set('deadnight_seen', JSON.stringify([...s])); }
+function loadSave() { try { const s = JSON.parse(store.get(SAVE_KEY, 'null')); return s && s.v === 1 ? s : null; } catch (e) { return null; } }
+function deleteSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* bỏ qua */ } }
+function saveLabel(S) {
+  const C = CHARS[S.char] || CHARS[0], z = ZONES[S.zone];
+  const mins = Math.max(1, Math.round((S.playTime || 0) / 60));
+  return `${C.name} · ${S.phase === 'night' || S.phase === 'dusk' ? 'Đêm ' + Math.max(1, S.wave) : 'Ngày ' + S.dayNo} · ${z ? z.name : ''} · ${mins} phút`;
+}
+function canSave() { return state.mode === 'play' && !net.active && player && !player.zombie && !player.dead && !player.downed && !Q.won && !Q.heli && !cinema.active && !zt.busy; }
+function saveGame(flash) {
+  if (!canSave()) return false;
+  const P = player;
+  const S = {
+    v: 1, at: Date.now(), char: P.char, zone: ZONE.id, x: +P.x.toFixed(2), z: +P.z.toFixed(2),
+    hp: P.hp, food: P.food, water: P.water, bag: { ...P.bag }, melee: P.melee, durs: { ...P.durs }, armor: P.armor, pack: !!P.pack,
+    recipes: [...P.recipes], books: [...P.books], guns: P.guns.map((g) => ({ owned: g.owned, ammo: g.ammo })), weapon: P.weapon,
+    battery: P.battery, flashOn: P.flashOn, torchT: P.torchT, infected: P.infected, infMax: P.infMax || 0,
+    looted: [...P.looted], picked: [...P.picked], lootCount: P.lootCount,
+    Q: { ...Q, heli: null }, power, dayNo, wave, phase, phaseT, dayStartHour, hourFrom, toSpawn, nightTotal, nightKills, hour: atmos.hour, weather: atmos.kind,
+    durKey, gates: JSON.parse(JSON.stringify(gateStates)), drops: JSON.parse(JSON.stringify(dropStore)), kills, score, playTime: gtime - playStart,
+    story: [...story.seen], bots: bots.map((b) => ({ ci: b.ci, hp: b.hp, state: b.state === 'out' ? 'out' : 'ok' })),
+  };
+  store.set(SAVE_KEY, JSON.stringify(S));
+  if (flash) { const f = $('saveflash'); f.classList.add('show'); clearTimeout(saveGame.t); saveGame.t = setTimeout(() => f.classList.remove('show'), 1600); }
+  return true;
+}
+function applySave(S) {
+  const P = player;
+  P.x = S.x; P.z = S.z; P.hp = Math.min(P.maxHp, S.hp); P.food = S.food; P.water = S.water;
+  for (const k in S.bag) if (k in P.bag) P.bag[k] = S.bag[k];
+  P.melee = S.melee in MELEE ? S.melee : 'fist'; P.durs = { ...S.durs }; P.armor = S.armor || 0; P.pack = !!S.pack;
+  P.recipes = new Set(S.recipes); P.books = new Set(S.books);
+  S.guns.forEach((g, i) => { if (P.guns[i]) { P.guns[i].owned = g.owned; P.guns[i].ammo = g.ammo; } });
+  P.weapon = P.guns[S.weapon] && P.guns[S.weapon].owned ? S.weapon : 0;
+  P.battery = S.battery || 0; P.flashOn = S.flashOn; P.torchT = S.torchT || 0;
+  P.infected = S.infected || 0; if (S.infMax) P.infMax = S.infMax;
+  P.looted = new Set(S.looted); P.picked = new Set(S.picked); P.lootCount = S.lootCount || 0;
+  Object.assign(Q, S.Q, { heli: null }); power = !!S.power;
+  dayNo = S.dayNo; wave = S.wave; dayStartHour = S.dayStartHour; hourFrom = S.hourFrom;
+  phase = S.phase === 'shot' ? 'day' : S.phase; phaseT = S.phaseT;
+  toSpawn = S.toSpawn || 0; nightTotal = S.nightTotal || 1; nightKills = S.nightKills || 0;
+  atmos.hour = S.hour; atmos.setWeather(S.weather || 'clear', true);
+  if (S.durKey && DURATIONS[S.durKey]) { DAY_LEN = DURATIONS[S.durKey].day; NIGHT_LEN = DURATIONS[S.durKey].night; }
+  for (const k in gateStates) delete gateStates[k]; Object.assign(gateStates, S.gates || {});
+  for (const k in dropStore) delete dropStore[k]; Object.assign(dropStore, S.drops || {});
+  kills = S.kills || 0; score = S.score || 0; playStart = gtime - (S.playTime || 0);
+  story.seen = new Set(S.story || []);
+  if (power) applyPowerVisual();
+  if (Q.armory) unlockArmory(false);
+  for (const sb of S.bots || []) { const b = findBot(sb.ci); if (b) { b.hp = Math.max(1, sb.hp); if (sb.state === 'out') b.state = 'out'; } }
+  placeBots();
+  clearDrops(); loadHostDrops();
+  setPlayerSprite(); hud.dirty = true;
+  if (Q.called && (phase === 'dawn' || phase === 'day')) setTimeout(() => { if (state.mode === 'play' && !Q.heli && !Q.won) heliArrive(); }, 3500);
+  showMsg('CHƠI TIẾP', saveLabel(S));
+}
+function continueGame() {
+  const S = loadSave();
+  if (!S) return;
+  myChar = clamp(S.char | 0, 0, CHARS.length - 1);
+  startGame({ load: S });
+}
+
+// ---------- cốt truyện ----------
+function playStory(id) {
+  if (!settings.cine || story.seen.has(id)) return Promise.resolve();
+  story.seen.add(id); markSeen(id);
+  if (bagOpen) toggleBag(false);
+  if (craftUI.open) toggleCraft(false);
+  if (mapOpen) toggleMap(false);
+  if (skillsOpen) toggleSkills(false);
+  sound.init();
+  return cinema.play(id);
+}
+function storyZone(id) {
+  if (state.mode !== 'play') return;
+  if (id !== 'school' && !story.seen.has('ch1')) playStory('ch1');
+  else if (id === 'market' && !story.seen.has('lord')) playStory('lord').then(lordHorde);
+}
+// Zombie Chúa gầm lên: cả bầy lao về phía người chơi
+function lordHorde() {
+  if (state.mode !== 'play' || (net.active && !net.host)) return;
+  for (let i = 0; i < 9; i++) {
+    const side = i % 2 ? 1 : -1;
+    const x = clamp(player.x + side * rand(13, 20), BOUNDS.x0 + 1, BOUNDS.x1 - 1), z = rand(WALL_Z + 0.5, BOUNDS.z1 - 0.4);
+    if (insideSolid(x, z, 0.5)) continue;
+    newZombie(i % 4 === 3 ? 'runner' : 'walker', x, 0, z, 'walk', { aggro: true });
+  }
+  showMsg('CẢ BẦY ĐANG KÉO TỚI!', 'Zombie Chúa đã gọi chúng');
+}
+
+// ---------- menu chính ----------
+function refreshMenu() {
+  const S = loadSave();
+  const c = $('m-continue');
+  c.disabled = !S;
+  $('m-save').textContent = S ? saveLabel(S) : 'Chưa có bản lưu';
+  $('best').textContent = bestScore();
+  const first = document.querySelector('#main-menu .mbtn:not(:disabled)');
+  document.querySelectorAll('#main-menu .mbtn').forEach((b) => b.classList.remove('sel'));
+  if (first && !isTouch) first.classList.add('sel');
+}
+function newGameFlow() {
+  if (loadSave()) askConfirm('Bắt đầu trò chơi mới? Bản lưu hiện tại sẽ bị ghi đè khi bạn chơi.', openCharSel, 'CHƠI MỚI');
+  else openCharSel();
+}
+function startNewGame() {
+  $('charsel').classList.add('hidden');
+  deleteSave();
+  startGame();
+  saveT = 20;
+  if (settings.cine) playStory('prologue');
+}
+let quitted = false;
+function quitGame() {
+  if (state.mode === 'play' && !net.active) saveGame();
+  if (net.room) leaveRoom();
+  quitted = true;
+  try { if (sound.ac) sound.ac.suspend(); } catch (e) { /* bỏ qua */ }
+  for (const id of ['title', 'pause', 'settings', 'confirm', 'over', 'win']) $(id).classList.add('hidden');
+  document.body.classList.remove('playing');
+  $('bye').classList.remove('hidden');
+  try { window.close(); } catch (e) { /* trình duyệt không cho đóng thẻ */ }
+}
+$('bye-back').addEventListener('click', () => location.reload());
+$('m-continue').addEventListener('click', continueGame);
+$('m-settings').addEventListener('click', () => openSettings());
+$('m-quit').addEventListener('click', () => askConfirm('Thoát game?', quitGame, 'THOÁT'));
+$('p-settings').addEventListener('click', () => openSettings());
+$('p-save').addEventListener('click', () => {
+  if (net.active) { askConfirm('Rời phòng co-op và về menu chính?', () => { leaveRoom(); toMenu(); }, 'RỜI PHÒNG'); return; }
+  saveGame(); toMenu();
+});
+// điều hướng menu bằng phím mũi tên / Enter
+function menuNav(e) {
+  const scr = ['confirm', 'settings', 'pause', 'title'].find((id) => !$(id).classList.contains('hidden'));
+  if (!scr || scr === 'settings' || scr === 'confirm') return false;
+  const list = [...$(scr).querySelectorAll('.mbtn:not(:disabled)')];
+  if (!list.length) return false;
+  let i = list.findIndex((b) => b.classList.contains('sel'));
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') i = (i + 1) % list.length;
+  else if (e.code === 'ArrowUp' || e.code === 'KeyW') i = (i - 1 + list.length) % list.length;
+  else if ((e.code === 'Enter' || e.code === 'Space') && i >= 0) { list[i].click(); return true; }
+  else return false;
+  list.forEach((b, k) => b.classList.toggle('sel', k === i));
+  return true;
+}
+document.querySelectorAll('.mbtn').forEach((b) => b.addEventListener('mouseenter', () => { b.parentElement.querySelectorAll('.mbtn').forEach((x) => x.classList.toggle('sel', x === b)); }));
+
 // ================= NÚT BẤM =================
-$('start-btn').addEventListener('click', openCharSel);
-$('cs-go').addEventListener('click', () => { $('charsel').classList.add('hidden'); startGame(); });
+$('start-btn').addEventListener('click', newGameFlow);
+$('cs-go').addEventListener('click', startNewGame);
 $('cs-back').addEventListener('click', closeCharSel);
 $('sk-close').addEventListener('click', () => toggleSkills(false));
-$('view-btn').addEventListener('click', startView);
-$('px-btn').addEventListener('click', cyclePixel);
-$('dur-btn').addEventListener('click', () => {
-  const keys = Object.keys(DURATIONS);
-  durKey = keys[(keys.indexOf(durKey) + 1) % keys.length];
-  store.set('deadnight_dur2', durKey);
-  DAY_LEN = DURATIONS[durKey].day; NIGHT_LEN = DURATIONS[durKey].night;
-  setQualityLabel();
-});
 document.querySelectorAll('#view-bar .vb').forEach((b) => b.addEventListener('click', () => viewAction(b.dataset.v)));
 $('view-show').addEventListener('click', () => viewAction('hud'));
-$('again-btn').addEventListener('click', () => (net.active && !net.host ? toast('Chờ chủ phòng bắt đầu ván mới…') : startGame()));
+$('again-btn').addEventListener('click', () => (net.active && !net.host ? toast('Chờ chủ phòng bắt đầu ván mới…') : (net.active ? startGame() : (deleteSave(), startGame()))));
+$('ov-load').addEventListener('click', continueGame);
 $('win-again').addEventListener('click', () => (net.active && !net.host ? toast('Chờ chủ phòng bắt đầu ván mới…') : startGame()));
 const menuOut = () => { if (net.room) leaveRoom(); toMenu(); };
 $('menu-btn').addEventListener('click', menuOut);
@@ -4322,18 +4713,13 @@ $('t-use').addEventListener('touchstart', (e) => { e.preventDefault(); if (playe
 $('t-use').addEventListener('touchend', (e) => { e.preventDefault(); interact.touchHold = false; }, { passive: false });
 $('t-use').addEventListener('touchcancel', () => { interact.touchHold = false; });
 $('resume-btn').addEventListener('click', togglePause);
-$('q-btn').addEventListener('click', () => {
-  quality = quality === 'high' ? 'low' : 'high';
-  store.set('deadnight_q', quality);
-  setQualityLabel();
-  location.reload();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden || state.mode !== 'play' || net.active) return;
+  saveGame();
+  if (!state.paused && !cinema.active) togglePause();
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && state.mode === 'play' && !state.paused) togglePause(); });
 addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
-$('help').innerHTML = isTouch
-  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên phải: Túi đồ, Chế đồ, Bản đồ, Kỹ năng · Nên xoay ngang màn hình'
-  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ E: lục soát, nhặt đồ · R: nạp đạn · 1-5/Q: đổi vũ khí<br>I: túi đồ · B: bàn chế đồ · M: bản đồ · K: kỹ năng · F: băng bó · C: ăn uống · V: thuốc giải · T: đuốc · L: đèn pin · X: ném bom xăng · G: húc';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

@@ -485,6 +485,145 @@
     body.touch .tb span { display: none; }
     body.touch .tb img { width: 22px; height: 22px; }
   }
+  /* ---------- menu chính, tạm dừng ---------- */
+  .tcard { max-width: 960px; display: flex; flex-direction: column; align-items: center; }
+  .tleft { text-align: center; }
+  .menu { display: flex; flex-direction: column; gap: 8px; width: min(440px, 86vw); margin: 6px auto 0; }
+  .mbtn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 54px; padding: 6px 30px 7px;
+    font-family: inherit; color: var(--ink); background: rgba(14,12,20,.8); border: 2px solid rgba(217,192,138,.55); outline: 2px solid rgba(0,0,0,.55); cursor: pointer; text-align: center; }
+  .mbtn b { font-weight: 400; font-size: 27px; letter-spacing: 3px; line-height: 1; }
+  .mbtn small { font-size: 15px; color: var(--ink-dim); letter-spacing: 1px; line-height: 1.1; }
+  .mbtn:hover:not(:disabled), .mbtn.sel { border-color: var(--gold); background: rgba(62,46,22,.92); }
+  .mbtn.sel::before, .mbtn:hover:not(:disabled)::before { content: '▶'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gold); font-size: 18px; }
+  .mbtn.hot { background: rgba(150,30,22,.88); border-color: #ffb08a; }
+  .mbtn.hot:hover, .mbtn.hot.sel { background: rgba(196,44,32,.95); }
+  .mbtn.hot small { color: #ffd8c8; }
+  .mbtn:disabled { opacity: .42; cursor: default; }
+  .mbtn.dim { opacity: .6; }
+  .mbtn:active:not(:disabled) { transform: translateY(2px); }
+  .mfoot { margin-top: 10px; font-size: 18px; color: var(--ink-dim); text-shadow: 0 2px 0 #000; }
+  .mfoot b { color: var(--gold); font-weight: 400; }
+  .pcard { max-width: 520px; }
+  .ptitle { font-size: 60px !important; margin-bottom: 12px !important; }
+  #title .card { max-height: 100%; overflow-y: auto; }
+  @media (max-height: 560px) {
+    .tcard { flex-direction: row; justify-content: center; gap: 22px; padding: 8px 12px; }
+    .tleft { flex: 1; min-width: 0; max-width: 430px; }
+    #title .menu { gap: 5px; width: min(360px, 46vw); margin: 0; }
+    .mbtn { min-height: 40px; padding: 3px 26px 4px; }
+    .mbtn b { font-size: 21px; letter-spacing: 2px; }
+    .mbtn small { font-size: 13px; }
+    #title .mbtn:not(#m-continue) small { display: none; }
+    .ptitle { font-size: 42px !important; margin-bottom: 6px !important; }
+    .pcard .menu { width: min(360px, 80vw); }
+    .mfoot { font-size: 15px; margin-top: 6px; }
+  }
+  /* ---------- cài đặt ---------- */
+  #settings { background: rgba(4,4,8,.62); z-index: 9; }
+  .scard { position: relative; max-width: 740px; max-height: calc(100dvh - 20px); display: flex; flex-direction: column; text-align: left; padding: 14px 18px 12px; }
+  .scard h2 { margin: 0 0 8px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); text-align: center; }
+  .stabs { display: flex; gap: 6px; flex: none; margin-bottom: 6px; }
+  .stab { flex: 1; font-family: inherit; font-size: 20px; color: var(--ink-dim); background: #1a1620; border: 2px solid #3a3440; padding: 4px 6px 5px; cursor: pointer; white-space: nowrap; }
+  .stab.on { color: #fff; background: #3a2e18; border-color: var(--gold); }
+  .spanes { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding-right: 4px; }
+  .srow { display: flex; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px solid rgba(217,192,138,.12); font-size: 19px; }
+  .srow > span { flex: 1; min-width: 0; line-height: 1.15; }
+  .srow > span small { display: block; font-size: 15px; color: var(--ink-dim); }
+  .srow input[type=range] { width: min(230px, 34vw); accent-color: #f2c14e; height: 26px; }
+  .srow em { font-style: normal; min-width: 46px; text-align: right; color: var(--gold); }
+  .tog, .seg button, .sbtn, .keyb { font-family: inherit; font-size: 17px; padding: 4px 12px; cursor: pointer; border: 2px solid #3a3440; background: #1a1620; color: var(--ink-dim); min-height: 34px; }
+  .tog { min-width: 96px; }
+  .tog.on { color: #fff; background: #2a5a2a; border-color: #8ad87a; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .seg button.on { color: #fff; background: #3a2e18; border-color: var(--gold); }
+  .sbtn { color: #fff; background: #2c5a6a; border-color: #9ad8e8; }
+  .sbtn.warn { background: #5a2a2a; border-color: #e88a7a; }
+  .keyb { min-width: 110px; color: var(--gold); background: #0e0c12; border-color: #5a4a30; }
+  .keyb.wait { color: #fff; border-color: #ff8a6a; animation: blink .4s infinite alternate; }
+  .snote { color: var(--gold) !important; }
+  .shead { font-size: 17px; color: var(--gold); letter-spacing: 2px; padding: 10px 4px 2px; }
+  .shelp { font-size: 16px; color: var(--ink-dim); line-height: 1.4; padding: 10px 4px; }
+  .sfoot { flex: none; margin-top: 8px; }
+  @media (max-height: 560px) {
+    .scard { padding: 8px 12px; }
+    .scard h2 { font-size: 24px; margin-bottom: 4px; text-align: left; }
+    .sfoot { position: absolute; right: 12px; top: 6px; margin: 0; }
+    .stab { font-size: 17px; padding: 2px 4px 3px; }
+    .srow { padding: 4px; font-size: 17px; }
+    .srow > span small { font-size: 13px; }
+  }
+  @media (max-width: 600px) { .srow { flex-wrap: wrap; } .srow > span { flex-basis: 100%; } .srow input[type=range] { width: 70vw; } }
+  #confirm { z-index: 12; background: rgba(0,0,0,.62); }
+  .ccard { max-width: 480px; }
+  #cf-text { font-size: 23px; line-height: 1.3; }
+  #bye { z-index: 40; background: #050507; }
+  #saveflash { position: fixed; z-index: 6; left: 50%; transform: translateX(-50%); bottom: calc(70px + var(--sb)); font-size: 18px; color: #9ae08a; text-shadow: 0 1px 0 #000, 0 0 6px #000; opacity: 0; pointer-events: none; transition: opacity .4s; }
+  #saveflash.show { opacity: 1; }
+  /* nút cảm ứng: cỡ, độ đậm, chơi tay trái */
+  #tpad { transform: scale(var(--ts, 1)); transform-origin: 100% 100%; }
+  body.lefty #tpad { right: auto; left: var(--sl); transform-origin: 0 100%; }
+  body.lefty #t-swap { right: auto; left: calc(175px * var(--u)); }
+  body.lefty #t-reload { right: auto; left: calc(172px * var(--u)); }
+  body.lefty #t-use { right: auto; left: calc(125px * var(--u)); }
+  body.lefty #t-shove { right: auto; left: calc(67px * var(--u)); }
+  body.lefty #t-throw { right: auto; left: calc(11px * var(--u)); }
+  body.touch.lefty #hud-top { flex-direction: row-reverse; }
+  body.touch.lefty #hud-l { align-items: flex-end; }
+  body.touch.lefty #hud-r { align-items: flex-start; }
+  body.touch.lefty #team { text-align: right; padding: 0 4px 0 0; }
+  /* ---------- đoạn phim cốt truyện ---------- */
+  #cine { position: fixed; inset: 0; z-index: 30; background: #000; display: flex; flex-direction: column; align-items: center; touch-action: none; cursor: pointer;
+    padding: var(--st) var(--sr) var(--sb) var(--sl); }
+  #cine.hidden { display: none; }
+  #cine-wrap { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; container-type: size; }
+  #cine-stage { position: relative; width: min(100cqw, calc(100cqh * 16 / 9)); aspect-ratio: 16 / 9; overflow: hidden; }
+  #cine-cv { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  #cine-ov { position: absolute; inset: 0; pointer-events: none; }
+  .cov { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-size: clamp(10px, 1.7vw, 18px); color: #fff; text-shadow: 0 1px 0 #000; transition: opacity .3s; }
+  .cov.mono { color: #7affb8; letter-spacing: 1px; font-size: clamp(9px, 1.4vw, 15px); transform: translate(-50%, 0); }
+  .cov.scr { color: #d8ecff; letter-spacing: 3px; font-size: clamp(11px, 2.1vw, 22px); }
+  .cov.scr.sm { letter-spacing: 1px; font-size: clamp(9px, 1.4vw, 15px); color: #a8c8e8; }
+  .cov.sign { letter-spacing: 2px; font-size: clamp(9px, 1.8vw, 19px); color: #f4f0e0; }
+  .cov.chalk { color: #e8f0e0; font-size: clamp(10px, 1.8vw, 19px); transform: translate(-50%, 0); opacity: .9; }
+  .cov.tvred { background: #c81a1a; color: #fff; padding: 0 6px; letter-spacing: 2px; font-size: clamp(9px, 1.6vw, 17px); }
+  .cov.tvred.wide { padding: 0 12px; }
+  .cov.ticker { transform: none; overflow: hidden; font-size: clamp(9px, 1.5vw, 16px); color: #f2c14e; height: 1.3em; line-height: 1.3em; }
+  .cov.ticker span { display: inline-block; padding-left: 100%; animation: tick 11s linear infinite; }
+  @keyframes tick { to { transform: translateX(-100%); } }
+  .cov.label { transform: translate(-50%, -100%); font-size: clamp(10px, 1.7vw, 18px); color: var(--gold); background: rgba(0,0,0,.6); padding: 1px 8px 2px; border-left: 3px solid var(--gold); }
+  .cov.count { font-size: clamp(28px, 7vw, 76px); color: #ff3a2a; letter-spacing: 6px; text-shadow: 0 0 18px rgba(255,40,30,.8), 0 3px 0 #000; animation: blink .45s infinite alternate; }
+  #cine-cap { position: absolute; left: 0; right: 0; top: 9%; text-align: center; pointer-events: none; opacity: 0; padding: 0 12px; }
+  #cine-cap.show { animation: capIn 3.6s ease forwards; }
+  #cine-cap b { display: block; font-weight: 400; font-size: clamp(20px, 4.4vw, 48px); letter-spacing: 6px; color: #f1e6cf; text-shadow: 0 2px 0 #000, 0 0 16px rgba(0,0,0,.9); }
+  #cine-cap small { display: block; font-size: clamp(13px, 2.2vw, 23px); color: #d8c8a8; letter-spacing: 2px; text-shadow: 0 2px 0 #000; }
+  @keyframes capIn { 0% { opacity: 0; transform: translateY(6px); } 14% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
+  #cine-title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; opacity: 0; padding: 0 16px; }
+  #cine-title.show { animation: titIn 1.2s ease forwards; }
+  #cine-title b { font-weight: 400; font-size: clamp(40px, 11vw, 120px); line-height: .9; letter-spacing: 6px; color: #e2402c; text-shadow: 0 0 26px rgba(226,64,44,.6), 0 6px 0 #2e0806, 0 7px 0 #000; }
+  #cine-title span { margin-top: 10px; font-size: clamp(18px, 3.4vw, 34px); letter-spacing: 4px; color: #f1e6cf; text-shadow: 0 2px 0 #000; }
+  #cine-title em { margin-top: 8px; font-style: normal; font-size: clamp(14px, 2.2vw, 22px); color: var(--gold); max-width: 760px; line-height: 1.25; }
+  @keyframes titIn { 0% { opacity: 0; transform: scale(1.08); filter: blur(4px); } 100% { opacity: 1; transform: none; filter: none; } }
+  #cine-box { position: relative; flex: none; width: min(880px, calc(100vw - 20px)); min-height: 84px; margin: 6px 0 8px; z-index: 31; display: flex; gap: 12px; align-items: flex-start;
+    background: rgba(14,12,20,.95); border: 2px solid var(--edge); outline: 2px solid var(--edge-dark); padding: 8px 14px 10px 10px; pointer-events: none; }
+  #cine-box.off { visibility: hidden; }
+  #cine-box canvas { width: 72px; height: 60px; image-rendering: pixelated; flex: none; background: #14101a; border: 2px solid #000; }
+  #cine-box .cb { flex: 1; min-width: 0; }
+  #cine-box .who { display: block; font-weight: 400; font-size: 20px; letter-spacing: 1px; line-height: 1; }
+  #cine-box .txt { margin: 4px 0 0; font-size: clamp(18px, 2.3vw, 25px); line-height: 1.2; color: #f1e6cf; min-height: 2.4em; }
+  #cine-box .nx { position: absolute; right: 10px; bottom: 4px; font-style: normal; color: var(--gold); font-size: 16px; opacity: 0; }
+  #cine-box.done .nx { opacity: 1; animation: blink .5s infinite alternate; }
+  #cine-box.narr { justify-content: center; text-align: center; background: rgba(0,0,0,.66); border-color: rgba(217,192,138,.25); outline: none; }
+  #cine-box.narr canvas, #cine-box.narr .who { display: none; }
+  #cine-box.narr .txt { font-style: italic; color: #eadcbc; min-height: 0; }
+  #cine-skip { position: fixed; right: calc(12px + var(--sr)); top: calc(10px + var(--st)); z-index: 32; font-family: inherit; font-size: 19px; color: var(--ink); background: rgba(10,8,14,.65); border: 2px solid rgba(217,192,138,.6); padding: 3px 12px 4px; cursor: pointer; }
+  #cine-skip:hover { border-color: var(--edge); }
+  @media (max-height: 520px) {
+    #cine-box { padding: 5px 10px 6px 6px; gap: 8px; min-height: 60px; margin: 4px 0 4px; }
+    #cine-box canvas { width: 54px; height: 45px; }
+    #cine-box .who { font-size: 16px; }
+    #cine-box .txt { font-size: 16px; min-height: 2.3em; margin-top: 2px; }
+    #cine-skip { font-size: 16px; padding: 2px 9px 3px; }
+  }
 </style>
 </head>
 <body>
@@ -598,7 +737,7 @@
 </div></div>
 <div id="charsel" class="screen hidden"><div class="card win">
   <h2>CHỌN NHÂN VẬT</h2>
-  <div class="lsub">Luyện tập: bạn chơi một nhân vật, 4 người còn lại là bot đi cùng</div>
+  <div class="lsub">Trò chơi mới: bạn chơi một nhân vật, 4 người còn lại là bot đi cùng</div>
   <div id="cs-grid"></div>
   <div id="cs-desc"></div>
   <div class="btns" style="margin-top:12px"><button class="btn" id="cs-go">BẮT ĐẦU</button><button class="btn ghost" id="cs-back">Quay lại</button></div>
@@ -610,31 +749,60 @@
   <div class="btns" style="margin-top:10px"><button class="btn ghost" id="sk-close">ĐÓNG (K)</button></div>
 </div></div>
 <div id="title" class="screen hidden">
-  <div class="card">
-    <h1>DEAD NIGHT</h1>
-    <div class="tag">LỤC SOÁT · SỐNG SÓT · CHỜ GIẢI CỨU</div>
-    <div class="btns">
-      <button class="btn" id="start-btn">LUYỆN TẬP</button>
-      <button class="btn alt" id="coop-btn">CO-OP</button>
-      <button class="btn ghost" id="view-btn">Ngắm cảnh</button>
-      <button class="btn ghost" id="q-btn">Đồ hoạ: Cao</button>
-      <button class="btn ghost" id="px-btn">Pixel: 1x</button>
-      <button class="btn ghost" id="dur-btn">Thời lượng: Vừa</button>
+  <div class="card tcard">
+    <div class="tleft">
+      <h1>DEAD NIGHT</h1>
+      <div class="tag">LỤC SOÁT · SỐNG SÓT · CHỜ GIẢI CỨU</div>
+      <div class="mfoot">Kỷ lục: sống sót <b id="best">0</b> ngày</div>
     </div>
-    <div class="help"><span id="help"></span><br>Kỷ lục: sống sót <b style="color:var(--gold);font-weight:400" id="best">0</b> ngày</div>
+    <nav class="menu" id="main-menu">
+      <button class="mbtn" id="m-continue"><b>CHƠI TIẾP</b><small id="m-save">Chưa có bản lưu</small></button>
+      <button class="mbtn hot" id="start-btn"><b>TRÒ CHƠI MỚI</b><small>Cốt truyện · bạn và 4 bot đồng đội</small></button>
+      <button class="mbtn" id="coop-btn"><b>CHƠI CÙNG BẠN BÈ</b><small>Co-op 2–5 người · thiếu người thì bot</small></button>
+      <button class="mbtn" id="m-settings"><b>CÀI ĐẶT</b><small>Âm thanh · đồ hoạ · độ sáng · nút bấm</small></button>
+      <button class="mbtn" id="m-quit"><b>THOÁT GAME</b></button>
+    </nav>
   </div>
 </div>
 <div id="pause" class="screen hidden">
-  <div class="card win">
-    <h1 style="font-size:64px">TẠM DỪNG</h1>
-    <div class="btns" style="margin-top:14px"><button class="btn" id="resume-btn">TIẾP TỤC</button></div>
+  <div class="card win pcard">
+    <h1 class="ptitle">TẠM DỪNG</h1>
+    <nav class="menu">
+      <button class="mbtn hot" id="resume-btn"><b>TIẾP TỤC</b></button>
+      <button class="mbtn" id="p-settings"><b>CÀI ĐẶT</b></button>
+      <button class="mbtn" id="p-save"><b>LƯU VÀ VỀ MENU CHÍNH</b></button>
+    </nav>
+    <div class="mfoot" id="p-note"></div>
   </div>
 </div>
+<div id="settings" class="screen hidden"><div class="card win scard">
+  <h2>CÀI ĐẶT</h2>
+  <div class="stabs">
+    <button class="stab on" data-tab="sound">Âm thanh</button><button class="stab" data-tab="gfx">Đồ hoạ</button><button class="stab" data-tab="ctrl">Nút bấm</button><button class="stab" data-tab="game">Trò chơi</button>
+  </div>
+  <div class="spanes">
+    <div class="spane" data-pane="sound"></div>
+    <div class="spane hidden" data-pane="gfx"></div>
+    <div class="spane hidden" data-pane="ctrl"></div>
+    <div class="spane hidden" data-pane="game"></div>
+  </div>
+  <div class="btns sfoot"><button class="btn ghost" id="set-close">ĐÓNG</button></div>
+</div></div>
+<div id="confirm" class="screen hidden"><div class="card win ccard">
+  <div id="cf-text"></div>
+  <div class="btns" style="margin-top:14px"><button class="btn" id="cf-yes">ĐỒNG Ý</button><button class="btn ghost" id="cf-no">Huỷ</button></div>
+</div></div>
+<div id="bye" class="screen hidden"><div class="card win">
+  <h1 style="font-size:clamp(40px,8vw,72px)">ĐÃ THOÁT GAME</h1>
+  <div class="stats" id="bye-text">Tiến trình đã được lưu. Bạn có thể đóng thẻ này.</div>
+  <div class="btns"><button class="btn" id="bye-back">MỞ LẠI GAME</button></div>
+</div></div>
+<div id="saveflash">✓ Đã lưu</div>
 <div id="over" class="screen hidden">
   <div class="card win">
     <h1 id="ov-title" style="font-size:clamp(40px,8vw,72px)">BẠN ĐÃ CHẾT</h1>
     <div class="stats">Sống sót <b><span id="ov-night">1</span> ngày</b><br>Hạ gục <b id="ov-kills">0</b> zombie · Lục được <b id="ov-loot">0</b> món<br>Thời gian <b><span id="ov-time">0</span> phút</b> · Kỷ lục <b id="ov-best">0</b> ngày</div>
-    <div class="btns"><button class="btn" id="again-btn">CHƠI LẠI</button><button class="btn ghost" id="menu-btn">Về menu</button></div>
+    <div class="btns"><button class="btn alt hidden" id="ov-load">TẢI BẢN LƯU</button><button class="btn" id="again-btn">CHƠI LẠI</button><button class="btn ghost" id="menu-btn">Về menu</button></div>
   </div>
 </div>
 <div id="win" class="screen hidden">

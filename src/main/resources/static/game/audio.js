@@ -3,15 +3,28 @@
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 export class Sound {
-  constructor() { this.ac = null; this.lx = 0; this.lz = 0; this.cricketT = 0; this.crackleT = 0; this.muted = false; }
+  constructor() { this.ac = null; this.lx = 0; this.lz = 0; this.cricketT = 0; this.crackleT = 0; this.muted = false; this.vol = { master: 1, music: 1, sfx: 1, amb: 1 }; this._bus = null; }
+  // âm lượng theo kênh (0..1): tổng, nhạc nền, hiệu ứng, môi trường
+  setVolumes(v) { Object.assign(this.vol, v); this.applyVolumes(); }
+  applyVolumes() {
+    if (!this.ac) return;
+    const t = this.ac.currentTime;
+    this.master.gain.setTargetAtTime(0.9 * this.vol.master, t, 0.05);
+    this.sfx.gain.setTargetAtTime(this.vol.sfx, t, 0.05);
+    this.amb.gain.setTargetAtTime(this.vol.amb, t, 0.05);
+    this.mus.gain.setTargetAtTime(this.vol.music, t, 0.05);
+  }
   init() {
     if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume(); return; }
     try {
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       this.ac = ac;
-      this.master = ac.createGain(); this.master.gain.value = 0.9;
+      this.master = ac.createGain(); this.master.gain.value = 0.9 * this.vol.master;
       const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
       this.master.connect(comp); comp.connect(ac.destination);
+      this.sfx = ac.createGain(); this.amb = ac.createGain(); this.mus = ac.createGain();
+      this.sfx.gain.value = this.vol.sfx; this.amb.gain.value = this.vol.amb; this.mus.gain.value = this.vol.music;
+      for (const b of [this.sfx, this.amb, this.mus]) b.connect(this.master);
       const len = ac.sampleRate * 2;
       this.noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
@@ -20,7 +33,7 @@ export class Sound {
         const s = ac.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
         const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
         const g = ac.createGain(); g.gain.value = 0;
-        s.connect(f); f.connect(g); g.connect(this.master); s.start();
+        s.connect(f); f.connect(g); g.connect(this.amb); s.start();
         return { f, g };
       };
       this.wind = loop('bandpass', 420, 0.6);
@@ -30,7 +43,7 @@ export class Sound {
       // nền nhạc trầm (hợp âm La thứ) rất nhỏ
       this.pad = ac.createGain(); this.pad.gain.value = 0;
       const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 0.4;
-      this.pad.connect(lp); lp.connect(this.master);
+      this.pad.connect(lp); lp.connect(this.mus);
       for (const [f, det] of [[110, -6], [110.4, 5], [130.8, -3], [164.8, 4], [82.4, 0]]) {
         const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
         const g = ac.createGain(); g.gain.value = 0.18;
@@ -50,8 +63,8 @@ export class Sound {
       const dx = x - this.lx, dz = z - this.lz, d = Math.hypot(dx, dz);
       g.gain.value = base / (1 + d * d * 0.012);
       const p = ac.createStereoPanner(); p.pan.value = clamp(dx / 16, -0.9, 0.9);
-      g.connect(p); p.connect(this.master);
-    } else { g.gain.value = base; g.connect(this.master); }
+      g.connect(p); p.connect(this._bus || this.sfx);
+    } else { g.gain.value = base; g.connect(this._bus || this.sfx); }
     return node;
   }
   noise(dur, type, freq, vol, x, z, q = 1) {
@@ -141,7 +154,7 @@ export class Sound {
       const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
       const g = ac.createGain(); g.gain.value = 0;
       const lfo = ac.createOscillator(); lfo.frequency.value = 17; const lg = ac.createGain(); lg.gain.value = 0.012; lfo.connect(lg); lg.connect(g.gain);
-      o.connect(f); f.connect(g); g.connect(this.master); o.start(); lfo.start();
+      o.connect(f); f.connect(g); g.connect(this.amb); o.start(); lfo.start();
       this.gen = { g };
     }
     this.genOn = on;
@@ -155,7 +168,7 @@ export class Sound {
       const g = ac.createGain(); g.gain.value = 0;
       const am = ac.createGain(); am.gain.value = 0.5;
       const lfo = ac.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 13; const lg = ac.createGain(); lg.gain.value = 0.5; lfo.connect(lg); lg.connect(am.gain);
-      s.connect(f); f.connect(am); am.connect(g); g.connect(this.master); s.start(); lfo.start();
+      s.connect(f); f.connect(am); am.connect(g); g.connect(this.sfx); s.start(); lfo.start();
       this.hel = { g };
     }
     this.heliOn = on;
@@ -172,6 +185,7 @@ export class Sound {
     this.pad.gain.setTargetAtTime(this.muted ? 0 : 0.02 * amb.music, t, 1.5);
     if (this.gen) this.gen.g.gain.setTargetAtTime(this.muted || !this.genOn ? 0 : 0.03 * (amb.gen || 0), t, 0.4);
     if (this.hel) this.hel.g.gain.setTargetAtTime(this.muted || !this.heliOn ? 0 : 0.22 * (amb.heli || 0), t, 0.4);
+    this._bus = this.amb;
     this.cricketT -= dt;
     if (this.cricketT <= 0 && amb.crickets > 0.05) {
       this.cricketT = 0.25 + Math.random() * 1.1 / amb.crickets;
@@ -190,5 +204,34 @@ export class Sound {
       this.crackleT = 0.04 + Math.random() * 0.25;
       this.noise(0.03 + Math.random() * 0.04, 'highpass', 2000 + Math.random() * 2000, 0.12 * amb.fire);
     }
+    this._bus = null;
+    // nền căng thẳng cho đoạn phim
+    if (amb.drone > 0 && !this.dr) {
+      const ac = this.ac;
+      const g = ac.createGain(); g.gain.value = 0;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
+      for (const [f, det] of [[55, 0], [55.6, 7], [82.4, -5], [58.3, 3]]) {
+        const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+        const og = ac.createGain(); og.gain.value = 0.22; o.connect(og); og.connect(lp); o.start();
+      }
+      lp.connect(g); g.connect(this.mus);
+      this.dr = { g };
+    }
+    if (this.dr) this.dr.g.gain.setTargetAtTime(this.muted ? 0 : 0.05 * (amb.drone || 0), t, 0.8);
   }
+  // ---- tiếng cho đoạn phim ----
+  boom(d = 1) { this.noise(2.4, 'lowpass', 200, 1.1 * d); this.noise(0.7, 'lowpass', 900, 0.5 * d); this.tone('sine', 62, 22, 1.8, 0.5 * d); }
+  sting() { this.tone('sawtooth', 110, 103, 2.4, 0.11); this.tone('sawtooth', 116.5, 109, 2.4, 0.09); this.tone('sine', 55, 36, 2.8, 0.32); this.noise(1.8, 'lowpass', 260, 0.5); }
+  tvStatic(dur = 0.6, vol = 0.1) { this.noise(dur, 'bandpass', 2600, vol, undefined, undefined, 0.4); }
+  meow(evil) {
+    if (evil) { this.tone('sawtooth', 760, 360, 0.55, 0.07); this.noise(0.5, 'highpass', 2600, 0.14); }
+    else { this.tone('triangle', 640, 860, 0.3, 0.06); this.tone('triangle', 860, 560, 0.32, 0.05, undefined, undefined, 0.26); }
+  }
+  scream() { this.tone('sawtooth', 820, 1320, 0.55, 0.05); this.tone('sawtooth', 1260, 960, 0.65, 0.045, undefined, undefined, 0.12); this.noise(0.55, 'bandpass', 1800, 0.07, undefined, undefined, 2); }
+  beep() { this.tone('sine', 1320, 1320, 0.07, 0.04); }
+  heartbeat() { this.tone('sine', 62, 44, 0.16, 0.4); this.tone('sine', 56, 40, 0.18, 0.3, undefined, undefined, 0.22); }
+  bang() { this.noise(0.35, 'lowpass', 520, 0.85); this.tone('square', 92, 38, 0.25, 0.22); this.noise(0.16, 'bandpass', 1800, 0.22, undefined, undefined, 2); }
+  roar() { this.tone('sawtooth', 72, 40, 2.0, 0.24); this.tone('sawtooth', 98, 58, 1.8, 0.12); this.noise(1.8, 'lowpass', 420, 0.55); this.tone('triangle', 150, 90, 1.5, 0.06); }
+  click() { this.tone('square', 2200, 1700, 0.02, 0.04); }
+  hiss() { this.noise(0.45, 'highpass', 3000, 0.12); }
 }

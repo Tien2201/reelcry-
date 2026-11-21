@@ -363,6 +363,11 @@ export function charPortrait(i, pal, scale = 4) {
   g.drawImage(a.canvas, 0, 0, fw, fh, 0, 0, fw * scale, fh * scale);
   return c;
 }
+// nhân vật phụ và zombie riêng cho đoạn phim (không cầm vũ khí)
+export function npcAtlas(pal) { return buildAtlas(SPEC.normal, { ...PAL_SURVIVOR, ...pal }, { weapon: 'fist' }); }
+export function npcZombieAtlas(seed, pal = {}, kind = 'walker') {
+  return buildAtlas(kind === 'brute' ? SPEC.brute : SPEC.normal, { ...zombiePalette(seed, kind), ...pal }, { zombie: true, kind });
+}
 const playerCache = [];
 export function playerSprites(i) {
   const k = i % 4;

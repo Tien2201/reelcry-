@@ -1712,7 +1712,7 @@ function questListHtml() {
     + it(Q.called, ready && !Q.called, 'Gọi trực thăng cứu hộ')
     + it(!!Q.heli, Q.called && !Q.heli, 'Cầm cự tới bình minh')
     + it(Q.won, !!Q.heli, 'Lên trực thăng ở bãi đáp')
-    + '<div style="margin-top:6px;color:var(--ink-dim)">Không có súng thật: súng, đạn và mìn đều do <b>Naryne</b> tự chế (ống thép, thuốc pháo, bi sắt, đinh)<br>Kho vật chứng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
+    + '<div style="margin-top:6px;color:var(--ink-dim)">Không có súng thật: súng, đạn và mìn đều phải <b>tự chế</b> (ống thép, thuốc pháo, bi sắt, đinh)<br>Kho vật chứng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
 }
 
 // ---------- trực thăng cứu hộ ----------
@@ -2519,17 +2519,21 @@ function describeGate() {
     return player.bag.wood > 0 ? { label: 'Chèn gỗ giữ cổng', can: true, time: 1.2 } : { label: 'Cần 1 thanh gỗ để chèn cổng', can: false };
   }
   if (player.bag.pipe > 0 && player.bag.wood > 0) return { label: 'Bẩy cổng bằng ống thép và chèn gỗ', can: true, time: 4.0 };
+  if (player.bag.wood >= 2) return { label: 'Bẩy cổng bằng gỗ rồi chèn (2 thanh gỗ)', can: true, time: 4.5 };
   const busy = bots.find((b) => b.task && b.task.poi === 'gate') || (net.active && !net.host && net.taskSent && net.taskSent.gate > gtime);
   if (busy) return { label: 'Bạn đang tới nâng cổng…', can: false };
   const b = allBots().find((o) => o.state === 'ok');
   if (b) return { label: `Nhờ ${CHARS[b.ci].name} nâng cổng`, can: true, time: 0.3 };
-  return { label: 'Nâng cổng sắt (bạn khác chèn gỗ)', can: true, time: 2.2 };
+  return { label: 'Nâng cổng sắt · cần 2 thanh gỗ (hoặc ống thép + 1 gỗ) để tự chèn', can: true, time: 2.2 };
 }
 function doGate() {
   const st = world.pois.gate.state || 'closed';
   if (st === 'held' && !gateMine && player.bag.wood > 0) { player.bag.wood--; gateAct('prop'); hud.dirty = true; return; }
   if (st !== 'closed') return;
-  if (player.bag.pipe > 0 && player.bag.wood > 0) { player.bag.wood--; gateAct('lift', CHARS[player.char].name); gateAct('prop'); hud.dirty = true; return; }
+  if ((player.bag.pipe > 0 && player.bag.wood > 0) || player.bag.wood >= 2) {
+    player.bag.wood -= player.bag.pipe > 0 ? 1 : 2;
+    gateAct('lift', CHARS[player.char].name); gateAct('prop'); hud.dirty = true; return;
+  }
   const b = allBots().find((o) => o.state === 'ok');
   if (b) { botTask(CHARS[b.ci].id, 'gate'); return; }
   gateMine = true; gateAct('lift', CHARS[player.char].name, 'me');
@@ -3240,21 +3244,9 @@ function applyItemEffect(it, mul = 1) {
 const canCraft = (R) => Object.entries(R.need).every(([k, v]) => (player.bag[k] || 0) >= v);
 const craftUI = { open: false, grid: Array(9).fill(null), sel: -1, tab: 'inv', focus: null, msg: '' };
 // phím V / nút thuốc giải: chế nhanh nếu đã biết công thức
-// súng, đạn, mìn: chỉ Naryne chế được — bạn là Naryne, hoặc Naryne (bot / bạn chơi cùng) đứng gần
-function naryneHelp() {
-  const me = CHARS[player.char] && CHARS[player.char].id === 'naryne';
-  if (me) return 'me';
-  const near = (x, z) => Math.hypot(x - player.x, z - player.z) < 6;
-  for (const b of allBots()) if (CHARS[b.ci].id === 'naryne' && b.state === 'ok' && near(b.x, b.z)) return 'bot';
-  if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && CHARS[rp.char].id === 'naryne' && !(rp.flags & (4 | 8 | 128)) && near(rp.x, rp.z)) return 'mate';
-  return null;
-}
-function naryneNote() {
-  const h = naryneHelp();
-  if (h === 'me') return 'Bạn là Naryne: tự chế súng, đạn, mìn';
-  if (h) return 'Naryne đang ở gần · nhờ Naryne chế giúp';
-  return partyIds().includes('naryne') ? 'Chỉ Naryne chế được · gọi Naryne lại gần (6 m)' : 'Chỉ Naryne chế được · Naryne không đi cùng đội';
-}
+// súng, đạn, mìn tự chế: ai cũng chế được, chỉ cần đủ nguyên liệu (nhân vật nào cũng tự lo được)
+const naryneHelp = () => 'me';
+const naryneNote = () => 'Ai cũng chế được · cần ống thép, thuốc pháo, bi sắt, đinh, băng keo';
 function craft(id) {
   const R = RECIPES.find((r) => r.id === id);
   if (!R || player.zombie || state.mode !== 'play') return;
@@ -3304,7 +3296,6 @@ function gridCraft() {
   if (R.book === 'naryne') {
     const h = naryneHelp();
     if (!h) { craftUI.msg = naryneNote(); renderCraft(); return; }
-    if (h === 'bot') { const nb = allBots().find((b) => CHARS[b.ci].id === 'naryne'); if (nb) floaters.push({ x: nb.x, y: 2.5, z: nb.z, text: 'Để mình chế!', t: 1.3, color: CHARS[nb.ci].color }); }
   }
   if ((player.bag[R.out] || 0) >= capOf(R.out) && !ITEMS[R.out].weapon) { craftUI.msg = 'Túi đã đầy ' + ITEMS[R.out].name.toLowerCase(); renderCraft(); return; }
   craftUI.grid.fill(null);

@@ -24,7 +24,7 @@ export const CHARS = [
   },
   {
     id: 'naryne', name: 'Naryne', nat: 'Nhật', role: 'Nữ · mê hoá sinh', color: '#c88ae8', hp: 90, speed: 4.8, scale: 0.96,
-    desc: 'Tiểu thư mê hoá sinh, người duy nhất biết tự chế súng, đạn và mìn. Nhanh nhất nhóm, máu ít nhất.',
+    desc: 'Tiểu thư mê hoá sinh. Nhanh nhất nhóm, máu ít nhất.',
     mod: {},
     pal: { hair: '#1a1a24', hairS: '#0c0c12', hairL: '#3a3a4a', top: '#e8e4f0', topS: '#b8b0c8', topL: '#ffffff', scarf: '#c8283a', scarfS: '#8a1a28' },
   },

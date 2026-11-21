@@ -4,7 +4,7 @@
 // Đồ lục được tính riêng cho từng người chơi (co-op: ai cũng lục được mỗi chỗ một lần).
 
 export const ITEMS = {
-  // vũ khí nóng đều do Naryne tự chế (học sinh không dùng súng thật)
+  // vũ khí nóng đều là đồ tự chế (học sinh không dùng súng thật)
   ammo9: { name: 'Đạn bi tự chế', max: 40, icon: 0 },
   shells: { name: 'Đạn đinh tự chế', max: 24, icon: 1 },
   bandage: { name: 'Băng gạc', max: 8, icon: 2, use: 'heal', heal: 25, time: 1.1, give: true },
@@ -81,7 +81,7 @@ export const BOOKS = {
   basic: { item: 'book_basic', name: 'Sách: Chế đồ cơ bản', where: 'bàn giáo viên trong các lớp học' },
   med: { item: 'book_med', name: 'Sổ tay y tế', where: 'tủ thuốc ở phòng y tế, nhà thuốc' },
   arms: { item: 'book_arms', name: 'Sổ tay bom xăng & bẫy', where: 'phòng bảo vệ của trường, đồn cảnh sát' },
-  naryne: { item: 'powder', name: 'Đồ tự chế của Naryne', where: '', who: 'naryne' },
+  naryne: { item: 'powder', name: 'Vũ khí tự chế (ai cũng chế được)', where: '' },
   bow: { item: 'book_bow', name: 'Sổ tay bắn cung', where: 'giá dụng cụ ở CLB bắn cung' },
   surv: { item: 'book_surv', name: 'Cẩm nang sinh tồn', where: 'tủ đồ học sinh, quầy quần áo' },
 };
@@ -96,7 +96,7 @@ export const RECIPES = [
   { id: 'medkit', book: 'med', out: 'medkit', n: 1, need: { bandage: 2, alcohol: 1 } },
   { id: 'antidote', book: 'med', out: 'antidote', n: 1, need: { antibio: 1, syringe: 1 } },
   { id: 'molotov', book: 'arms', out: 'molotov', n: 1, need: { bottle: 1, cloth: 1, alcohol: 1 } },
-  // chỉ Naryne chế được (hoá học, chế tạo): súng, đạn và mìn tự chế
+  // súng, đạn và mìn tự chế: ai cũng chế được khi có đủ nguyên liệu
   { id: 'pistol', book: 'naryne', out: 'pistol', n: 1, need: { pipe: 1, wood: 1, tape: 2, scrap: 1 } },
   { id: 'ammo9', book: 'naryne', out: 'ammo9', n: 4, need: { powder: 1, casing: 2 } },
   { id: 'shotgun', book: 'naryne', out: 'shotgun', n: 1, need: { pipe: 2, wood: 2, tape: 2, scrap: 2 } },

@@ -1081,8 +1081,12 @@ function startCoop(asHost) {
   if (!net.room || net.started) return;
   net.started = true; net.active = true;
   $('lobby').classList.add('hidden');
-  startGame();
+  // khách vào muộn: nếu dịch đã bùng phát ở máy chủ phòng thì vào thẳng trạng thái đó
+  const hm = roomMembers().find((x) => x.peer === net.hostPeer);
+  const ob = !asHost && !!(hm && hm.pz && hm.pz.w && hm.pz.w.ob);
+  startGame({ ob });
   setPlayerSkin(net.colorIdx);
+  if (!ob) setTimeout(playIntro, 400);
   if (!asHost) {
     for (const z of zombies) releaseSprite(z);
     zombies = []; net.zmap.clear();
@@ -1187,6 +1191,7 @@ function handleEvents(rp, list) {
     else if (type === 'ups' && net.host) { const z = zombies.find((o) => o.id === (ev[2] | 0)); if (z && z.state === 'pin') releasePin(z, 2.4, true); }
     else if (type === 'dr' && net.host) hostAddDrop(String(ev[2]), clamp(ev[3] | 0, 1, 99), (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, rp.zone);
     else if (type === 'pk' && net.host) hostPickDrop(ev[2] | 0, rp.peer);
+    else if (type === 'ob' && !net.host) { if (calmNow() && !outbreakQueued && state.mode === 'play') { outbreakQueued = true; startOutbreak(); } }
   }
 }
 function makeSnapshot(base) {
@@ -1204,6 +1209,7 @@ function makeSnapshot(base) {
     gr: net.grants.slice(-6),
     bt: bots.map((b) => [b.ci, Math.round(b.x * 10), Math.round(b.z * 10), Math.round(b.aim * 100), b.weapon, (b.moving ? 1 : 0) | (b.firing ? 2 : 0) | (b.state === 'down' || b.pinnedBy ? 4 : 0) | (b.state === 'out' ? 8 : 0), Math.round(b.hp)]),
     gt: GATE_CODES.indexOf((gateStates[ZONE.id] || { s: 'closed' }).s),
+    ob: story.seen.has('outbreak') ? 1 : 0, gc: Q.gateCut ? 1 : 0,
   };
   // giữ presence dưới 4 KiB
   while (z.length > 8 && base + JSON.stringify(w).length > 3900) z.splice(z.length - 8, 8);
@@ -1246,6 +1252,8 @@ function applySnapshot(w) {
   if (Array.isArray(w.dp) && !zt.busy) syncDrops(w.dp);
   if (Array.isArray(w.bt) && !zt.busy) syncBotViews(w.bt);
   if (w.gt !== undefined && !zt.busy && world.pois.gate) gateVisual(GATE_CODES[w.gt | 0] || 'closed');
+  if (w.ob && calmNow() && !outbreakQueued && !cinema.active && !zt.busy) coopLateOutbreak();
+  if (w.gc && !Q.gateCut) { Q.gateCut = true; openMainGate(true); }
   if (Array.isArray(w.gr)) for (const g of w.gr) if (Array.isArray(g) && g[0] === net.me && !net.grantSeen.has(g[3])) { net.grantSeen.add(g[3]); const it = ITEM_KEYS[g[1] | 0]; if (it) giveItems([[it, g[2] | 0]], true); }
   const hs = q[3] | 0;
   if (hs && !Q.heli) heliArrive();
@@ -1596,6 +1604,7 @@ function questApply(act, n, rp, predicted = false) {
     powerOn();
     if (!predicted && world.pois.generator) makeNoise(world.pois.generator.x, world.pois.generator.z, 16);
   } else if (act === 'armory') unlockArmory();
+  else if (act === 'gatecut' && !Q.gateCut) { Q.gateCut = true; openMainGate(true); }
   hud.dirty = true;
 }
 function questText() {
@@ -2652,9 +2661,10 @@ function clearAcid() {
 // ================= THÀNH PHỐ NHIỀU KHU =================
 // lưới 3 dãy phố × 4 khu; đi hết đường thì sang khu bên cạnh, vào hẻm phía sau lên dãy trên,
 // rẽ ở ngã tư phía trước xuống dãy dưới. Co-op: cả đội cùng ở một khu, phải cùng ra một lối.
-const ZONE_IDS = GRID.flat();
+// 3 tầng trường (chương 0) nằm ngoài lưới phố nhưng vẫn phải có mã để co-op đồng bộ khu
+const ZONE_IDS = [...GRID.flat(), ...Object.keys(ZONES).filter((k) => /^sf\d$/.test(k) && !GRID.flat().includes(k))];
 const EXITS = [null, 'w', 'e', 'n', 's'];
-const ENTRIES = ['start', 'w', 'e', 'n', 's'];
+const ENTRIES = ['start', 'w', 'e', 'n', 's', 'gate'];
 const OPP = { w: 'e', e: 'w', n: 's', s: 'n' };
 const ITEM_KEYS = Object.keys(ITEMS);
 const zt = { busy: false, wait: '', target: null };
@@ -4496,7 +4506,7 @@ function startGame(opts = {}) {
   const L = opts.load || null;
   sound.init();
   if (!L) story.seen = new Set();
-  if (!L && net.active) story.seen.add('outbreak');
+  if (!L && opts.ob) story.seen.add('outbreak');
   outbreakQueued = false;
   if (C3.on) c3End();
   clearNPCs();
@@ -4505,7 +4515,7 @@ function startGame(opts = {}) {
   clearDrops(); clearFlowers();
   for (const k in dropStore) delete dropStore[k];
   net.zoneSeq = 0; net.zoneSeqSeen = -1; net.zoneEntry = 'start'; net.grants = []; net.pickedDrops.clear();
-  const z0 = L && ZONES[L.zone] ? L.zone : QS.has('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : net.active ? 'sf2' : NEW_ZONE;
+  const z0 = L && ZONES[L.zone] ? L.zone : QS.has('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : NEW_ZONE;
   const wantCalm = calmNow() && isFloor(z0);
   if (ZONE.id !== z0 || WORLD_FLAGS.calm !== wantCalm) { disposeWorld(world); setZone(z0); WORLD_FLAGS.calm = wantCalm; buildZoneWorld(); }
   camReveal = 0; zt.wait = ''; clearAcid(); clearFire(); seenSpecial.clear();
@@ -4740,7 +4750,7 @@ function frame(now) {
   if (cinema.active) {
     cinema.frame(dt);
     sound.update(dt, cinema.amb());
-    if (cinema.active && cinema.is3D()) { cineRender(dt); return; }
+    if (cinema.active && cinema.is3D()) { if (net.active) netTick(dt); cineRender(dt); return; }
     if (!net.active || state.mode !== 'play') return;
     player.inv = Math.max(player.inv, 0.4);
   }
@@ -5169,9 +5179,12 @@ function startNewGame() {
   deleteSave();
   startGame();
   saveT = 20;
-  if (!settings.cine) return;
+  playIntro();
+}
+function playIntro() {
+  if (!settings.cine || !calmNow()) return;
   playStory('prologue').then(() => {
-    if (state.mode !== 'play' || !calmNow()) return;
+    if (state.mode !== 'play' || !calmNow() || cinema.active) return;
     defineArrive();
     cinema.play('arrive', { onEnd: () => { if (C3.on) c3End(); } });
   });
@@ -5282,11 +5295,15 @@ function placeCalmBots() {
 }
 let outbreakQueued = false;
 function checkOutbreak() {
-  if (!calmNow() || net.active || cinema.active || outbreakQueued || ZONE.id !== 'sf2') return;
-  if (curBuilding && curBuilding.id === 'class11a') { outbreakQueued = true; setTimeout(startOutbreak, 250); }
+  if (!calmNow() || (net.active && !net.host) || cinema.active || outbreakQueued || ZONE.id !== 'sf2') return;
+  const b = world.buildings.find((q) => q.id === 'class11a');
+  const inside = (x, z) => !!b && x > b.x0 && x < b.x1 && z < b.zf && z > b.zb;
+  const any = (curBuilding && curBuilding.id === 'class11a') || (net.active && [...net.players.values()].some((rp) => rp.inited && rp.here && inside(rp.x, rp.z)));
+  if (any) { outbreakQueued = true; setTimeout(startOutbreak, 250); }
 }
 function startOutbreak() {
   if (state.mode !== 'play') { outbreakQueued = false; return; }
+  if (net.active && net.host) netEvent('ob');
   if (!settings.cine) { afterOutbreak(); return; }
   story.seen.add('outbreak3d'); markSeen('outbreak');
   sound.init();
@@ -5302,12 +5319,15 @@ function afterOutbreak() {
   WORLD_FLAGS.calm = false;
   const b = world.buildings.find((q) => q.id === 'class11a');
   if (b) { player.x = b.door; player.z = 0.7; }
-  for (const n of npcs) if (!n.seated || Math.random() < 0.5) newZombie(Math.random() < 0.25 ? 'runner' : 'walker', n.x, 0, n.z, 'walk', { variant: 'student', aggro: Math.random() < 0.4 });
+  const hostSide = !net.active || net.host;
+  if (hostSide) {
+    for (const n of npcs) if (!n.seated || Math.random() < 0.5) newZombie(Math.random() < 0.25 ? 'runner' : 'walker', n.x, 0, n.z, 'walk', { variant: 'student', aggro: Math.random() < 0.4 });
+    if (b) { const t = newZombie('walker', b.x0 + 2.4, 0, -4.6, 'walk', { variant: 'student', aggro: true }); t.hp = t.maxHp = Math.round(t.hp * 1.5); }
+    const ha = newZombie('walker', BOUNDS.x0 + 5, 0, 0.6, 'walk', { variant: 'student', aggro: false });
+    ha.hp = ha.maxHp = 170;
+    spawnLurkers();
+  }
   clearNPCs();
-  if (b) { const t = newZombie('walker', b.x0 + 2.4, 0, -4.6, 'walk', { variant: 'student', aggro: true }); t.hp = t.maxHp = Math.round(t.hp * 1.5); }
-  const ha = newZombie('walker', BOUNDS.x0 + 5, 0, 0.6, 'walk', { variant: 'student', aggro: false });
-  ha.hp = ha.maxHp = 170;
-  spawnLurkers();
   for (const e of world.emitters) if (e.kind === 'inner' && Math.random() < 0.55) e.flicker = 'broken';
   for (const bt of bots) bt.sp.group.visible = true;
   placeBots();
@@ -5316,6 +5336,14 @@ function afterOutbreak() {
   showMsg('CHƯƠNG 0 · TIẾT HỌC CUỐI', 'Tìm kềm cắt ở kho tầng 3 · cắt khoá cổng chính tầng 1');
   if (!partyIds().includes(CHARS[bench].id)) setTimeout(() => toast(`${CHARS[bench].name} chạy lạc khỏi nhóm trong lúc hỗn loạn`), 2600);
   sound.wave();
+}
+// khách vào phòng khi dịch đã bùng phát (hoặc bỏ lỡ phim): chuyển sang trạng thái sau dịch, dựng lại tầng
+function coopLateOutbreak() {
+  story.seen.add('outbreak');
+  clearNPCs();
+  if (isFloor(ZONE.id) && WORLD_FLAGS.calm) { disposeWorld(world); setZone(ZONE.id); WORLD_FLAGS.calm = false; buildZoneWorld(); afterZoneLoad(ZONE.id); }
+  WORLD_FLAGS.calm = false;
+  hud.dirty = true;
 }
 // ---------- cổng chính tầng 1: cắt ổ khoá bằng kềm ----------
 function describeMainGate() {
@@ -5338,6 +5366,7 @@ function openMainGate(feed) {
 function cutGate() {
   if (!(player.bag.cutters > 0)) return;
   player.bag.cutters = 0; Q.gateCut = true;
+  if (net.active && !net.host) netEvent('q', 'gatecut', 0);
   openMainGate(true); gainXP(25, true); hud.dirty = true; saveT = 1;
 }
 // ---------- chuyển tầng ----------
@@ -5356,13 +5385,14 @@ function afterZoneLoad(id) {
 // ================= PHIM 3D: dựng bằng chính thế giới trong game =================
 const C3 = { on: false, actors: [], hidden: [], shake: 0, b: null, cam: { pos: new THREE.Vector3(0, 5, 10), look: new THREE.Vector3(), fov: CAM.fov } };
 function c3Begin(hideReal = true, b = null) {
-  C3.on = true; C3.b = b;
+  C3.on = true; C3.b = b; C3.hideReal = hideReal;
   if (hideReal) {
     C3.hidden = [player.sprite.group, ...bots.map((q) => q.sp.group), ...npcs.map((n) => n.sp.group)].filter((g) => g.visible);
     for (const g of C3.hidden) g.visible = false;
   }
 }
 function c3End() {
+  for (const z of zombies) if (z.c3h) { z.c3h = false; z.sprite.group.visible = true; }
   for (const a of C3.actors) scene.remove(a.sp.group);
   C3.actors = [];
   for (const g of C3.hidden) g.visible = true;
@@ -5402,6 +5432,12 @@ const c3Cam = (px, py, pz, lx, ly, lz, fov = 34) => { C3.cam.pos.set(px, py, pz)
 const lerp3 = (a, b, k) => a + (b - a) * k;
 function cineRender(dt) {
   if (FP.on) fpApply(false);
+  if (C3.on && C3.hideReal) {
+    // co-op: người chơi khác, bot (bản sao) và zombie mới sinh không lọt vào cảnh phim
+    for (const rp of net.players.values()) { if (rp.sp) rp.sp.group.visible = false; if (rp.zsp) rp.zsp.group.visible = false; }
+    for (const v of botViews.values()) v.sp.group.visible = false;
+    for (const z of zombies) if (z.sprite.group.visible) { z.sprite.group.visible = false; z.c3h = true; }
+  }
   gtime += dt; U.time.value = gtime;
   c3Update(dt);
   camTarget.x = C3.cam.look.x;

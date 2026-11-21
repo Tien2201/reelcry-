@@ -15,8 +15,10 @@ export const BY = 3.6;          // bậc thềm phía sau
 export const BACK_Z = -15;      // tường kè thứ hai
 export const BLD_D = 5.6;       // chiều sâu toà nhà
 export const ZB = WALL_Z - BLD_D;
-export const BOUNDS = { x0: -58, x1: 58, z0: ZB + 0.2, z1: 4.6 };
-export const STREET_FRONT = 3.25;
+// phố rộng: vỉa hè sau (sát nhà) · 2 làn xe · vỉa hè trước; cỏ chỉ còn một viền mỏng phía trước
+export const BOUNDS = { x0: -58, x1: 58, z0: ZB + 0.2, z1: 6.95 };
+export const STREET_FRONT = 7.2;
+export const LANE_Z = 2.0;
 export const STAIR_DEPTH = 1.9;
 const XMIN = -72, XMAX = 72;
 
@@ -37,7 +39,6 @@ export const ZONES = {
     id: 'downtown', name: 'Trung tâm thành phố', seed: 20261120,
     buildings: DOWNTOWN_BUILDINGS,
     stairs: [{ x: -24.4, w: 1.9 }, { x: 26.4, w: 1.9 }, { x: 47.2, w: 1.9 }],
-    pond: { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 },
     stream: { x0: -29.0, x1: -27.0 },
     helipad: { x: 52.4, z: 1.2, r: 2.5 },
     gas: true, generator: true, checkpoint: true, windmill: true, camp: { x0: 18, x1: 31 }, campfire: { x: 24.5, z: 1.3 },
@@ -140,7 +141,6 @@ ZONES.residential = {
   ],
   alley: -0.5, cross: -0.5, gate: true,
   stairs: [{ x: -24.4, w: 1.9 }, { x: 22, w: 1.9 }],
-  pond: { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 },
   stream: { x0: -29.0, x1: -27.0 },
   terrace: [{ x: -31.6, zf: -3.0, w: 4.4, d: 4.0, floors: 1, ridge: 'z', roof: 'moss', style: 'stone', shutter: '#4a3a2a', door: 0.5, seed: 21, lit: false, by: TY }, ...bgHouses([-40, -6, 18, 40], 51)],
   trees: [[-58, -7, 1.2, 'oak2'], [-24.0, -8.8, 1.3, 'oak'], [8, -9.5, 1.0, 'autumn'], [30, -9, 1.0, 'oak'], [55, -10, 1.0, 'pine']],
@@ -552,7 +552,7 @@ export function buildWorld(scene, quality) {
   const stShapes = [
     { type: 'rect', kind: 7, x: XMIN, z: WALL_Z - 1, w: XMAX - XMIN, h: STREET_FRONT - WALL_Z + 1 },
     { type: 'rect', kind: 8, x: XMIN, z: WALL_Z - 1, w: XMAX - XMIN, h: 1.1 },
-    { type: 'rect', kind: 8, x: XMIN, z: STREET_FRONT - 0.5, w: XMAX - XMIN, h: 0.5 },
+    { type: 'rect', kind: 8, x: XMIN, z: STREET_FRONT - 1.3, w: XMAX - XMIN, h: 1.3 },
   ];
   if (Z.gas) stShapes.push({ type: 'rect', kind: 8, x: -57.5, z: -0.9, w: 9, h: 3.6 });
   if (camp) stShapes.push({ type: 'rect', kind: 1, x: camp.x0, z: STREET_FRONT - 0.2, w: camp.x1 - camp.x0, h: 6 });
@@ -568,7 +568,7 @@ export function buildWorld(scene, quality) {
     if (Z.gas && x > -57.5 && x < -48.5) continue;
     if (HELIPAD && Math.abs(x + 0.6 - HELIPAD.x) < HELIPAD.r + 0.6) continue;
     if ((Z.noPaint || []).some(([a, b]) => x > a && x < b)) continue;
-    stShapes.push({ type: 'rect', kind: 9, x, z: 0.95, w: 1.5, h: 0.13 });
+    stShapes.push({ type: 'rect', kind: 9, x, z: LANE_Z - 0.065, w: 1.5, h: 0.13 });
   }
   // bãi đáp: vòng tròn + chữ H sơn trắng
   if (HELIPAD) {
@@ -1604,7 +1604,7 @@ export function buildWorld(scene, quality) {
     if (camp && x > camp.x0 - 1 && x < camp.x1 + 1) continue;
     if (Z.cross !== undefined && Math.abs(x - Z.cross) < 3) continue;
     if ((Z.noBush || []).some(([a, b]) => x > a && x < b)) continue;
-    bush(x, 5.4 + rng() * 1.0, 0.6 + rng() * 0.3, 0, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, null);
+    bush(x, STREET_FRONT + 0.9 + rng() * 0.8, 0.6 + rng() * 0.3, 0, rng.chance(0.5) ? TREE_COLORS.oak2 : TREE_COLORS.oak, null);
   }
 
   // ======================= ĐÈN (đa số hỏng) =======================
@@ -1622,7 +1622,7 @@ export function buildWorld(scene, quality) {
     if (y0 === 0) addCircle(x, z, 0.2, true);
   }
   const lampStates = ['broken', 'lamp', 'dead', 'broken', 'lamp', 'broken', 'lamp', 'dead'];
-  (Z.lamps || []).forEach((x, i) => lampPost(x, STREET_FRONT + 0.45, '#ffb85e', 0, 2.4, lampStates[i % lampStates.length]));
+  (Z.lamps || []).forEach((x, i) => lampPost(x, STREET_FRONT + 0.3, '#ffb85e', 0, 2.4, lampStates[i % lampStates.length]));
   if (POND) {
     lampPost(POND.cx - POND.rx - 0.6, STREET_FRONT + 0.9, '#ffb85e', 0, 2.4, 'broken');
     lampPost(POND.cx + POND.rx + 0.7, STREET_FRONT + 0.6, '#ffb85e', 0, 2.4, 'lamp');
@@ -1735,7 +1735,10 @@ export function buildWorld(scene, quality) {
     if (style === 'burnt') fire(x + 0.3, z, 0.7, 12, 0.95);
     if (o.loot) { const [tx2, tz2] = P(-L / 2 - 0.55, 0); container(o.loot, tx2, tz2 + (o.lootDz || 0), o.label || 'Cốp xe'); }
   }
-  for (const [x, z, ry, style, o] of Z.cars || []) car(x, z, ry, style, o || {});
+  for (const [x, z, ry, style, o] of Z.cars || []) {
+    const zz = z > 1.6 ? ((Math.round(x * 7) & 1) ? z - 1.85 : z + 2.25) : z;
+    car(x, zz, ry, style, o || {});
+  }
 
   // ======================= TRẠM XĂNG =======================
   if (Z.gas) {
@@ -1837,9 +1840,9 @@ export function buildWorld(scene, quality) {
     root.add(door);
   }
   if (Z.checkpoint) {
-    tent(21, 7.2, 0.25, clothMats.a);
-    tent(28.5, 7.6, -0.3, clothMats.b);
-    for (let i = 0; i < 9; i++) for (let row = 0; row < 2; row++) if (i < 9 - row) misc.add(camp.x0 + 1 + i * 0.66 + row * 0.33, 0.17 + row * 0.3, 5.2, 0.62, 0.32, 0.36, row ? '#a89670' : '#968460');
+    tent(21, STREET_FRONT + 1.9, 0.25, clothMats.a);
+    tent(28.5, STREET_FRONT + 2.2, -0.3, clothMats.b);
+    for (let i = 0; i < 9; i++) for (let row = 0; row < 2; row++) if (i < 9 - row) misc.add(camp.x0 + 1 + i * 0.66 + row * 0.33, 0.17 + row * 0.3, STREET_FRONT + 0.55, 0.62, 0.32, 0.36, row ? '#a89670' : '#968460');
   }
 
   // ======================= CỐI XAY GIÓ (thềm sau) =======================
@@ -1908,7 +1911,7 @@ export function buildWorld(scene, quality) {
       if (i < n && rng() > broken) { const mx = x + (x1 - x0) / n / 2; planks.add(mx, 0.42, z, (x1 - x0) / n, 0.1, 0.07, '#b8a890'); planks.add(mx, 0.78, z, (x1 - x0) / n, 0.1, 0.07, '#b8a890'); }
     }
   }
-  for (const [a, b, z] of Z.fences || []) fence(a, b, z);
+  for (const [a, b, z] of Z.fences || []) fence(a, b, Math.max(z, STREET_FRONT + 2.2));
 
   // ======================= BIỂN CHỈ ĐƯỜNG, RÀO CHẮN CUỐI PHỐ =======================
   const links = Z.links || {};
@@ -1979,7 +1982,7 @@ export function buildWorld(scene, quality) {
       else if (k < 0.8) { for (let t = 0; t < 2; t++) misc.add(x, 0.13 + t * 0.26, z, 0.7, 0.24, 0.7, '#141416'); addCircle(x, z, 0.35, true); }
       else debris(x, z, 5, 0.9);
     }
-    papers(XMIN + 14, XMAX - 14, -1.3, 2.9, hi ? 120 : 60);
+    papers(XMIN + 14, XMAX - 14, -1.3, STREET_FRONT - 0.4, hi ? 160 : 80);
     for (const b of BUILDINGS) if (b.shop) for (let i = 0; i < 14; i++) misc.add(b.x0 + 0.4 + rng() * (b.w - 0.8), 0.015, WALL_Z + 0.1 + rng() * 0.7, 0.08 + rng() * 0.1, 0.01, 0.06 + rng() * 0.08, rng() < 0.5 ? '#9ab0c0' : '#c8dae4', rng() * 3);
     for (const [x, z, sz] of Z.blood || []) bloodPool(x, z, sz);
     for (const [x, z, lbl] of Z.bodies || []) { bloodPool(x, z, 1.3); container('body', x, z, lbl, null, { corpse: true }); }

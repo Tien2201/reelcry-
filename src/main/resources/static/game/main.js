@@ -42,7 +42,8 @@ renderer.toneMapping = THREE.NoToneMapping;
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x000000, 30, 100);
 // camera thấp kiểu diorama: nhìn gần như ngang vào mặt tiền các ngôi nhà
-const CAM = { y: 9.6, back: 26, lookY: 3.0, lookZ: -3.2, fov: 30 };
+// camera chúc xuống hơn một chút để cả mặt phố rộng nằm gọn trong khung
+const CAM = { y: 11.0, back: 26, lookY: 2.6, lookZ: -2.4, fov: 31 };
 const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
 let camScale = 1, camInside = 0;
 const post = new Post(renderer);
@@ -1396,7 +1397,7 @@ function spawnFlowers(day) {
   if (!flowerSpr) flowerSpr = makeFlowerSprite();
   const seed = (net.host ? net.gameId : net.gameSeen) || 7;
   const r = makeRng(Math.abs(seed % 1e6) * 31 + day * 977 + (ZONE.seed % 1000) * 13);
-  const spots = (ZONE.flowers || []).filter(([x, z]) => !insideSolid(x, z, 0.25));
+  const spots = (ZONE.flowers || []).map(([x, z]) => [x, z > 2 ? Math.min(z + 2.3, STREET_FRONT - 0.6) : z]).filter(([x, z]) => !insideSolid(x, z, 0.25));
   const n = Math.min(spots.length, 2 + Math.min(2, net.players.size));
   for (let i = 0; i < n; i++) {
     const [x, z] = spots.splice(Math.floor(r() * spots.length), 1)[0];

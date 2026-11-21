@@ -1442,7 +1442,7 @@ export function buildWorld(scene, quality) {
       const cageBox = addBox(cx0 - 0.05, cz1 - 0.05, 42.85, cz1 + 0.05);
       addBox(cx0 - 0.05, -7.5, cx0 + 0.05, cz1);
       pois.armory = { x: 41.05, z: -5.2, door, box: cageBox, open: false, label: 'Kho vũ khí (khoá)' };
-      container('armory', 41.4, -6.55, 'Giá súng', b, { locked: 'armory' });
+      container('armory', 41.4, -6.55, 'Tủ vật chứng', b, { locked: 'armory' });
       papers(29.5, 42.5, -6.5, -2.4, 16); bloodPool(34.2, -4.4, 1.4); bloodPool(37.6, -6.2, 0.9);
       chair(33.0, -4.6, true); debris(30.6, -5.2, 6, 0.9);
     },
@@ -1947,7 +1947,7 @@ export function buildWorld(scene, quality) {
     for (let i = 0; i < 2; i++) crates.add(16.9 + i * 0.75, 0.3, -1.25, 0.7, 0.55, 0.5, '#8a9a6a', 0);
     misc.add(17.25, 0.6, -1.25, 1.5, 0.05, 0.52, '#3a4a2a');
     addBox(16.5, -1.55, 18.0, -0.95);
-    container('ammo_crate', 17.25, -0.55, 'Thùng đạn quân đội');
+    container('ammo_crate', 17.25, -0.55, 'Thùng đồ quân đội');
   }
   }
   const clothMats = { a: lamb({ map: T.clothTile('#c8b896') }), b: lamb({ map: T.clothTile('#6a7a4a') }) };

@@ -176,9 +176,10 @@ function dirFromAngle(a) {
 // ================= TRẠNG THÁI GAME =================
 const WEAPONS = [
   { key: 'knife', name: 'DAO', melee: true, dmg: 45, rate: 0.4, reach: 1.5, arc: 1.05, mag: 0, shake: 0.05 },
-  { key: 'pistol', name: 'SÚNG LỤC', dmg: 34, rate: 0.26, mag: 12, reload: 1.0, spread: 0.035, pellets: 1, speed: 38, kick: 0.06, shake: 0.12, ammo: 'ammo9', noise: 15 },
-  { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.2, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, ammo: 'shells', noise: 19 },
-  { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.07, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, ammo: 'ammo9', noise: 17 },
+  // súng tự chế của Naryne: ít đạn, nạp lâu, kém chính xác hơn súng thật
+  { key: 'pistol', name: 'SÚNG ỐNG', dmg: 42, rate: 0.45, mag: 2, reload: 1.5, spread: 0.05, pellets: 1, speed: 34, kick: 0.09, shake: 0.16, ammo: 'ammo9', noise: 15 },
+  { key: 'shotgun', name: 'HOA CẢI', dmg: 17, rate: 0.9, mag: 1, reload: 1.9, spread: 0.24, pellets: 8, speed: 30, kick: 0.22, shake: 0.42, ammo: 'shells', noise: 19 },
+  { key: 'smg', name: 'SÚNG ĐINH', dmg: 11, rate: 0.13, mag: 20, reload: 1.6, spread: 0.06, pellets: 1, speed: 30, kick: 0.03, shake: 0.05, ammo: 'nails', noise: 6 },
   { key: 'bow', name: 'CUNG', dmg: 58, rate: 0.7, mag: 1, reload: 0.45, spread: 0.012, pellets: 1, speed: 26, kick: 0.03, shake: 0.04, ammo: 'arrow', noise: 0, bow: true },
 ];
 // nhân vật đang chơi (lưu lựa chọn)
@@ -321,6 +322,7 @@ addEventListener('keydown', (e) => {
   if (act === 'map') toggleMap();
   if (act === 'mute') { settings.mute = !settings.mute; sound.muted = settings.mute; saveSettings(); toast(settings.mute ? 'Đã tắt tiếng' : 'Đã bật tiếng'); }
   if (act === 'view') toggleView();
+  if (act === 'mine') placeMine();
   if (act === 'pause') togglePause();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -1701,7 +1703,7 @@ function questListHtml() {
     + it(Q.called, ready && !Q.called, 'Gọi trực thăng cứu hộ')
     + it(!!Q.heli, Q.called && !Q.heli, 'Cầm cự tới bình minh')
     + it(Q.won, !!Q.heli, 'Lên trực thăng ở bãi đáp')
-    + '<div style="margin-top:6px;color:var(--ink-dim)">Kho súng trong đồn cần chìa khoá · bàn trưởng đồn<br>Súng rất hiếm: súng lục ở phòng bảo vệ trường, shotgun ở kho súng · đạn tự chế từ thuốc súng + vỏ đạn</div>';
+    + '<div style="margin-top:6px;color:var(--ink-dim)">Không có súng thật: súng, đạn và mìn đều do <b>Naryne</b> tự chế (ống thép, thuốc pháo, bi sắt, đinh)<br>Kho vật chứng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
 }
 
 // ---------- trực thăng cứu hộ ----------
@@ -1845,7 +1847,7 @@ function describe(tg) {
   if (tg.type === 'zf') return player.bag.flower > 0 ? { label: `Cho ${tg.rp.name} ăn hoa bỉ ngạn`, can: true, time: 2.0 } : { label: `${tg.rp.name} đã hoá zombie · cần hoa bỉ ngạn`, can: false };
   if (tg.type === 'cu') return { label: `Tiêm thuốc giải cho ${tg.rp.name}`, can: true, time: 1.5 };
   if (tg.type === 'f') return player.bag.flower >= ITEMS.flower.max ? { label: 'Hoa bỉ ngạn · túi đã đầy', can: false } : { label: 'Hái hoa bỉ ngạn', can: true, time: 0.9 };
-  if (tg.key === 'armory') return player.bag.key > 0 ? { label: 'Mở kho súng bằng chìa khoá', can: true, time: 1.2 } : { label: 'Kho súng bị khoá · cần chìa khoá', can: false };
+  if (tg.key === 'armory') return player.bag.key > 0 ? { label: 'Mở kho vật chứng bằng chìa khoá', can: true, time: 1.2 } : { label: 'Kho vật chứng bị khoá · cần chìa khoá', can: false };
   if (tg.key === 'mainGate') return describeMainGate();
   return questDescribe(tg.key);
 }
@@ -2000,7 +2002,7 @@ function buildIcons() {
     ICON[it] = c.toDataURL(); iconCanvas[it] = c;
   }
 }
-const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L'], ['molotov', 'X']];
+const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L'], ['molotov', 'X'], ['mine', 'Y']];
 // icon pixel 12×12 cho thanh công cụ
 const UI_PIX = {
   more: { pal: { '#': '#140e0a', 1: '#f0ece0' }, rows: [
@@ -2043,7 +2045,7 @@ function buildQuickBar() {
     const d = document.createElement('div');
     d.className = 'qi'; d.dataset.it = it; d.title = ITEMS[it].name;
     d.innerHTML = `<img alt="" src="${ICON[it]}"><b>0</b><i>${key}</i>`;
-    const act = () => (it === 'antidote' ? quickAntidote() : it === 'flashlight' ? toggleFlashlight() : it === 'molotov' ? throwMolotov() : useItem(it));
+    const act = () => (it === 'antidote' ? quickAntidote() : it === 'flashlight' ? toggleFlashlight() : it === 'molotov' ? throwMolotov() : it === 'mine' ? placeMine() : useItem(it));
     d.addEventListener('click', act);
     d.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); act(); }, { passive: false });
     q.appendChild(d);
@@ -2089,6 +2091,7 @@ function renderBag() {
     if (n && def.melee && player.melee !== it) btn('Cầm', () => { equipMelee(it); if (player.weapon !== 0) switchWeapon(0); renderBagIfOpen(); });
     if (n && def.use) btn(def.use === 'armor' ? 'Mặc' : def.use === 'pack' ? 'Đeo' : 'Dùng', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
     if (n && def.throw) btn('Ném', () => { if (bagOpen) toggleBag(false); throwMolotov(); });
+    if (n && def.place) btn('Đặt', () => { if (bagOpen) toggleBag(false); placeMine(); });
     if (n && it === 'flashlight') btn(player.flashOn ? 'Tắt' : 'Bật', () => { toggleFlashlight(); renderBagIfOpen(); });
     const giveFn = (rp) => () => { bagGiveFor = null; if (bagOpen && !net.active) toggleBag(false); giveTo(it, rp); renderBagIfOpen(); };
     // vũ khí cận chiến / cung: đưa được cho bot đứng gần
@@ -2890,7 +2893,7 @@ function buildZoneWorld() {
   if (fx.decals) { fx.decals.clear(); for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9); }
 }
 function loadZone(id, entry) {
-  clearFlowers(); clearDrops(); clearAcid(); clearFire(); player.pinned = 0;
+  clearFlowers(); clearDrops(); clearAcid(); clearFire(); clearMines(); player.pinned = 0;
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = []; net.zmap.clear();
   for (const p of pickups) scene.remove(p.mesh);
@@ -3239,10 +3242,26 @@ function applyItemEffect(it, mul = 1) {
 const canCraft = (R) => Object.entries(R.need).every(([k, v]) => (player.bag[k] || 0) >= v);
 const craftUI = { open: false, grid: Array(9).fill(null), sel: -1, tab: 'inv', focus: null, msg: '' };
 // phím V / nút thuốc giải: chế nhanh nếu đã biết công thức
+// súng, đạn, mìn: chỉ Naryne chế được — bạn là Naryne, hoặc Naryne (bot / bạn chơi cùng) đứng gần
+function naryneHelp() {
+  const me = CHARS[player.char] && CHARS[player.char].id === 'naryne';
+  if (me) return 'me';
+  const near = (x, z) => Math.hypot(x - player.x, z - player.z) < 6;
+  for (const b of allBots()) if (CHARS[b.ci].id === 'naryne' && b.state === 'ok' && near(b.x, b.z)) return 'bot';
+  if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && CHARS[rp.char].id === 'naryne' && !(rp.flags & (4 | 8 | 128)) && near(rp.x, rp.z)) return 'mate';
+  return null;
+}
+function naryneNote() {
+  const h = naryneHelp();
+  if (h === 'me') return 'Bạn là Naryne: tự chế súng, đạn, mìn';
+  if (h) return 'Naryne đang ở gần · nhờ Naryne chế giúp';
+  return partyIds().includes('naryne') ? 'Chỉ Naryne chế được · gọi Naryne lại gần (6 m)' : 'Chỉ Naryne chế được · Naryne không đi cùng đội';
+}
 function craft(id) {
   const R = RECIPES.find((r) => r.id === id);
   if (!R || player.zombie || state.mode !== 'play') return;
-  if (!player.recipes.has(R.id)) { lootFeed(R.out, 'Chưa biết cách chế · tìm ' + BOOKS[R.book].name, true); return; }
+  if (R.book === 'naryne' && !naryneHelp()) { lootFeed(R.out, naryneNote(), true); return; }
+  if (R.book !== 'naryne' && !player.recipes.has(R.id)) { lootFeed(R.out, 'Chưa biết cách chế · tìm ' + BOOKS[R.book].name, true); return; }
   if (!canCraft(R)) { lootFeed(R.out, 'Thiếu ' + Object.keys(R.need).filter((k) => (player.bag[k] || 0) < R.need[k]).map((k) => ITEMS[k].name).join(' + '), true); return; }
   for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
   finishCraft(R);
@@ -3254,7 +3273,7 @@ function craftOutN(R) {
 function finishCraft(R) {
   const got = addItem(R.out, craftOutN(R));
   if (ITEMS[R.out].melee && MELEE_ORDER.indexOf(R.out) < MELEE_ORDER.indexOf(player.melee)) equipMelee(R.out, true);
-  if (!player.recipes.has(R.id)) { player.recipes.add(R.id); showMsg('KHÁM PHÁ CÔNG THỨC MỚI', ITEMS[R.out].name); }
+  if (!player.recipes.has(R.id)) { player.recipes.add(R.id); if (R.book !== 'naryne') showMsg('KHÁM PHÁ CÔNG THỨC MỚI', ITEMS[R.out].name); }
   lootFeed(R.out, `+${got || ''} ${ITEMS[R.out].name}`.replace('+ ', '+')); sound.unlock(); gainXP(4, true); hud.dirty = true;
   if (R.out === 'antidote' && player.infected > 0) useItem('antidote');
 }
@@ -3284,6 +3303,11 @@ function gridAuto(R) {
 function gridCraft() {
   const R = matchRecipe();
   if (!R) return;
+  if (R.book === 'naryne') {
+    const h = naryneHelp();
+    if (!h) { craftUI.msg = naryneNote(); renderCraft(); return; }
+    if (h === 'bot') { const nb = allBots().find((b) => CHARS[b.ci].id === 'naryne'); if (nb) floaters.push({ x: nb.x, y: 2.5, z: nb.z, text: 'Để mình chế!', t: 1.3, color: CHARS[nb.ci].color }); }
+  }
   if ((player.bag[R.out] || 0) >= capOf(R.out) && !ITEMS[R.out].weapon) { craftUI.msg = 'Túi đã đầy ' + ITEMS[R.out].name.toLowerCase(); renderCraft(); return; }
   craftUI.grid.fill(null);
   finishCraft(R);
@@ -3323,7 +3347,7 @@ function renderCraft() {
   od.addEventListener('click', gridCraft);
   out.appendChild(od);
   $('cr-go').disabled = !R;
-  $('cr-name').textContent = R ? (player.recipes.has(R.id) ? ITEMS[R.out].name : ITEMS[R.out].name + ' · công thức mới!') : craftUI.grid.some(Boolean) ? 'Chưa ra món nào…' : 'Đặt nguyên liệu vào lưới';
+  $('cr-name').textContent = R ? (R.book === 'naryne' ? ITEMS[R.out].name + (naryneHelp() ? '' : ' · cần Naryne') : player.recipes.has(R.id) ? ITEMS[R.out].name : ITEMS[R.out].name + ' · công thức mới!') : craftUI.grid.some(Boolean) ? 'Chưa ra món nào…' : 'Đặt nguyên liệu vào lưới';
   $('cr-msg').textContent = craftUI.msg;
   document.querySelectorAll('#craft .crtab').forEach((b) => b.classList.toggle('on', b.dataset.tab === craftUI.tab));
   const inv = $('cr-inv'), book = $('cr-book');
@@ -3340,12 +3364,12 @@ function renderCraft() {
   } else {
     book.innerHTML = '';
     for (const key of Object.keys(BOOKS)) {
-      const B = BOOKS[key], known = player.books.has(key);
+      const B = BOOKS[key], nar = key === 'naryne', known = nar || player.books.has(key);
       const sec = document.createElement('div');
       sec.className = 'crb' + (craftUI.focus === key ? ' focus' : '');
-      sec.innerHTML = `<h4><img alt="" src="${ICON[B.item]}"> ${B.name}</h4>`;
+      sec.innerHTML = `<h4><img alt="" src="${ICON[B.item]}"> ${B.name}</h4>` + (nar ? `<div class="crnote">${naryneNote()}</div>` : '');
       for (const R of RECIPES.filter((r) => r.book === key)) {
-        const learned = player.recipes.has(R.id);
+        const learned = nar || player.recipes.has(R.id);
         const row = document.createElement('button');
         row.className = 'crr' + (learned && canCraft(R) ? ' can' : '') + (learned ? '' : ' unk');
         if (learned) row.innerHTML = `<img alt="" src="${ICON[R.out]}"><span><b>${ITEMS[R.out].name}${R.n > 1 ? ' ×' + craftOutN(R) : ''}</b><br>` + Object.entries(R.need).map(([k, v]) => `<i class="${(player.bag[k] || 0) >= v ? 'ok' : 'no'}"><img alt="" src="${ICON[k]}">${ITEMS[k].name} ${player.bag[k] || 0}/${v}</i>`).join(' ') + '</span>';
@@ -3359,6 +3383,50 @@ function renderCraft() {
   }
 }
 
+// ---------- mìn tự chế: đặt xuống đất, zombie bước tới thì nổ ----------
+let mines = [];
+const mineGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.12, 10), mineMat = new THREE.MeshLambertMaterial({ color: '#4a5a3a' });
+function placeMine() {
+  if (!(player.bag.mine > 0) || state.mode !== 'play' || player.zombie || player.pinned || player.action || curBuilding && curBuilding.portal) return;
+  player.bag.mine--;
+  const a = player.aim, x = clamp(player.x + Math.cos(a) * 0.9, BOUNDS.x0 + 0.3, BOUNDS.x1 - 0.3), z = clamp(player.z + Math.sin(a) * 0.9, BOUNDS.z0 + 0.2, BOUNDS.z1 - 0.2);
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(mineGeo, mineMat); body.position.y = 0.06; body.castShadow = true; g.add(body);
+  const led = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.06), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.3, 0.2) }));
+  led.position.y = 0.14; g.add(led);
+  g.position.set(x, 0, z); scene.add(g);
+  mines.push({ x, z, g, led, t: 0 });
+  lootFeed('mine', 'Đã đặt mìn · tránh xa 3 m');
+  sound.use('heal'); hud.dirty = true; renderBagIfOpen();
+}
+function clearMines() { for (const m of mines) scene.remove(m.g); mines = []; }
+function updateMines(dt) {
+  for (let i = mines.length - 1; i >= 0; i--) {
+    const m = mines[i];
+    m.t += dt;
+    m.led.visible = m.t < 1.5 ? Math.floor(m.t * 8) % 2 === 0 : Math.floor(gtime * 2) % 2 === 0;
+    if (m.t < 1.5) continue;   // chờ kích hoạt
+    const trig = zombies.some((z) => z.state !== 'dead' && (z.y || 0) <= 0.3 && Math.hypot(z.x - m.x, z.z - m.z) < 1.1);
+    if (!trig) continue;
+    scene.remove(m.g); mines.splice(i, 1);
+    for (const z of zombies) {
+      if (!hittable(z)) continue;
+      const d = Math.hypot(z.x - m.x, z.z - m.z);
+      if (d < 3.2) damageZombie(z, Math.round(150 * (1 - d / 3.2) + 30), Math.atan2(z.z - m.z, z.x - m.x), 1.4);
+    }
+    const dp = Math.hypot(player.x - m.x, player.z - m.z);
+    if (dp < 2.6 && playerAlive() && !player.zombie && player.inv <= 0) {
+      player.hp -= Math.round(35 * (1 - dp / 2.6)) + 5; player.inv = 0.4; hurtFlash = 0.6; sound.hurt(); hud.dirty = true;
+      floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'BỊ NỔ!', t: 0.9, color: '#ff8a6a' });
+      if (player.hp <= 0) playerDied();
+    }
+    for (let k = 0; k < 26; k++) { const an = Math.random() * TAU, sp = rand(3, 9); fx.spark.spawn(m.x, 0.3, m.z, Math.cos(an) * sp, rand(2, 7), Math.sin(an) * sp * 0.7, rand(0.2, 0.5), rand(0.06, 0.12), Math.random() < 0.5 ? '#ffd890' : '#ff7a2a', { grav: 9, drag: 2, mode: 1 }); }
+    for (let k = 0; k < 14; k++) fx.smoke.spawn(m.x + rand(-0.6, 0.6), 0.4, m.z + rand(-0.5, 0.5), rand(-0.5, 0.5), rand(1, 2.4), rand(-0.3, 0.3), rand(1.5, 2.6), rand(0.5, 0.9), new THREE.Color(0.18, 0.16, 0.14), { grav: -0.1, drag: 0.6, mode: 2 });
+    muzzleLight.position.set(m.x, 1, m.z); muzzleLight.intensity = 80; muzzleT = 0.12;
+    shake = Math.max(shake, 0.5); sound.boom(0.6); makeNoise(m.x, m.z, 25);
+    fx.decals.add(m.x, m.z, 1.4);
+  }
+}
 // ---------- bom xăng: ném ra một vùng lửa ----------
 let firePools = [];
 function throwMolotov() {
@@ -4549,11 +4617,20 @@ function drawViewModel(g) {
       if (long) {
         // súng dài: chéo từ góc phải dưới vào giữa màn hình, tay trái đỡ ốp
         c.save(); c.translate(124, 104); c.rotate(-0.4);
-        RO(-5, -100, 10, 46, '#26262c'); R(-5, -100, 3, 46, '#4a4a54');
-        RO(-9, -56, 18, 44, '#34343c'); R(-9, -56, 4, 44, '#50505a');
-        if (k === 'shotgun') { RO(-9, -86, 18, 22, '#7a4a26'); R(-9, -86, 18, 4, '#9a6a3a'); for (let i = 0; i < 4; i++) R(-9, -80 + i * 4, 18, 1, '#5a3418'); }
-        else { RO(-5, -34, 10, 26, '#1a1a1e'); RO(-7, -90, 14, 14, '#2a2a30'); }
-        RO(-10, -14, 20, 26, k === 'shotgun' ? '#5a3a22' : '#22222a');
+        if (k === 'shotgun') {
+          // súng hoa cải tự chế: hai ống thép quấn băng keo, báng gỗ
+          RO(-9, -100, 9, 50, '#7a7e86'); RO(0, -100, 9, 50, '#6a6e76'); R(-9, -100, 3, 50, '#aeb2ba'); R(0, -100, 2, 50, '#8a8e96');
+          R(-7, -102, 5, 3, '#1a1a1e'); R(2, -102, 5, 3, '#1a1a1e');
+          for (const y of [-86, -66]) R(-9, y, 18, 4, '#c8c0a0');
+          RO(-9, -50, 18, 40, '#8a5a32'); R(-9, -50, 4, 40, '#a8784a'); R(-9, -38, 18, 3, '#c8c0a0');
+          RO(-10, -14, 20, 26, '#6a4426');
+        } else {
+          // súng bắn đinh cải tiến: thân máy vàng, mũi thép, băng đinh
+          RO(-5, -98, 10, 28, '#5a5a62'); R(-5, -98, 3, 28, '#8a8a92'); R(-2, -100, 4, 3, '#1a1a1e');
+          RO(-11, -72, 22, 40, '#e8b020'); R(-11, -72, 5, 40, '#ffd860'); R(-11, -50, 22, 3, '#2a2a30');
+          RO(11, -66, 6, 30, '#8a8a92'); for (let i = 0; i < 6; i++) R(12, -64 + i * 5, 4, 1, '#c8ccd4');
+          RO(-8, -32, 16, 40, '#2a2a30'); R(-8, -32, 3, 40, '#44444c');
+        }
         c.restore();
         fx0 = 124 + Math.sin(0.4) * 102 * -1 + 0; fy0 = 104 - Math.cos(0.4) * 102;
         arm(70, 74, 0.75, 70, 15); grip(76, 66);
@@ -4561,9 +4638,11 @@ function drawViewModel(g) {
       } else {
         // súng lục: hai tay cầm, khe ngắm ở giữa
         const gx = 96, gy = 38;
-        RO(gx - 9, gy, 18, 30, '#2e2e34'); R(gx - 9, gy, 18, 4, '#55555f'); R(gx - 9, gy + 4, 3, 26, '#3e3e46');
-        R(gx - 7, gy - 4, 4, 4, '#1a1a1e'); R(gx + 3, gy - 4, 4, 4, '#1a1a1e'); R(gx - 1, gy - 3, 2, 3, '#d8d8e0');
-        RO(gx - 8, gy + 28, 16, 22, '#1e1e22');
+        // súng ống tự chế: ống thép ngắn quấn băng keo, cán gỗ
+        RO(gx - 8, gy, 16, 30, '#7a7e86'); R(gx - 8, gy, 4, 30, '#aeb2ba'); R(gx + 4, gy, 4, 30, '#5a5e66');
+        R(gx - 4, gy - 2, 8, 5, '#1a1a1e');
+        R(gx - 8, gy + 8, 16, 3, '#c8c0a0'); R(gx - 8, gy + 20, 16, 3, '#c8c0a0');
+        RO(gx - 8, gy + 28, 16, 22, '#8a5a32'); R(gx - 8, gy + 28, 4, 22, '#a8784a');
         arm(gx - 14, gy + 56, 0.55, 70, 16); arm(gx + 8, gy + 58, -0.4, 70, 17);
         grip(gx - 9, gy + 46); grip(gx + 4, gy + 42);
         fx0 = gx; fy0 = gy - 8;
@@ -4675,7 +4754,7 @@ function startGame(opts = {}) {
   const z0 = L && ZONES[L.zone] ? L.zone : QS.has('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : NEW_ZONE;
   const wantCalm = calmNow() && isFloor(z0);
   if (ZONE.id !== z0 || WORLD_FLAGS.calm !== wantCalm) { disposeWorld(world); setZone(z0); WORLD_FLAGS.calm = wantCalm; buildZoneWorld(); }
-  camReveal = 0; zt.wait = ''; clearAcid(); clearFire(); seenSpecial.clear();
+  camReveal = 0; zt.wait = ''; clearAcid(); clearFire(); clearMines(); seenSpecial.clear();
   if (craftUI.open) { craftUI.grid.fill(null); craftUI.open = false; $('craft').classList.add('hidden'); }
   for (const p of pickups) scene.remove(p.mesh);
   pickups = []; floaters = [];
@@ -4863,6 +4942,8 @@ function init() {
   if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }
   if (QS.has('debug')) window.__post = () => ({ flash: post.params.flash, gain: post.params.gain, lift: post.params.lift, hour: +atmos.hour.toFixed(2), kind: atmos.kind, hurt: hurtFlash, mode: state.mode });
   if (QS.has('debug')) window.__conts = (kind) => world.containers.filter((c) => !kind || c.kind === kind).map((c) => [c.id, c.kind, +c.x.toFixed(2), +c.z.toFixed(2), player.looted.has(c.id)]);
+  if (QS.has('debug')) window.__gcraft = (id) => { const R = RECIPES.find((r) => r.id === id); toggleCraft(true); gridAuto(R); const b0 = player.bag[R.out] || 0, w0 = player.guns.map((g) => g.owned); gridCraft(); const res = { msg: craftUI.msg, got: (player.bag[R.out] || 0) - b0, guns: player.guns.map((g) => g.owned), w0, help: naryneHelp() }; toggleCraft(false); return res; };
+  if (QS.has('debug')) window.__mine = (place = true) => { if (place) placeMine(); return mines.map((m) => [+m.x.toFixed(1), +m.z.toFixed(1), +m.t.toFixed(2)]); };
   if (QS.has('debug')) window.__craft = () => ({ open: craftUI.open, grid: [...craftUI.grid], recipes: [...player.recipes], books: [...player.books], melee: player.melee, durs: { ...player.durs } });
   if (QS.has('debug')) window.__hostZone = (id, entry) => { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = entry; net.zoneSeqSeen = net.zoneSeq; requestZone(id, entry); };
   if (QS.has('debug')) window.__net = () => { const hp = net.room && net.room.peers().find((q) => q.peer === net.hostPeer); return { host: net.host, hostPeer: net.hostPeer, me: net.me, seen: net.zoneSeqSeen, seq: net.zoneSeq, zn: hp && hp.presence && hp.presence.w ? hp.presence.w.zn : null, busy: zt.busy, zone: ZONE.id }; };
@@ -4958,7 +5039,7 @@ function frame(now) {
   for (const fn of world.animated) fn(dt, gtime, A.wind);
   updatePlayerLights(dt, A);
   lastFlash = A.flash;
-  if (state.mode === 'play') { updateAcid(dt); updateFire(dt); noticeSpecials(); }
+  if (state.mode === 'play') { updateAcid(dt); updateFire(dt); updateMines(dt); noticeSpecials(); }
   const fOn = state.mode === 'play' ? flashActive() && !player.zombie : state.mode === 'title' || state.mode === 'view';
   flashlight.intensity = state.mode === 'loading' || !fOn ? 0 : 40 * A.flash;
   if (camReveal > 0 && state.mode === 'play') {
@@ -5027,7 +5108,7 @@ const ACTIONS = [
   ['up', 'Đi lên', 'KeyW'], ['down', 'Đi xuống', 'KeyS'], ['left', 'Sang trái', 'KeyA'], ['right', 'Sang phải', 'KeyD'], ['run', 'Chạy', 'ShiftLeft'],
   ['use', 'Lục soát, nhặt đồ (giữ)', 'KeyE'], ['reload', 'Nạp đạn', 'KeyR'], ['swap', 'Đổi vũ khí', 'KeyQ'], ['heal', 'Băng bó', 'KeyF'], ['eat', 'Ăn, uống', 'KeyC'],
   ['cure', 'Thuốc giải', 'KeyV'], ['torch', 'Đốt đuốc', 'KeyT'], ['light', 'Đèn pin', 'KeyL'], ['throw', 'Ném bom xăng', 'KeyX'], ['shove', 'Húc (Hamble)', 'KeyG'], ['holster', 'Cất vũ khí (tay không)', 'KeyH'],
-  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'], ['view', 'Đổi góc nhìn thứ nhất / thứ ba', 'KeyZ'],
+  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'], ['view', 'Đổi góc nhìn thứ nhất / thứ ba', 'KeyZ'], ['mine', 'Đặt mìn tự chế', 'KeyY'],
 ];
 const ALT_KEYS = { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], run: ['ShiftRight'], bag: ['Tab'], pause: ['Escape'] };
 const KB = {};
@@ -5048,7 +5129,7 @@ function keyName(code) {
   return KEY_NAMES[code] || code;
 }
 const KN = (a) => keyName(KB[a]);
-const QUICK_ACT = { bandage: 'heal', medkit: 'heal', food: 'eat', water: 'eat', antidote: 'cure', torch: 'torch', flashlight: 'light', molotov: 'throw' };
+const QUICK_ACT = { bandage: 'heal', medkit: 'heal', food: 'eat', water: 'eat', antidote: 'cure', torch: 'torch', flashlight: 'light', molotov: 'throw', mine: 'mine' };
 function helpHtml() {
   if (isTouch) return 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên: Túi đồ, Chế đồ, Bản đồ, Kỹ năng, Dừng';
   return `${KN('up')}${KN('left')}${KN('down')}${KN('right')}: đi · ${KN('run')}: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ ${KN('use')}: lục soát, nhặt đồ · ${KN('reload')}: nạp đạn · 1-5/${KN('swap')}: đổi vũ khí<br>`

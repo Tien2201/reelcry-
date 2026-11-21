@@ -397,12 +397,12 @@ export function makeCharacterSprites() {
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 46, P = new Pix(16 * N, 16);
+  const N = 47, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
-  // 0 đạn 9mm
-  { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
-  // 1 đạn ghém
-  { const r = at(1); for (let i = 0; i < 3; i++) { r(2 + i * 4, 3, 3, 9, '#c8281e'); r(2 + i * 4, 3, 1, 9, '#e84a3a'); r(2 + i * 4, 11, 3, 3, '#d8b050'); } }
+  // 0 đạn bi tự chế: ống giấy cuộn băng keo, đầu bi sắt
+  { const r = at(0); for (let i = 0; i < 3; i++) { const x = 2 + i * 4; r(x, 5, 3, 9, '#d8cfae'); r(x, 5, 1, 9, '#f0e8cc'); r(x, 8, 3, 2, '#8a8a8e'); r(x, 2, 3, 3, '#a8acb4'); r(x + 1, 2, 1, 1, '#e8ecf0'); } }
+  // 1 đạn đinh tự chế: ống nhựa nhét đinh
+  { const r = at(1); for (let i = 0; i < 3; i++) { const x = 2 + i * 4; r(x, 4, 3, 10, '#2a6ac8'); r(x, 4, 1, 10, '#5a9ae8'); r(x, 9, 3, 2, '#c8c8c8'); r(x + 1, 1, 1, 3, '#b8bcc4'); } }
   // 2 băng gạc
   { const r = at(2); r(2, 5, 12, 7, '#ece8e0'); r(2, 5, 12, 1, '#ffffff'); r(3, 7, 10, 1, '#c8c4bc'); r(3, 9, 10, 1, '#c8c4bc'); r(11, 5, 3, 7, '#d8d4cc'); }
   // 3 hộp cứu thương
@@ -417,10 +417,10 @@ export function makeItemIcons() {
   { const r = at(7); r(2, 4, 12, 9, '#2a6a3a'); r(2, 4, 12, 1, '#3a8a4a'); r(4, 6, 3, 3, '#1a1a1e'); r(9, 6, 3, 2, '#d8b050'); r(9, 9, 4, 2, '#c8c8c8'); r(4, 11, 1, 2, '#d8b050'); r(7, 11, 1, 2, '#d8b050'); r(12, 1, 1, 3, '#8a8a8a'); }
   // 8 chìa khoá
   { const r = at(8); r(2, 4, 6, 6, '#e8c040'); r(4, 6, 2, 2, '#00000000'); r(8, 6, 7, 2, '#e8c040'); r(12, 8, 2, 3, '#e8c040'); r(10, 8, 1, 2, '#e8c040'); r(2, 4, 6, 1, '#fff0a0'); }
-  // 9 shotgun
-  { const r = at(9); r(1, 7, 10, 2, '#2a2a30'); r(1, 6, 10, 1, '#6a6a7c'); r(10, 7, 5, 3, '#7a4a2a'); r(5, 9, 3, 2, '#7a4a2a'); r(9, 9, 2, 3, '#2a2a30'); }
-  // 10 tiểu liên
-  { const r = at(10); r(1, 6, 11, 3, '#2a2a30'); r(1, 6, 11, 1, '#6a6a7c'); r(6, 9, 2, 5, '#2a2a30'); r(10, 9, 2, 3, '#2a2a30'); r(12, 7, 3, 2, '#3a3a40'); }
+  // 9 súng hoa cải tự chế: hai ống thép, báng gỗ, quấn băng keo
+  { const r = at(9); r(1, 5, 9, 2, '#7a7e86'); r(1, 7, 9, 2, '#6a6e76'); r(1, 5, 9, 1, '#aeb2ba'); r(9, 5, 6, 5, '#8a5a32'); r(9, 5, 6, 1, '#a8784a'); r(4, 4, 2, 6, '#c8c0a0'); r(7, 4, 1, 6, '#c8c0a0'); r(10, 10, 2, 4, '#6a4426'); }
+  // 10 súng bắn đinh cải tiến: thân máy vàng, ống đinh
+  { const r = at(10); r(2, 4, 9, 5, '#e8b020'); r(2, 4, 9, 1, '#ffd860'); r(11, 5, 3, 2, '#5a5a62'); r(1, 6, 1, 1, '#c8ccd4'); r(6, 9, 3, 5, '#2a2a30'); r(3, 9, 2, 3, '#8a8a92'); r(4, 4, 1, 5, '#2a2a30'); }
   // 11 kháng sinh (lọ thuốc)
   { const r = at(11); r(4, 5, 8, 9, '#e8e4dc'); r(4, 5, 1, 9, '#ffffff'); r(4, 2, 8, 3, '#d86a2a'); r(5, 8, 6, 3, '#3a8ac8'); r(6, 9, 4, 1, '#e8f4ff'); }
   // 12 ống tiêm
@@ -431,10 +431,10 @@ export function makeItemIcons() {
   { const r = at(14); r(7, 8, 2, 7, '#2a7a2a'); r(4, 11, 3, 1, '#3a8a3a'); const pet = '#e8242a', tip = '#ff6a5a';
     for (const [x, y] of [[3, 3], [11, 3], [2, 6], [12, 6], [5, 1], [9, 1], [4, 5], [10, 5]]) r(x, y, 2, 2, pet);
     r(6, 3, 4, 4, '#c81a20'); r(7, 4, 2, 2, '#ffd84a'); for (const [x, y] of [[2, 2], [13, 2], [1, 7], [14, 7]]) r(x, y, 1, 1, tip); }
-  // 15 thuốc súng (túi vải)
+  // 15 thuốc pháo (túi vải)
   { const r = at(15); r(3, 5, 10, 9, '#6a5a4a'); r(3, 5, 10, 1, '#8a7a66'); r(6, 2, 4, 3, '#5a4a3a'); r(5, 4, 6, 1, '#3a2a1e'); r(5, 8, 6, 4, '#2a2a2e'); r(6, 9, 1, 1, '#8a8a8e'); r(9, 10, 1, 1, '#8a8a8e'); }
-  // 16 vỏ đạn
-  { const r = at(16); for (let i = 0; i < 3; i++) { r(2 + i * 4, 4 + (i % 2) * 2, 3, 8, '#c89a3a'); r(2 + i * 4, 4 + (i % 2) * 2, 1, 8, '#f0d070'); r(2 + i * 4, 11 + (i % 2) * 2, 3, 1, '#8a6a2a'); } }
+  // 16 bi sắt
+  { const r = at(16); for (const [x, y] of [[3, 8], [7, 9], [11, 8], [5, 4], [9, 4], [7, 12], [2, 12], [12, 12]]) { r(x, y, 3, 3, '#8a8e96'); r(x, y, 1, 1, '#e8ecf0'); r(x + 2, y + 2, 1, 1, '#4a4e56'); } }
   // 17 thanh gỗ
   { const r = at(17); for (let i = 0; i < 11; i++) { r(2 + i, 12 - i, 3, 3, i % 3 ? '#8a6a44' : '#a8845a'); } r(12, 1, 2, 2, '#c8a070'); r(2, 13, 2, 1, '#5a4028'); }
   // 18 đuốc
@@ -443,8 +443,8 @@ export function makeItemIcons() {
   { const r = at(19); r(2, 6, 9, 4, '#2a2a30'); r(2, 6, 9, 1, '#5a5a66'); r(11, 4, 3, 8, '#3a3a42'); r(14, 5, 1, 6, '#fff0b0'); r(5, 10, 2, 1, '#c8281e'); }
   // 20 pin
   { const r = at(20); for (let i = 0; i < 2; i++) { r(3 + i * 6, 3, 4, 11, '#2a6ac8'); r(3 + i * 6, 3, 1, 11, '#5a9ae8'); r(4 + i * 6, 1, 2, 2, '#c8c8c8'); r(3 + i * 6, 10, 4, 4, '#1a1a1e'); } }
-  // 21 súng lục
-  { const r = at(21); r(2, 5, 11, 3, '#2a2a30'); r(2, 5, 11, 1, '#6a6a7c'); r(9, 8, 4, 6, '#3a2a22'); r(9, 8, 1, 6, '#5a4232'); r(7, 8, 2, 2, '#2a2a30'); }
+  // 21 súng ống tự chế: ống thép ngắn, cán gỗ, băng keo
+  { const r = at(21); r(1, 5, 11, 3, '#7a7e86'); r(1, 5, 11, 1, '#b8bcc4'); r(4, 4, 2, 5, '#c8c0a0'); r(8, 4, 1, 5, '#c8c0a0'); r(9, 8, 4, 6, '#8a5a32'); r(9, 8, 1, 6, '#a8784a'); r(7, 8, 2, 2, '#3a3a40'); }
   // 22 tên (mũi tên)
   { const r = at(22); for (let i = 0; i < 3; i++) { const o = i * 3; for (let k = 0; k < 10; k++) r(3 + k + (i === 1 ? 1 : 0), 14 - k - o, 1, 1, '#a8845a'); r(12 + (i === 1 ? 1 : 0), 5 - o, 2, 2, '#c8c8d0'); r(2 + (i === 1 ? 1 : 0), 13 - o, 2, 2, '#e84a3a'); } }
   // 23 vải vụn
@@ -488,6 +488,8 @@ export function makeItemIcons() {
   { const r = at(44); for (let k = 0; k < 13; k++) r(4 + Math.round(Math.sin(k / 12 * Math.PI) * 4), 1 + k, 1, 1, '#8a5a2a'); r(4, 1, 1, 13, '#e8e0d0'); }
   // 45 kềm cắt (cán đỏ, lưỡi thép)
   { const r = at(45); for (let k = 0; k < 7; k++) { r(2 + k, 13 - k, 2, 2, '#c8281e'); r(7 + k, 13 - k, 2, 2, '#a81e16'); } r(6, 6, 3, 3, '#8a8a92'); for (let k = 0; k < 4; k++) { r(7 + k, 4 - k, 2, 2, '#c8ccd4'); r(9 + k, 6 - k, 2, 2, '#9aa0a8'); } r(6, 6, 1, 1, '#e8ecf0'); }
+  // 46 mìn tự chế: hộp kim loại quấn băng keo, đèn đỏ
+  { const r = at(46); r(2, 7, 12, 6, '#4a5a3a'); r(2, 7, 12, 1, '#6a7a52'); r(2, 9, 12, 2, '#c8c0a0'); r(6, 4, 4, 3, '#3a3a40'); r(7, 3, 2, 1, '#ff3a2a'); r(3, 13, 2, 1, '#2a2a2e'); r(11, 13, 2, 1, '#2a2a2e'); }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
 }

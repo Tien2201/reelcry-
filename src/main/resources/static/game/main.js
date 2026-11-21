@@ -74,12 +74,12 @@ const sun = new THREE.DirectionalLight(0xffffff, 1);
 sun.castShadow = true;
 const sunSize = 26;
 Object.assign(sun.shadow.camera, { left: -sunSize, right: sunSize, top: sunSize, bottom: -sunSize, near: 1, far: 110 });
-sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.035;
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.035; sun.shadow.radius = 2.5;   // viền bóng mềm (PCF)
 scene.add(sun, sun.target);
 const flashlight = new THREE.SpotLight('#fff0d6', 0, 22, 0.44, 0.6, 1.5);
 flashlight.castShadow = true;
 flashlight.shadow.camera.near = 0.3; flashlight.shadow.camera.far = 22;
-flashlight.shadow.bias = -0.0008; flashlight.shadow.normalBias = 0.03;
+flashlight.shadow.bias = -0.0008; flashlight.shadow.normalBias = 0.03; flashlight.shadow.radius = 2;
 scene.add(flashlight, flashlight.target);
 const muzzleLight = new THREE.PointLight('#ffc070', 0, 11, 1.6);
 scene.add(muzzleLight);
@@ -127,6 +127,17 @@ function placeCamera(shake = 0) {
 const blobTex = softDisc(64, 0.15, 1.6);
 const blobMat = new THREE.MeshBasicMaterial({ map: blobTex, color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false });
 const blobGeo = new THREE.PlaneGeometry(1, 1);
+let sunYaw = 0;
+// hai tấm đổ bóng xếp chéo hình chữ X, cố định theo thế giới (bù góc xoay billboard):
+// nắng từ hướng nào cũng có ít nhất một tấm đổ bóng gần đủ bề ngang
+function updateSpriteShadows() {
+  for (const sp of SPRITES) {
+    if (!sp.shadow) continue;
+    if (!sp.group.parent) { SPRITES.delete(sp); continue; }
+    const r = sp.group.rotation.y;
+    sp.shadow.rotation.y = Math.PI / 4 - r; sp.shadow2.rotation.y = -Math.PI / 4 - r;
+  }
+}
 function makeSprite(atlasList, xray) {
   const maps = atlasList.map((a) => { const m = a.map.clone(); m.needsUpdate = true; m.repeat.set(1 / 4, 1 / 4); return m; });
   const a0 = atlasList[0];
@@ -137,9 +148,14 @@ function makeSprite(atlasList, xray) {
   spriteLit(mat);
   const geo = new THREE.PlaneGeometry(a0.w, a0.h); geo.translate(0, a0.h / 2, 0);
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: maps[0], alphaTest: 0.5 });
   mesh.customDepthMaterial = depth;
+  // tấm đổ bóng vô hình luôn quay về phía mặt trời: bóng nhân vật đầy đặn ở mọi góc nắng / góc nhìn
+  mesh.castShadow = false;
+  // three.js lấy map/alphaTest/side từ vật liệu của vật khi vẽ bóng, nên tấm này cần map riêng và hai mặt
+  const smat = new THREE.MeshBasicMaterial({ map: maps[0], alphaTest: 0.5, side: THREE.DoubleSide, colorWrite: false, depthWrite: false });
+  const shadow = new THREE.Mesh(geo, smat), shadow2 = new THREE.Mesh(geo, smat);
+  for (const o of [shadow, shadow2]) { o.castShadow = true; o.customDepthMaterial = depth; mesh.add(o); }
   const xmat = new THREE.MeshBasicMaterial({ map: maps[0], alphaTest: 0.5, color: xray, transparent: true, opacity: 0.6, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false });
   const xr = new THREE.Mesh(geo, xmat);
   xr.renderOrder = 20;
@@ -152,7 +168,7 @@ function makeSprite(atlasList, xray) {
   group.add(mesh, blob);
   scene.add(group);
   hideRefl(xr, blob);
-  return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, cur: 0, w: a0.w, h: a0.h };
+  return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, shadow, shadow2, smat, cur: 0, w: a0.w, h: a0.h };
 }
 function setFrame(s, dir, frame) {
   s._dir = dir; s._fr = frame; SPRITES.add(s);
@@ -164,7 +180,7 @@ function setFrame(s, dir, frame) {
 function setSpriteMap(s, i) {
   if (s.cur === i) return;
   s.cur = i;
-  s.mat.map = s.maps[i]; s.depth.map = s.maps[i]; s.xmat.map = s.maps[i];
+  s.mat.map = s.maps[i]; s.depth.map = s.maps[i]; s.xmat.map = s.maps[i]; if (s.smat) s.smat.map = s.maps[i];
 }
 function dirFromAngle(a) {
   if (a > -Math.PI / 4 && a <= Math.PI / 4) return 'right';
@@ -3722,8 +3738,13 @@ function applyAtmos(dt, t) {
   hemi.intensity = A.hemiI + lightning * 1.5;
   scene.fog.color.copy(A.fog); scene.fog.near = A.fogNear; scene.fog.far = A.fogFar;
   renderer.setClearColor(A.skyHor);
-  const step = (sunSize * 2) / sun.shadow.mapSize.x;
-  const sx = Math.round(camTarget.x / step) * step, sz = -3;
+  const ss = FP.on ? 34 : sunSize, sc = sun.shadow.camera;
+  if (sc.right !== ss) { Object.assign(sc, { left: -ss, right: ss, top: ss, bottom: -ss }); sc.updateProjectionMatrix(); }
+  const step = (ss * 2) / sun.shadow.mapSize.x;
+  const ax = FP.on ? player.x + Math.cos(FP.yaw) * 16 : camTarget.x, az = FP.on ? clamp(player.z + Math.sin(FP.yaw) * 10, -12, 14) : -3;
+  const sx = Math.round(ax / step) * step, sz = Math.round(az / step) * step;
+  sunYaw = Math.atan2(A.sunDir.x, A.sunDir.z);
+  updateSpriteShadows();
   sun.target.position.set(sx, 0, sz);
   sun.position.set(sx + A.sunDir.x * 50, A.sunDir.y * 50, sz + A.sunDir.z * 50);
   const P = post.params;
@@ -4475,7 +4496,7 @@ function fpApply(on) {
   if (on) {
     FP.yaw = player ? player.aim : -Math.PI / 2; FP.pitch = 0;
   } else {
-    for (const sp of SPRITES) { sp.group.rotation.y = 0; sp.xmat.visible = true; if (sp._dir) setFrame(sp, sp._dir, sp._fr); }
+    for (const sp of SPRITES) { sp.group.rotation.y = 0; sp.xmat.visible = true; if (sp.ghost) setGhost(sp, false); if (sp._dir) setFrame(sp, sp._dir, sp._fr); }
     placeCamera(); camera.updateMatrixWorld(); camQuat.copy(camera.quaternion);
     for (const o of fpBillboardMeshes()) o.quaternion.copy(camQuat);
     if (world) for (const b of world.buildings) b.cut.value = 0;
@@ -4499,6 +4520,23 @@ function fpBillboard() {
   }
   qYaw.setFromAxisAngle(Y_AXIS, th);
   for (const o of fpBillboardMeshes()) o.quaternion.copy(qYaw);
+  // đồng đội đứng sát trước mặt thì mờ đi, không che tầm nhìn
+  const fx0 = Math.cos(FP.yaw), fz0 = Math.sin(FP.yaw);
+  for (const sp of mateSprites()) {
+    const dx = sp.group.position.x - camera.position.x, dz = sp.group.position.z - camera.position.z, d = Math.hypot(dx, dz);
+    setGhost(sp, d < 2.4 && dx * fx0 + dz * fz0 > 0);
+  }
+}
+function mateSprites() {
+  const out = bots.map((b) => b.sp);
+  for (const v of botViews.values()) out.push(v.sp);
+  for (const rp of net.players.values()) if (rp.sp) out.push(rp.sp);
+  return out;
+}
+function setGhost(sp, on) {
+  if (!!sp.ghost === on) return;
+  sp.ghost = on;
+  sp.mat.transparent = on; sp.mat.opacity = on ? 0.32 : 1; sp.mat.alphaTest = on ? 0.2 : 0.5; sp.mat.depthWrite = !on;
 }
 function fpCamera(dt) {
   // cửa ra vào: tường trước chỉ "mở" khi đứng ngay ô cửa để đi xuyên qua
@@ -4957,6 +4995,9 @@ function init() {
   if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
   if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
   if (QS.has('debug')) { window.__set = () => ({ settings, KB: { ...KB } }); window.__save = () => loadSave(); window.__saveNow = () => saveGame(true); window.__story = () => [...story.seen]; }
+  if (QS.has('debug')) window.__shInfo = () => { const out = []; for (const sp of SPRITES) { if (!sp.group.visible) continue; const e = sp.shadow.matrixWorld.elements; out.push([+sp.shadow.rotation.y.toFixed(2), sp.shadow.castShadow, sp.mesh.castShadow, sp.shadow.visible, !!sp.smat.map, e.slice(12, 15).map((v) => +v.toFixed(1)), sp.shadow.parent === sp.mesh]); if (out.length > 4) break; } return { sunYaw, n: SPRITES.size, out }; };
+  if (QS.has('debug')) window.__shProxy = (on) => { for (const sp of SPRITES) if (sp.shadow) { sp.shadow.castShadow = sp.shadow2.castShadow = on; sp.mesh.castShadow = !on; } };
+  if (QS.has('debug')) window.__hour = (h) => { dayStartHour = h; phaseT = 0; atmos.hour = h; atmos.setWeather('clear', true); };
   if (QS.has('debug')) window.__vm = (sw, rec = 0, mz = false) => { FP.dbg = sw === null ? null : { sw, rec, mz }; };
   if (QS.has('debug')) window.__fp = (yaw, pitch = 0) => { settings.view = 'fp'; FP.yaw = yaw; FP.pitch = pitch; return { on: FP.on, near: camera.near, fov: camera.fov, cam: camera.position.toArray().map((v) => +v.toFixed(2)) }; };
   if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }

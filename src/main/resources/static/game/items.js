@@ -26,8 +26,9 @@ export const ITEMS = {
   torch: { name: 'Đuốc', max: 3, icon: 18, use: 'torch', time: 0.6 },
   flashlight: { name: 'Đèn pin', max: 1, icon: 19, tool: true },
   battery: { name: 'Pin', max: 6, icon: 20 },
+  arrow: { name: 'Tên (cung)', max: 30, icon: 22 },
 };
-export const ITEM_ORDER = ['bandage', 'medkit', 'food', 'water', 'antidote', 'antibio', 'syringe', 'flower', 'torch', 'wood', 'flashlight', 'battery', 'ammo9', 'shells', 'powder', 'casing', 'fuel', 'part', 'key'];
+export const ITEM_ORDER = ['bandage', 'medkit', 'food', 'water', 'antidote', 'antibio', 'syringe', 'flower', 'torch', 'wood', 'flashlight', 'battery', 'ammo9', 'shells', 'arrow', 'powder', 'casing', 'fuel', 'part', 'key'];
 // công thức chế thuốc giải (giữ tên cũ cho chỗ khác dùng)
 export const ANTIDOTE_RECIPE = { antibio: 1, syringe: 1 };
 // các công thức chế tạo trong ba lô
@@ -36,6 +37,7 @@ export const RECIPES = [
   { id: 'ammo9', out: 'ammo9', n: 5, need: { powder: 1, casing: 1 }, time: 2.5, label: 'Chế 5 đạn 9mm' },
   { id: 'shells', out: 'shells', n: 2, need: { powder: 1, casing: 1 }, time: 2.5, label: 'Chế 2 đạn ghém' },
   { id: 'torch', out: 'torch', n: 1, need: { wood: 1 }, time: 1.5, label: 'Làm đuốc' },
+  { id: 'arrow', out: 'arrow', n: 3, need: { wood: 1 }, time: 2, label: 'Vót tên cho cung' },
 ];
 export const TORCH_TIME = 150;    // giây cháy của một cây đuốc
 export const BATTERY_TIME = 240;  // giây sáng của một viên pin

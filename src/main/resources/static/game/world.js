@@ -138,7 +138,7 @@ ZONES.residential = {
     B('house', 3, { roof: 'wood', wall: 'brick' }), B('house', 12, { floors: 1, h: 4.2, roof: 'red', plaster: PLASTERS[3] }),
     B('house', 25, { roof: 'slate', plaster: PLASTERS[1] }), B('kiosk', 34), B('house', 42, { roof: 'moss', wall: 'brick' }), B('house', 50.5, { roof: 'red', plaster: PLASTERS[2] }),
   ],
-  alley: -0.5, cross: -0.5,
+  alley: -0.5, cross: -0.5, gate: true,
   stairs: [{ x: -24.4, w: 1.9 }, { x: 22, w: 1.9 }],
   pond: { cx: -28, cz: 6.25, rx: 6.6, rz: 2.55, c0: -29.6, c1: -26.4 },
   stream: { x0: -29.0, x1: -27.0 },
@@ -158,7 +158,7 @@ ZONES.market = {
     B('pharmacy', -56), B('plantshop', -48), B('mall', -37), B('grocery', -9), B('kiosk', 17),
     B('garage', 27), B('house', 36, { roof: 'slate', plaster: PLASTERS[2] }), B('house', 45.5, { roof: 'red', wall: 'brick' }),
   ],
-  alley: -13.3, cross: -13.3,
+  alley: -13.3, cross: -13.3, gate: true,
   stairs: [{ x: 25, w: 1.9 }, { x: 54.5, w: 1.9 }],
   stalls: [3.2, 6.6, 10.0, 13.4],
   terrace: bgHouses([-44, -10, 14, 44], 61),
@@ -251,7 +251,7 @@ export function setZone(id) {
   for (const k in linkIds) links[k] = ZONES[linkIds[k]].name;
   ZONE = { ...def, linkIds, links, cross: linkIds.s ? def.cross : undefined, alley: linkIds.n ? def.alley : undefined };
   BUILDINGS = def.buildings.map((b) => ({ ...b }));
-  if (ZONE.alley !== undefined) BUILDINGS.push({ kind: 'alley', id: 'alley', name: 'Hẻm', x0: ZONE.alley - 1.7, x1: ZONE.alley + 1.7, sign: '↑ ' + links.n.toUpperCase(), seed: 9 });
+  if (ZONE.alley !== undefined) BUILDINGS.push({ kind: 'alley', id: 'alley', name: 'Hẻm', x0: ZONE.alley - 1.7, x1: ZONE.alley + 1.7, sign: '↑ ' + links.n.toUpperCase(), seed: 9, gate: !!def.gate });
   STAIRS = def.stairs || []; POND = def.pond || null; STREAM = def.stream || null; HELIPAD = def.helipad || null;
   return ZONE;
 }
@@ -1063,6 +1063,21 @@ export function buildWorld(scene, quality) {
       sm.position.set(cx, TY - 0.05, zb + 0.03); root.add(sm);
     }
     b.emitter = emit(cx, 1.6, zb + 0.6, '#ffb85e', 4, 6, 'lamp', 'broken');
+    if (b.gate) {
+      // cổng sắt đổ chắn miệng hẻm: chỉ người thật khoẻ mới nâng nổi
+      const gate = new THREE.Group();
+      const barMat = lamb({ map: tx.metal, color: '#4a4a52' });
+      const GW = w - 0.7;
+      for (let x = -GW / 2 + 0.1; x <= GW / 2 - 0.05; x += 0.22) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.2, 0.06), barMat); bar.position.set(x, 1.1, 0); bar.castShadow = true; gate.add(bar); }
+      for (const y of [0.15, 1.1, 2.1]) { const bar = new THREE.Mesh(new THREE.BoxGeometry(GW, 0.08, 0.08), barMat); bar.position.set(0, y, 0); bar.castShadow = true; gate.add(bar); }
+      const rust = new THREE.Mesh(new THREE.BoxGeometry(GW * 0.3, 0.5, 0.02), lamb({ color: '#8a4a2a' })); rust.position.set(GW * 0.2, 1.5, 0.03); gate.add(rust);
+      gate.position.set(cx, 0, zf - 0.45); gate.rotation.x = -1.2;
+      root.add(gate);
+      const plank = new THREE.Mesh(boxGeo(0.14, 2.3, 0.14, 1), lamb({ map: tx.plank, color: '#b89a72' }));
+      plank.position.set(cx + GW / 2 - 0.25, 1.15, zf - 0.45); plank.visible = false; root.add(plank);
+      const gbox = addBox(b.x0 + 0.3, zf - 2.0, b.x1 - 0.3, zf - 0.25);
+      pois.gate = { x: cx, z: zf + 0.55, gate, box: gbox, plank, label: 'Cổng sắt đổ chắn hẻm', state: 'closed', applied: false };
+    }
     addBox(b.x0 - 0.05, zb - 0.4, b.x0 + 0.3, zf + 0.02);
     addBox(b.x1 - 0.3, zb - 0.4, b.x1 + 0.05, zf + 0.02);
     addBox(b.x0, zb - 0.6, b.x1, zb);

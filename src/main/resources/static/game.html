@@ -112,6 +112,33 @@
   #map-svg svg { display: block; margin: 6px auto 0; }
   #map-note { font-size: 17px; color: var(--ink-dim); margin-top: 6px; line-height: 1.2; }
   #t-map { right: calc(120px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 14px; }
+  #t-skill { right: calc(174px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 15px; }
+  #t-shove { right: calc(96px + var(--sr)); bottom: calc(204px + var(--sb)); width: 54px; height: 54px; font-size: 15px; background: rgba(160,90,20,.7); }
+  body.touch.playing #t-shove.off { display: none; }
+  #char-tag { font-size: 16px; color: var(--gold); line-height: 1; }
+  .bar.xp { height: 5px; margin-top: 3px; width: 100%; }
+  .bar.xp i { background: #9a8aff; }
+  #charsel .card { max-width: 980px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #cs-grid, #char-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 8px; text-align: left; }
+  #char-pick { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .cc { display: flex; gap: 8px; align-items: flex-start; background: #1a1620; border: 2px solid #000; color: var(--ink); font-family: inherit; font-size: 16px; padding: 6px; cursor: pointer; text-align: left; line-height: 1.1; }
+  .cc.on { border-color: var(--gold); background: #2a2418; box-shadow: 0 0 0 2px rgba(242,193,78,.25); }
+  .cc.taken { opacity: .45; cursor: default; }
+  .cc .cp { image-rendering: pixelated; flex: none; }
+  .cc .ct b { font-weight: 400; font-size: 20px; }
+  .cc .ct i { font-style: normal; color: var(--ink-dim); }
+  .cc .ct small { color: var(--ink-dim); font-size: 15px; display: block; margin-top: 3px; }
+  .cc .ct em { font-style: normal; color: #ff8a6a; }
+  .cc.compact { font-size: 15px; }
+  #skills .card { max-width: 900px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #sk-xp { font-size: 17px; color: var(--ink-dim); margin: 4px 0 8px; line-height: 1.2; }
+  #sk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; text-align: left; }
+  .skb h3 { margin: 0 0 6px; font-weight: 400; font-size: 22px; color: var(--gold); letter-spacing: 1px; }
+  .skn { display: block; width: 100%; margin-bottom: 6px; background: #1a1620; border: 2px solid #3a3440; color: var(--ink-dim); font-family: inherit; font-size: 17px; text-align: left; padding: 5px 7px; line-height: 1.05; }
+  .skn small { font-size: 15px; }
+  .skn.can { border-color: var(--gold); color: var(--ink); cursor: pointer; background: #2a2418; }
+  .skn.have { border-color: #3a8a4a; color: #b8f0b8; background: #14201a; }
+  .sk-lock { color: #c88ae8; font-size: 16px; margin-bottom: 6px; }
   .bi button:disabled { opacity: .35; cursor: default; }
   #inf-row { font-size: 17px; color: #c8ffb8; }
   #inf-row.low #inf-time { color: #ff6a5a; animation: blink .4s infinite alternate; }
@@ -239,6 +266,8 @@
     <div class="row" style="margin-top:5px"><span class="lbl">ĐÓI</span><div class="bar fd" id="fd-bar"><i id="fd-fill"></i></div></div>
     <div class="row" style="margin-top:4px"><span class="lbl">KHÁT</span><div class="bar wt" id="wt-bar"><i id="wt-fill"></i></div></div>
     <div class="row hidden" id="inf-row" style="margin-top:4px"><span class="lbl" style="color:#9aff7a">VIRUS</span><span id="inf-time"></span></div>
+    <div class="row" style="margin-top:4px"><span id="char-tag"></span></div>
+    <div class="bar xp"><i id="xp-fill"></i></div>
   </div>
   <div id="zbanner" class="hidden">BẠN ĐANG LÀ ZOMBIE · chờ đồng đội cho ăn <b>hoa bỉ ngạn</b> · gầm để gọi họ</div>
   <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div><div id="zone-tag"></div></div>
@@ -249,7 +278,7 @@
   <div id="weapon-box" class="win">
     <div class="row" style="justify-content:space-between"><span id="wname">SÚNG LỤC</span><span id="reload-tag">NẠP ĐẠN…</span></div>
     <div id="ammo-line"><span id="ammo">12</span> <span id="reserve">∞</span></div>
-    <div id="slots"><div class="slot">1</div><div class="slot">2</div><div class="slot">3</div><div class="slot">4</div></div>
+    <div id="slots"><div class="slot">1</div><div class="slot">2</div><div class="slot">3</div><div class="slot">4</div><div class="slot">5</div></div>
   </div>
 </div>
 <div id="msg"><div id="msg-title"></div><div id="msg-sub"></div></div>
@@ -260,6 +289,8 @@
 <button class="tbtn off" id="t-use" aria-label="Lục soát">LỤC</button>
 <button class="tbtn" id="t-bag" aria-label="Túi đồ">TÚI</button>
 <button class="tbtn" id="t-map" aria-label="Bản đồ">MAP</button>
+<button class="tbtn" id="t-skill" aria-label="Kỹ năng">KN</button>
+<button class="tbtn" id="t-shove" aria-label="Húc">HÚC</button>
 <div id="zfade"></div>
 <div id="lobby" class="screen hidden"><div class="card win">
   <h2>CHƠI CÙNG BẠN BÈ</h2>
@@ -274,6 +305,8 @@
     <div class="lsub">MÃ PHÒNG — gửi cho bạn bè</div>
     <div id="room-code"></div>
     <div id="room-players"></div>
+    <div class="lsub">CHỌN NHÂN VẬT (mỗi người một nhân vật · thiếu người thì bot đi cùng)</div>
+    <div id="char-pick"></div>
     <div class="btns"><button class="btn" id="go-btn">BẮT ĐẦU</button><button class="btn ghost" id="leave-btn">Rời phòng</button></div>
   </div>
   <div id="lobby-note"></div>
@@ -292,12 +325,24 @@
   <div class="btns" style="margin-top:12px"><button class="btn ghost" id="bag-close">ĐÓNG (I)</button></div>
 </div></div>
 
+<div id="charsel" class="screen hidden"><div class="card win">
+  <h2>CHỌN NHÂN VẬT</h2>
+  <div class="lsub">Luyện tập: bạn chơi một nhân vật, 4 người còn lại là bot đi cùng</div>
+  <div id="cs-grid"></div>
+  <div class="btns" style="margin-top:12px"><button class="btn" id="cs-go">BẮT ĐẦU</button><button class="btn ghost" id="cs-back">Quay lại</button></div>
+</div></div>
+<div id="skills" class="screen hidden"><div class="card win">
+  <h2 id="sk-title">KỸ NĂNG</h2>
+  <div id="sk-xp"></div>
+  <div id="sk-grid"></div>
+  <div class="btns" style="margin-top:10px"><button class="btn ghost" id="sk-close">ĐÓNG (K)</button></div>
+</div></div>
 <div id="title" class="screen hidden">
   <div class="card">
     <h1>DEAD NIGHT</h1>
     <div class="tag">LỤC SOÁT · SỐNG SÓT · CHỜ GIẢI CỨU</div>
     <div class="btns">
-      <button class="btn" id="start-btn">CHƠI ĐƠN</button>
+      <button class="btn" id="start-btn">LUYỆN TẬP</button>
       <button class="btn alt" id="coop-btn">CO-OP</button>
       <button class="btn ghost" id="view-btn">Ngắm cảnh</button>
       <button class="btn ghost" id="q-btn">Đồ hoạ: Cao</button>

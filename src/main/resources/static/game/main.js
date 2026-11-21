@@ -5,7 +5,8 @@ import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, P
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
-import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite } from './sprites.js';
+import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite, charSprites, charPortrait } from './sprites.js';
+import { CHARS, SKILLS, computeMod, xpNeed } from './chars.js';
 import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME } from './items.js';
 import { openTransport, makeCode, roomName, cleanCode, cleanName } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
@@ -161,7 +162,38 @@ const WEAPONS = [
   { key: 'pistol', name: 'SÚNG LỤC', dmg: 34, rate: 0.26, mag: 12, reload: 1.0, spread: 0.035, pellets: 1, speed: 38, kick: 0.06, shake: 0.12, ammo: 'ammo9', noise: 15 },
   { key: 'shotgun', name: 'SHOTGUN', dmg: 20, rate: 0.78, mag: 6, reload: 1.6, spread: 0.2, pellets: 8, speed: 32, kick: 0.2, shake: 0.4, ammo: 'shells', noise: 19 },
   { key: 'smg', name: 'TIỂU LIÊN', dmg: 17, rate: 0.075, mag: 32, reload: 1.4, spread: 0.07, pellets: 1, speed: 40, kick: 0.05, shake: 0.08, ammo: 'ammo9', noise: 17 },
+  { key: 'bow', name: 'CUNG', dmg: 58, rate: 0.7, mag: 1, reload: 0.45, spread: 0.012, pellets: 1, speed: 26, kick: 0.03, shake: 0.04, ammo: 'arrow', noise: 0, bow: true },
 ];
+// nhân vật đang chơi (lưu lựa chọn)
+let myChar = clamp(+store.get('deadnight_char', '0') || 0, 0, CHARS.length - 1);
+const charSet = (ci) => { const s2 = charSprites(ci, CHARS[ci].pal); return [s2.knife, s2.pistol, s2.shotgun, s2.smg, s2.bow]; };
+function loadProgress(ci) {
+  try { const o = JSON.parse(store.get('deadnight_prog_' + CHARS[ci].id, '{}')); return { xp: +o.xp || 0, level: +o.level || 1, sp: +o.sp || 0, learned: new Set(Array.isArray(o.learned) ? o.learned : []) }; }
+  catch (e) { return { xp: 0, level: 1, sp: 0, learned: new Set() }; }
+}
+function saveProgress() {
+  if (!player || player.char === undefined) return;
+  store.set('deadnight_prog_' + CHARS[player.char].id, JSON.stringify({ xp: player.xp, level: player.level, sp: player.sp, learned: [...player.learned] }));
+}
+function applyMods() {
+  const c = CHARS[player.char];
+  player.mod = computeMod(c.id, player.learned);
+  const oldMax = player.maxHp || c.hp;
+  player.maxHp = c.hp + player.mod.maxHp;
+  player.hp = Math.min(player.maxHp, player.hp + Math.max(0, player.maxHp - oldMax));
+  player.speed = c.speed + player.mod.speed;
+  hud.dirty = true;
+}
+// kinh nghiệm: giết zombie, lục đồ, chế tạo, cứu bạn, làm nhiệm vụ, sống qua đêm
+function gainXP(n, why) {
+  if (!player || state.mode !== 'play' || player.zombie || !(n > 0)) return;
+  player.xp += n;
+  if (why) floaters.push({ x: player.x, y: 2.75, z: player.z, text: `+${n} XP`, t: 0.9, color: '#b8a8ff' });
+  let up = false;
+  while (player.xp >= xpNeed(player.level)) { player.xp -= xpNeed(player.level); player.level++; player.sp++; up = true; }
+  if (up) { showMsg(`LÊN CẤP ${player.level}`, `${CHARS[player.char].name} có điểm kỹ năng mới · ` + (isTouch ? 'bấm KN' : 'phím K')); sound.revive(); }
+  saveProgress(); hud.dirty = true;
+}
 const CORPSE_LIFE = 60;
 let zid = 0;
 const ZT = {
@@ -217,12 +249,16 @@ addEventListener('keydown', (e) => {
   if (player.pinned && (e.code === 'KeyE' || e.code === 'Space') && !e.repeat) { player.struggle = (player.struggle || 0) + 1; return; }
   if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); toggleBag(); return; }
   if (mapOpen) { if (e.code === 'KeyM' || e.code === 'Escape') toggleMap(false); return; }
+  if (skillsOpen) { if (e.code === 'KeyK' || e.code === 'Escape') toggleSkills(false); return; }
   if (bagOpen) return;
   if (e.code === 'KeyR') reload();
   if (e.code === 'Digit1') switchWeapon(0);
   if (e.code === 'Digit2') switchWeapon(1);
   if (e.code === 'Digit3') switchWeapon(2);
   if (e.code === 'Digit4') switchWeapon(3);
+  if (e.code === 'Digit5') switchWeapon(4);
+  if (e.code === 'KeyG') shove();
+  if (e.code === 'KeyK') toggleSkills();
   if (e.code === 'KeyQ') cycleWeapon();
   if (e.code === 'KeyF') quickHeal();
   if (e.code === 'KeyC') quickEat();
@@ -352,7 +388,7 @@ function navCell(x, z) {
   return j * NAV.w + i;
 }
 function navCompute() {
-  const cells = TG.map((t) => navCell(t.x, t.z));
+  const cells = TG.filter((t) => !t.bot).map((t) => navCell(t.x, t.z));
   const key = cells.join(',');
   if (key === NAV.cell) return;
   NAV.cell = key;
@@ -397,17 +433,26 @@ function navLOS(x0, z0, x1, z1) {
 
 // ================= NGƯỜI CHƠI & VŨ KHÍ =================
 function newPlayer() {
-  const sp = player ? player.sprite : makeSprite([SPR.player.knife, SPR.player.pistol, SPR.player.shotgun, SPR.player.smg], '#7ad8ff');
-  return {
+  if (player && player.sprite) scene.remove(player.sprite.group);
+  const ci = myChar, C = CHARS[ci];
+  const sp = makeSprite(charSet(ci), C.color);
+  sp.group.scale.setScalar(C.scale || 1);
+  const prog = loadProgress(ci);
+  const p0 = {
     x: (ZONE.start && ZONE.start.x) ?? 0, z: (ZONE.start && ZONE.start.z) ?? 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3, food: 85, water: 85, starve: 0,
     aim: 0, dir: 'right', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
     guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: 0 })),
-    bag: { ammo9: 0, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0, antibio: 0, syringe: 0, antidote: 0, flower: 0, powder: 0, casing: 0, wood: 1, torch: 0, flashlight: 0, battery: 0 },
+    bag: { ammo9: 0, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0, antibio: 0, syringe: 0, antidote: 0, flower: 0, powder: 0, casing: 0, wood: 1, torch: 0, flashlight: 0, battery: 0, arrow: 0 },
     flashOn: true, battery: 0, torchT: 0, exit: null,
     looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     infected: 0, zombie: false, picked: new Set(), groanT: 0, coughT: 12,
-    sprite: sp,
+    sprite: sp, char: ci, xp: prog.xp, level: prog.level, sp: prog.sp, learned: prog.learned, shoveT: 0,
   };
+  p0.mod = computeMod(C.id, p0.learned);
+  p0.maxHp = C.hp + p0.mod.maxHp; p0.hp = p0.maxHp; p0.speed = C.speed + p0.mod.speed;
+  // Tiến khởi đầu với cung và một bó tên
+  if (C.id === 'tien') { p0.guns[4].owned = true; p0.guns[4].ammo = 1; p0.bag.arrow = 12; p0.weapon = 4; }
+  return p0;
 }
 const curGun = () => player.guns[player.weapon];
 function switchWeapon(i) {
@@ -423,7 +468,7 @@ const reserveOf = (i) => (WEAPONS[i].melee ? Infinity : player.bag[WEAPONS[i].am
 function reload() {
   const g = curGun(), w = WEAPONS[player.weapon];
   if (w.melee || player.reloading > 0 || player.action || g.ammo >= w.mag || reserveOf(player.weapon) <= 0) return;
-  player.reloading = w.reload; sound.reload(); hud.dirty = true;
+  player.reloading = w.reload * (w.bow ? player.mod.bowRate : player.mod.reload); if (!w.bow) sound.reload(); hud.dirty = true;
 }
 function muzzlePos(out) {
   return out.set(player.x + Math.cos(player.aim) * 0.75, 1.0, player.z + Math.sin(player.aim) * 0.75);
@@ -440,8 +485,8 @@ function shoot() {
     return;
   }
   player.dryFire = 0;
-  g.ammo--; player.cooldown = w.rate; player.recoil = w.kick; hud.dirty = true;
-  makeNoise(player.x, player.z, w.noise);
+  g.ammo--; player.cooldown = w.rate * (w.bow ? player.mod.bowRate : 1); player.recoil = w.kick; hud.dirty = true;
+  if (w.noise) makeNoise(player.x, player.z, w.noise);
   // hỗ trợ ngắm: góc nhìn thấp khó ngắm theo chiều sâu, nên hút nhẹ về zombie gần hướng bắn
   let aim = player.aim, bestDa = 0.24;
   for (const z of zombies) {
@@ -455,29 +500,37 @@ function shoot() {
   for (let i = 0; i < w.pellets; i++) {
     const a = aim + rand(-w.spread, w.spread) * (w.pellets > 1 ? 1 : 0.6);
     const sp = w.speed * rand(0.92, 1.05);
-    bullets.push({ x: m.x, z: m.z, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg: w.dmg, life: 0.6, pierce: w.pellets > 1 ? 0 : 1 });
+    const dmg = Math.round(w.dmg * (w.bow ? player.mod.bowDmg : player.mod.gunDmg));
+    bullets.push({ x: m.x, z: m.z, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg, life: w.bow ? 0.75 : 0.6, pierce: w.bow ? player.mod.bowPierce : w.pellets > 1 ? 0 : 1, arrow: !!w.bow, mine: true });
   }
-  muzzleLight.position.copy(m); muzzleLight.intensity = 45;
-  muzzleT = 0.06;
   shake = Math.max(shake, w.shake);
-  for (let i = 0; i < 6; i++) { const a = aim + rand(-0.5, 0.5), s = rand(3, 8); fx.spark.spawn(m.x, m.y, m.z, Math.cos(a) * s, rand(-0.5, 1.5), Math.sin(a) * s, rand(0.06, 0.14), 0.07, '#ffd890', { grav: 0, drag: 6, mode: 1 }); }
-  const sa = aim + Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1);
-  fx.lit.spawn(player.x, 1.0, player.z, Math.cos(sa) * rand(1.5, 2.5), rand(2, 3), Math.sin(sa) * rand(1.5, 2.5), 2.5, 0.07, '#d8b050', { grav: 12, drag: 1, bounce: 0.35, spin: 14 });
-  sound.shoot(w.key);
-  fx.crows.scare(player.x, player.z, 14);
+  if (w.bow) { sound.swing(false); }
+  else {
+    muzzleLight.position.copy(m); muzzleLight.intensity = 45;
+    muzzleT = 0.06;
+    for (let i = 0; i < 6; i++) { const a = aim + rand(-0.5, 0.5), s = rand(3, 8); fx.spark.spawn(m.x, m.y, m.z, Math.cos(a) * s, rand(-0.5, 1.5), Math.sin(a) * s, rand(0.06, 0.14), 0.07, '#ffd890', { grav: 0, drag: 6, mode: 1 }); }
+    const sa = aim + Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1);
+    fx.lit.spawn(player.x, 1.0, player.z, Math.cos(sa) * rand(1.5, 2.5), rand(2, 3), Math.sin(sa) * rand(1.5, 2.5), 2.5, 0.07, '#d8b050', { grav: 12, drag: 1, bounce: 0.35, spin: 14 });
+    sound.shoot(w.key);
+    fx.crows.scare(player.x, player.z, 14);
+  }
   if (g.ammo === 0) reload();
 }
 // chém dao: trúng tối đa 3 zombie trong cung trước mặt
 function melee() {
   const w = WEAPONS[0];
   if (player.cooldown > 0 || player.action) return;
-  player.cooldown = w.rate; player.swing = 0.2; player.stamina = Math.max(0, player.stamina - 0.05);
+  const M = player.mod;
+  player.cooldown = w.rate * M.meleeRate; player.swing = 0.2; player.stamina = Math.max(0, player.stamina - 0.05);
   let hits = 0;
   for (const z of zombies) {
     if (!hittable(z)) continue;
     const dx = z.x - player.x, dz = z.z - player.z, d = Math.hypot(dx, dz);
     if (d > w.reach + z.r || Math.abs(angDiff(Math.atan2(dz, dx), player.aim)) > w.arc) continue;
-    damageZombie(z, w.dmg, Math.atan2(dz, dx), 0.55);
+    // Ama: hạ gục im lặng zombie chưa phát hiện mình (trừ zombie to/đặc biệt nặng)
+    const silent = M.takedown && !z.aggro && z.type !== 'brute' && z.type !== 'charger' && z.type !== 'weeper';
+    damageZombie(z, silent ? 9999 : Math.round(w.dmg * M.meleeDmg), Math.atan2(dz, dx), 0.55 * (M.meleeDmg > 1.5 ? 1.5 : 1));
+    if (silent) floaters.push({ x: z.x, y: 2.4, z: z.z, text: 'HẠ GỤC!', t: 0.9, color: '#f2c14e' });
     if (++hits >= 3) break;
   }
   for (let i = 0; i < 10; i++) {
@@ -503,6 +556,7 @@ function damageZombie(z, dmg, a, kb, cx = z.x, cz = z.z, remote = false) {
   sound.hit(cx, cz);
   if (!remote) floaters.push({ x: z.x + rand(-0.3, 0.3), y: 2.2, z: z.z, text: String(dmg), t: 0.55, color: '#ffffff' });
   if (z.hp <= 0 && !client) killZombie(z, a);
+  if (z.hp <= 0 && !remote && !z.xpGiven) { z.xpGiven = true; gainXP(SPECIAL[z.skin] ? (z.type === 'brute' ? 20 : 12) : 4, true); }
 }
 function wake(z) { if (z.aggro) return; if (z.type === 'weeper') { enrage(z, null); return; } z.aggro = true; z.sprite.xr.visible = true; if (Math.random() < 0.7) sound.groan(z.x, z.z, z.type === 'brute'); }
 function makeNoise(x, z, r, remote = false) {
@@ -592,8 +646,9 @@ function terracePlan(z) {
 let TG = [];
 function computeTargets() {
   TG = [];
-  if (playerAlive()) TG.push({ x: player.x, z: player.z, me: true, b: curBuilding, bile: player.bile > 0 });
+  if (playerAlive()) TG.push({ x: player.x, z: player.z, me: true, b: curBuilding, bile: player.bile > 0, det: player.mod.detect });
   if (net.active) netTargetsInto(TG);
+  if (!net.active || net.host) for (const b of bots) if (b.state === 'ok') TG.push({ x: b.x, z: b.z, me: false, bot: 'b' + b.ci, b: buildingAt(b.x, b.z), det: 1 });
 }
 function spawnRef() { return TG.length ? TG[Math.floor(Math.random() * TG.length)] : player; }
 function spawnZombie(stray = false) {
@@ -697,6 +752,8 @@ function startDawn() {
   if (Q.called && !Q.heli) setTimeout(() => { if (state.mode === 'play') heliArrive(); }, 3500);
   showMsg('TRỜI SÁNG', `Đã sống sót đêm ${wave}`);
   score += wave * 100; hud.dirty = true;
+  gainXP(40, true);
+  dawnBots();
   atmos.setWeather('clear');
 }
 function startDay(first = false) {
@@ -838,7 +895,7 @@ async function joinRoom(code, creating = false) {
     if (net.room) await leaveRoom();
     const room = await net.transport.join(roomName(code));
     Object.assign(net, { room, code, joinT: Date.now(), seq: 0, out: [], players: new Map(), zmap: new Map(), lastW: 0, started: false, hostPeer: null });
-    await room.presence({ v: 1, n: net.name, j: net.joinT, p: null, e: [], w: null });
+    await room.presence({ v: 1, n: net.name, j: net.joinT, c: myChar, p: null, e: [], w: null });
     net.unsub = room.onPeers(() => { refreshHost(); renderRoom(); });
     $('room-code').textContent = code;
     showLobbyPane('room');
@@ -864,12 +921,12 @@ function roomMembers() {
   const list = [];
   for (const p of net.room.peers()) {
     const pz = p.presence || {};
-    if (p.sameTab) { if (net.me !== p.peer) net.me = p.peer; list.push({ peer: p.peer, me: true, n: net.name, j: net.joinT }); continue; }
+    if (p.sameTab) { if (net.me !== p.peer) net.me = p.peer; list.push({ peer: p.peer, me: true, n: net.name, j: net.joinT, c: myChar }); continue; }
     if (pz.v !== 1 || typeof pz.j !== 'number') continue;
-    list.push({ peer: p.peer, me: false, n: cleanName(String(pz.n || '')), j: pz.j, pz });
+    list.push({ peer: p.peer, me: false, n: cleanName(String(pz.n || '')), j: pz.j, c: clamp(pz.c | 0, 0, CHARS.length - 1), pz });
   }
   list.sort((a, b) => a.j - b.j || (a.peer < b.peer ? -1 : 1));
-  return list.slice(0, 4);
+  return list.slice(0, 5);
 }
 function refreshHost() {
   const m = roomMembers();
@@ -895,12 +952,23 @@ function renderRoom() {
   const m = roomMembers();
   const el = $('room-players');
   el.innerHTML = '';
+  // mỗi người một nhân vật: người vào sau phải chọn nhân vật khác
+  const taken = new Map();
+  for (const x of m) if (!x.me && !taken.has(x.c)) taken.set(x.c, x.n);
+  if (taken.has(myChar)) {
+    const free = CHARS.findIndex((c, i) => !taken.has(i));
+    if (free >= 0) { pickChar(free); return; }
+  }
   m.forEach((x, i) => {
     const d = document.createElement('div');
-    d.style.color = PLAYER_COLORS[i];
-    d.textContent = `${i === 0 ? '★ ' : '• '}${x.n}${x.me ? ' (bạn)' : ''}${i === 0 ? ' — chủ phòng' : ''}`;
+    const ci = x.me ? myChar : x.c;
+    d.style.color = CHARS[ci].color;
+    d.textContent = `${i === 0 ? '★ ' : '• '}${x.n}${x.me ? ' (bạn)' : ''} · ${CHARS[ci].name}${i === 0 ? ' — chủ phòng' : ''}`;
     el.appendChild(d);
   });
+  const bots = CHARS.filter((c, i) => i !== myChar && !taken.has(i)).map((c) => c.name);
+  if (bots.length) { const d = document.createElement('div'); d.style.color = 'var(--ink-dim)'; d.textContent = 'Bot: ' + bots.join(', '); el.appendChild(d); }
+  renderCharPick($('char-pick'), taken);
   $('go-btn').classList.toggle('hidden', !net.host || net.started);
   // khách vào phòng: tự vào game khi chủ phòng đã bắt đầu
   if (!net.host && !net.started) {
@@ -930,15 +998,7 @@ function clientRestart() {
   showMsg('CHƠI LẠI', 'Chủ phòng đã bắt đầu ván mới');
 }
 let skinIdx = 0;
-function setPlayerSkin(i) {
-  if (i === skinIdx) return;
-  skinIdx = i;
-  const set = playerSprites(i);
-  const old = player.sprite;
-  scene.remove(old.group);
-  player.sprite = makeSprite([set.knife, set.pistol, set.shotgun, set.smg], '#7ad8ff');
-  setSpriteMap(player.sprite, player.weapon);
-}
+function setPlayerSkin(i) { skinIdx = i; }
 // chủ phòng cũ rời đi: dựng lại zombie đầy đủ từ ảnh chụp cuối cùng
 function becomeHost() {
   for (const z of zombies) {
@@ -961,12 +1021,12 @@ function netTick(dt) {
     if (pz.v !== 1) continue;
     seen.add(p.peer);
     let rp = net.players.get(p.peer);
-    if (!rp) { rp = { peer: p.peer, x: 0, z: 0, tx: 0, tz: 0, aim: 0, weapon: 1, flags: 0, hp: 100, lastSeq: 0, walk: 0, fireT: 0, inited: false }; net.players.set(p.peer, rp); }
-    rp.name = cleanName(String(pz.n || '')); rp.j = pz.j;
+    if (!rp) { rp = { peer: p.peer, x: 0, z: 0, tx: 0, tz: 0, aim: 0, weapon: 1, flags: 0, hp: 100, lastSeq: 0, walk: 0, fireT: 0, inited: false, char: 0 }; net.players.set(p.peer, rp); }
+    rp.name = cleanName(String(pz.n || '')); rp.j = pz.j; rp.char = clamp(pz.c | 0, 0, CHARS.length - 1);
     const a = pz.p;
     if (Array.isArray(a) && a.length >= 6) {
       rp.tx = clamp(+a[0] / 100 || 0, BOUNDS.x0 - 2, BOUNDS.x1 + 2); rp.tz = clamp(+a[1] / 100 || 0, BOUNDS.z0 - 2, BOUNDS.z1 + 2);
-      rp.aim = +a[2] / 100 || 0; rp.weapon = clamp(a[3] | 0, 0, 3); rp.flags = a[4] | 0; rp.hp = a[5] | 0; rp.inf = a[6] | 0;
+      rp.aim = +a[2] / 100 || 0; rp.weapon = clamp(a[3] | 0, 0, 4); rp.flags = a[4] | 0; rp.hp = a[5] | 0; rp.inf = a[6] | 0;
       rp.exit = EXITS[a[7] | 0] || null; rp.zone = a[8] === undefined ? -1 : a[8] | 0; rp.light = a[9] | 0;
       if (!rp.inited) { rp.x = rp.tx; rp.z = rp.tz; rp.inited = true; }
     }
@@ -988,7 +1048,7 @@ function netTick(dt) {
   net.out = net.out.filter((e) => now - e.t < 700 || (e.sent || 0) < 4).slice(-24);
   for (const e of net.out) e.sent = (e.sent || 0) + 1;
   const flags = (player.moving ? 1 : 0) | (player.firing ? 2 : 0) | (player.downed > 0 ? 4 : 0) | (player.dead ? 8 : 0) | (player.boarded ? 16 : 0) | (player.searching ? 32 : 0) | (player.infected > 0 ? 64 : 0) | (player.zombie ? 128 : 0) | (player.bile > 0 ? 256 : 0);
-  const patch = { v: 1, n: net.name, j: net.joinT, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), player.weapon, flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected), EXITS.indexOf(player.exit), zoneIdx(), lightState()], e: net.out.map((e) => e.ev) };
+  const patch = { v: 1, n: net.name, j: net.joinT, c: myChar, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), player.weapon, flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected), EXITS.indexOf(player.exit), zoneIdx(), lightState()], e: net.out.map((e) => e.ev) };
   if (net.host) {
     net.snapT -= 1 / 12;
     if (net.snapT <= 0) { net.snapT = 1 / 8; patch.w = makeSnapshot(JSON.stringify(patch).length); }
@@ -1009,12 +1069,18 @@ function handleEvents(rp, list) {
     else if (type === 'fl' && ev[2] === net.me && player.zombie) unzombie(rp);
     else if (type === 'cure' && ev[2] === net.me && player.infected > 0) cureInfection(rp.name);
     else if (type === 'gr') { rp.pingT = 6; sound.groan(rp.x, rp.z, true); }
-    else if (type === 'gv' && ev[2] === net.me) receiveGift(String(ev[3]), rp);
+    else if (type === 'gv' && ev[2] === net.me) receiveGift(String(ev[3]), rp, clamp((+ev[4] || 100) / 100, 1, 3));
     else if (type === 'bx') bileBlast((+ev[2] || 0) / 10, (+ev[3] || 0) / 10);
     else if (type === 'ac' && !net.host) spitAcid((+ev[2] || 0) / 10, (+ev[3] || 0) / 10, (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, false);
     else if (type === 'pin' && ev[2] === net.me) setPinned(ev[3] | 0);
     else if (type === 'unpin' && ev[2] === net.me && player.pinned === (ev[3] | 0)) player.pinned = 0;
     else if (type === 'chg' && ev[2] === net.me) knockPlayer((+ev[3] || 0) / 100, (+ev[4] || 0) / 100, clamp(ev[5] | 0, 0, 80));
+    else if (type === 'shv' && net.host) shoveAt((+ev[2] || 0) / 10, (+ev[3] || 0) / 10);
+    else if (type === 'btask' && net.host) botTask(String(ev[2]), String(ev[3]));
+    else if (type === 'gate' && net.host) gateAct(String(ev[2]), rp.name);
+    else if (type === 'cam' && rp.here) { camReveal = clamp(+ev[2] || 25, 5, 90); camLootOn = !!ev[3]; showMsg('CAMERA AN NINH', `${rp.name} đã hack camera · thấy mọi zombie`); }
+    else if (type === 'rbot' && net.host) reviveBot(ev[2] | 0, false);
+    else if (type === 'gbot' && net.host) giveToBot('b' + (ev[2] | 0), String(ev[3]), clamp((+ev[4] || 100) / 100, 1, 3));
     else if (type === 'ups' && net.host) { const z = zombies.find((o) => o.id === (ev[2] | 0)); if (z && z.state === 'pin') releasePin(z, 2.4, true); }
     else if (type === 'dr' && net.host) hostAddDrop(String(ev[2]), clamp(ev[3] | 0, 1, 99), (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, rp.zone);
     else if (type === 'pk' && net.host) hostPickDrop(ev[2] | 0, rp.peer);
@@ -1033,6 +1099,8 @@ function makeSnapshot(base) {
     zn: [ZONE_IDS.indexOf(zt.target || ZONE.id), ENTRIES.indexOf(net.zoneEntry || 'start'), net.zoneSeq || 0],
     dp: drops.filter((d) => d.id > 0).slice(-24).map((d) => [d.id, ITEM_KEYS.indexOf(d.it), d.n, Math.round(d.x * 10), Math.round(d.z * 10)]),
     gr: net.grants.slice(-6),
+    bt: bots.map((b) => [b.ci, Math.round(b.x * 10), Math.round(b.z * 10), Math.round(b.aim * 100), b.weapon, (b.moving ? 1 : 0) | (b.firing ? 2 : 0) | (b.state === 'down' || b.pinnedBy ? 4 : 0) | (b.state === 'out' ? 8 : 0), Math.round(b.hp)]),
+    gt: GATE_CODES.indexOf((gateStates[ZONE.id] || { s: 'closed' }).s),
   };
   // giữ presence dưới 4 KiB
   while (z.length > 8 && base + JSON.stringify(w).length > 3900) z.splice(z.length - 8, 8);
@@ -1048,7 +1116,7 @@ function applySnapshot(w) {
   const ph = PH[w.ph] || phase;
   if (ph !== phase) {
     if (ph === 'night') { wave = w.wv; showMsg(`ĐÊM ${w.wv}`, 'Zombie kéo tới!'); sound.wave(); }
-    else if (ph === 'dawn') showMsg('TRỜI SÁNG', `Đã sống sót đêm ${w.wv}`);
+    else if (ph === 'dawn') { showMsg('TRỜI SÁNG', `Đã sống sót đêm ${w.wv}`); gainXP(40, true); }
     else if (ph === 'day') { dayNo = w.d; showMsg(`NGÀY ${w.d}`, 'Tranh thủ lục soát'); restock(); }
     else if (ph === 'dusk') showMsg('CHIỀU TÀ', 'Màn đêm sắp buông xuống…');
     phase = ph;
@@ -1073,6 +1141,8 @@ function applySnapshot(w) {
     if (zid && zid !== ZONE.id && zid !== zt.target) requestZone(zid, ENTRIES[w.zn[1] | 0] || 'start');
   }
   if (Array.isArray(w.dp) && !zt.busy) syncDrops(w.dp);
+  if (Array.isArray(w.bt) && !zt.busy) syncBotViews(w.bt);
+  if (w.gt !== undefined && !zt.busy && world.pois.gate) gateVisual(GATE_CODES[w.gt | 0] || 'closed');
   if (Array.isArray(w.gr)) for (const g of w.gr) if (Array.isArray(g) && g[0] === net.me && !net.grantSeen.has(g[3])) { net.grantSeen.add(g[3]); const it = ITEM_KEYS[g[1] | 0]; if (it) giveItems([[it, g[2] | 0]], true); }
   const hs = q[3] | 0;
   if (hs && !Q.heli) heliArrive();
@@ -1146,11 +1216,11 @@ function clientZombies(dt) {
 function updateRemote(dt) {
   for (const rp of net.players.values()) {
     if (!rp.inited) continue;
-    if (!rp.sp) {
-      const idx = Math.max(0, roomMembers().findIndex((m) => m.peer === rp.peer));
-      rp.color = idx;
-      const set = playerSprites(idx);
-      rp.sp = makeSprite([set.knife, set.pistol, set.shotgun, set.smg], PLAYER_COLORS[idx]);
+    if (!rp.sp || rp.spChar !== rp.char) {
+      if (rp.sp) scene.remove(rp.sp.group);
+      rp.spChar = rp.char; rp.color = rp.char;
+      rp.sp = makeSprite(charSet(rp.char), CHARS[rp.char].color);
+      rp.sp.group.scale.setScalar(CHARS[rp.char].scale || 1);
     }
     const k = Math.min(1, dt * 10), ox = rp.x, oz = rp.z;
     rp.x += (rp.tx - rp.x) * k; rp.z += (rp.tz - rp.z) * k;
@@ -1158,7 +1228,7 @@ function updateRemote(dt) {
     const sp = rp.sp;
     rp.pingT = Math.max(0, (rp.pingT || 0) - dt);
     const zf = !!(rp.flags & 128);
-    if (zf && !rp.zsp) { const list = SPR.zombies.walker; rp.zsp = makeSprite([list[(rp.color || 0) % list.length]], PLAYER_COLORS[rp.color || 0]); }
+    if (zf && !rp.zsp) { const list = SPR.zombies.walker; rp.zsp = makeSprite([list[(rp.char || 0) % list.length]], CHARS[rp.char || 0].color); }
     if (rp.zsp) {
       rp.zsp.group.visible = zf;
       if (zf) { setFrame(rp.zsp, dirFromAngle(rp.aim), rp.flags & 1 ? Math.floor(rp.walk) % 4 : 0); rp.zsp.group.position.set(rp.x, 0, rp.z); }
@@ -1188,6 +1258,7 @@ function updateRemote(dt) {
 function playerAlive() { return state.mode === 'play' && !(player.downed > 0) && !player.dead && !player.boarded && !player.zombie; }
 function hurtPlayer(z, d) {
   if (player.inv > 0) return;
+  if (player.mod.dodge && Math.random() < player.mod.dodge) { player.inv = 0.3; floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NÉ!', t: 0.8, color: '#f2c14e' }); return; }
   player.hp -= z.dmg; player.inv = 0.35; hurtFlash = 0.5;
   player.action = null; interact.t = 0;
   shake = Math.max(shake, z.type === 'brute' ? 0.6 : 0.3);
@@ -1228,9 +1299,9 @@ const BITE_CHANCE = { walker: 0.35, runner: 0.35, brute: 0.6, bloater: 0.1, spit
 function infectPlayer(z) {
   if (player.zombie || player.boarded || state.mode !== 'play') return;
   if (player.infected > 0) { player.infected = Math.max(20, player.infected - 15); return; }
-  if (Math.random() >= (BITE_CHANCE[z.type] || 0.35)) return;
-  player.infected = INFECT_TIME;
-  showMsg('BỊ CẮN — NHIỄM VIRUS!', 'Có 5 phút chế thuốc giải: Kháng sinh + Ống tiêm' + (isTouch ? '' : ' (phím V)'));
+  if (Math.random() >= (BITE_CHANCE[z.type] || 0.35) * player.mod.bite) return;
+  player.infected = player.infMax = player.mod.infectTime;
+  showMsg('BỊ CẮN — NHIỄM VIRUS!', `Có ${Math.round(player.infMax / 60)} phút chế thuốc giải: Kháng sinh + Ống tiêm` + (isTouch ? '' : ' (phím V)'));
   sound.infect();
   hud.dirty = true;
 }
@@ -1283,7 +1354,7 @@ function unzombie(rp) {
 }
 let zlook = null;
 function setZombieLook(on) {
-  if (on && !zlook) { const list = SPR.zombies.walker; zlook = makeSprite([list[skinIdx % list.length]], PLAYER_COLORS[skinIdx]); }
+  if (on && !zlook) { const list = SPR.zombies.walker; zlook = makeSprite([list[player.char % list.length]], CHARS[player.char].color); }
   if (zlook) zlook.group.visible = on;
   player.sprite.group.visible = !on;
 }
@@ -1373,7 +1444,8 @@ function questDescribe(key) {
     if (!Q.called) return { label: 'GỌI TRỰC THĂNG CỨU HỘ', can: true, time: 2.0 };
     return { label: 'Đã gọi cứu hộ · chờ bình minh', can: false };
   }
-  if (key === 'cctv') return camReveal > 0 ? { label: 'Đang xem camera…', can: false } : { label: 'Xem camera an ninh', can: true, time: 1.5 };
+  if (key === 'cctv') return describeCam();
+  if (key === 'gate') return describeGate();
   if (key === 'generator') {
     if (power) return { label: 'Máy phát đang chạy', can: false };
     if (player.bag.fuel > 0) return { label: 'Đổ xăng, khởi động máy phát', can: true, time: 2.2 };
@@ -1392,6 +1464,7 @@ function questInteract(key) {
   if (!act) return;
   if (net.active && !net.host) { netEvent('q', act, n); questApply(act, n, null, true); }
   else questApply(act, n, null);
+  gainXP(25, true);
   hud.dirty = true;
 }
 function powerOn(msg = true) {
@@ -1564,10 +1637,11 @@ function interactTargets() {
     else if (rp.flags & 4 && !(rp.flags & 8)) out.push({ type: 'r', id: 'r' + rp.peer, rp, d, x: rp.x, z: rp.z });
     else if (rp.flags & 64 && player.bag.antidote > 0) out.push({ type: 'cu', id: 'cu' + rp.peer, rp, d: d + 0.3, x: rp.x, z: rp.z });
   }
+  for (const b of allBots()) if (b.state === 'down') { const d = Math.hypot(b.x - player.x, b.z - player.z); if (d < 1.5) out.push({ type: 'rb', id: 'rb' + b.ci, bt: b, d, x: b.x, z: b.z }); }
   for (const f of flowers) if (f.mesh.visible) { const d = Math.hypot(f.x - player.x, f.z - player.z); if (d < 1.2) out.push({ type: 'f', id: f.id, f, d, x: f.x, z: f.z }); }
   for (const k in world.pois) {
     const p = world.pois[k];
-    if (k === 'helipad' || (k === 'armory' && p.open)) continue;
+    if (k === 'helipad' || (k === 'armory' && p.open) || (k === 'gate' && p.state === 'open')) continue;
     const d = Math.hypot(p.x - player.x, p.z - player.z);
     if (d < 1.5) out.push({ type: 'p', id: 'p' + k, key: k, p, d, x: p.x, z: p.z });
   }
@@ -1578,14 +1652,15 @@ function describe(tg) {
     const c = tg.c;
     if (c.locked === 'armory' && !world.pois.armory.open) return { label: c.label + ' · bị khoá', can: false };
     if (player.looted.has(c.id)) return { label: c.label + ' · đã lục', can: false, done: true };
-    return { label: 'Lục ' + lc(c.label), can: true, time: searchTime(c.kind) };
+    return { label: 'Lục ' + lc(c.label), can: true, time: searchTime(c.kind) * player.mod.search };
   }
   if (tg.type === 'z') {
     if (tg.zo.looted) return { label: 'Xác đã lục', can: false, done: true };
     return { label: CORPSE_NAMES[tg.zo.lootKind] || 'Lục xác', can: true, time: searchTime('corpse') };
   }
+  if (tg.type === 'rb') return { label: 'Cứu ' + botName(tg.bt.ci), can: true, time: 3.0 * player.mod.reviveTime };
   if (tg.type === 'd') return { label: `Nhặt ${ITEMS[tg.dr.it].name}${tg.dr.n > 1 ? ' ×' + tg.dr.n : ''}`, can: true, time: 0.35 };
-  if (tg.type === 'r') return { label: 'Cứu ' + tg.rp.name, can: true, time: 3.0 };
+  if (tg.type === 'r') return { label: 'Cứu ' + tg.rp.name, can: true, time: 3.0 * player.mod.reviveTime };
   if (tg.type === 'zf') return player.bag.flower > 0 ? { label: `Cho ${tg.rp.name} ăn hoa bỉ ngạn`, can: true, time: 2.0 } : { label: `${tg.rp.name} đã hoá zombie · cần hoa bỉ ngạn`, can: false };
   if (tg.type === 'cu') return { label: `Tiêm thuốc giải cho ${tg.rp.name}`, can: true, time: 1.5 };
   if (tg.type === 'f') return player.bag.flower >= ITEMS.flower.max ? { label: 'Hoa bỉ ngạn · túi đã đầy', can: false } : { label: 'Hái hoa bỉ ngạn', can: true, time: 0.9 };
@@ -1608,23 +1683,27 @@ function updateInteract(dt) {
     if (interact.t >= best.info.time) { interact.t = 0; player.searching = false; doInteract(best); }
   } else interact.t = Math.max(0, interact.t - dt * 3);
   $('t-use').classList.toggle('off', !(best && best.info.can));
+  $('t-shove').classList.toggle('off', !player.mod.shove);
 }
 function doInteract(tg) {
   if (tg.type === 'c') {
     const c = tg.c;
     player.looted.add(c.id);
     giveItems(rollLoot(c.kind, Math.random, questDone));
+    gainXP(2, false);
   } else if (tg.type === 'z') {
     tg.zo.looted = true;
     tg.zo.sprite.mat.color.setScalar(0.62);
     giveItems(rollLoot(tg.zo.lootKind));
   } else if (tg.type === 'd') { if (drops.includes(tg.dr)) pickDrop(tg.dr); }
-  else if (tg.type === 'r') netEvent('rv', tg.rp.peer);
+  else if (tg.type === 'r') { netEvent('rv', tg.rp.peer); gainXP(15, true); }
+  else if (tg.type === 'rb') { if (net.active && !net.host) { netEvent('rbot', tg.bt.ci); gainXP(10, true); } else reviveBot(tg.bt.ci, true); }
   else if (tg.type === 'zf') { if (player.bag.flower > 0) { player.bag.flower--; netEvent('fl', tg.rp.peer); lootFeed('flower', `Đã cho ${tg.rp.name} ăn hoa`); } }
   else if (tg.type === 'cu') { if (player.bag.antidote > 0) { player.bag.antidote--; netEvent('cure', tg.rp.peer); lootFeed('antidote', `Đã tiêm thuốc giải cho ${tg.rp.name}`); } }
   else if (tg.type === 'f') { player.picked.add(tg.f.id); tg.f.mesh.visible = false; tg.f.e.base = 0; addItem('flower', 1); lootFeed('flower', '+1 Hoa bỉ ngạn'); sound.flower(); }
   else if (tg.key === 'armory') { unlockArmory(); if (net.active && !net.host) netEvent('q', 'armory', 0); }
-  else if (tg.key === 'cctv') { camReveal = 25; showMsg('CAMERA AN NINH', 'Thấy mọi zombie trong khu này trong 25 giây'); sound.radio(); }
+  else if (tg.key === 'cctv') doCam();
+  else if (tg.key === 'gate') doGate();
   else questInteract(tg.key);
   hud.dirty = true; renderBagIfOpen();
 }
@@ -1637,6 +1716,7 @@ function giveItems(list, picked = false) {
   }
   sound.pickup();
 }
+const capOf = (it) => (ITEMS[it].quest ? ITEMS[it].max : Math.round(ITEMS[it].max * ((player && player.mod && player.mod.carry) || 1)));
 function addItem(it, n) {
   const def = ITEMS[it];
   if (def.weapon !== undefined) {
@@ -1650,7 +1730,7 @@ function addItem(it, n) {
     return addItem(w.ammo, Math.ceil(w.mag / 4)) > 0 ? 1 : 0;
   }
   const before = player.bag[it] || 0;
-  player.bag[it] = Math.min(def.max, before + n);
+  player.bag[it] = Math.min(capOf(it), before + n);
   return player.bag[it] - before;
 }
 const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…', craft: 'Đang chế…', antidote: 'Tiêm thuốc giải…', torch: 'Châm đuốc…' };
@@ -1674,17 +1754,16 @@ function finishAction() {
   if (!(player.bag[it] > 0)) return;
   player.bag[it]--;
   if (act.target) {
-    netEvent('gv', act.target, it);
+    if (act.bot) giveToBot(act.target, it, player.mod.healMul);
+    else netEvent('gv', act.target, it, Math.round(player.mod.healMul * 100));
     lootFeed(it, `Đã dùng ${def.name.toLowerCase()} cho ${act.targetName}`);
+    gainXP(3, true);
     sound.pickup(); hud.dirty = true; renderBagIfOpen();
     return;
   }
   if (def.use === 'torch') { player.torchT = TORCH_TIME; lootFeed(it, 'Đã châm đuốc · cháy khoảng ' + Math.round(TORCH_TIME / 60 * 10) / 10 + ' phút'); sound.use('heal'); hud.dirty = true; renderBagIfOpen(); return; }
   if (def.use === 'cure') { cureInfection(); renderBagIfOpen(); return; }
-  if (def.heal) { player.hp = Math.min(player.maxHp, player.hp + def.heal); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${def.heal} MÁU`, t: 1.2, color: '#7fe07f' }); }
-  if (def.food) { player.food = Math.min(100, player.food + def.food); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NO BỤNG', t: 1.0, color: '#e8a860' }); }
-  if (def.water) { player.water = Math.min(100, player.water + def.water); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'HẾT KHÁT', t: 1.0, color: '#7ac8f0' }); }
-  sound.pickup(); hud.dirty = true; renderBagIfOpen();
+  applyItemEffect(it, player.mod.healMul);
 }
 function quickHeal() {
   const it = player.hp < 50 && player.bag.medkit > 0 ? 'medkit' : player.bag.bandage > 0 ? 'bandage' : player.bag.medkit > 0 ? 'medkit' : null;
@@ -1753,7 +1832,7 @@ function renderBag() {
     if ((ITEMS[it].quest || ITEMS[it].hideZero) && !n) continue;
     const d = document.createElement('div');
     d.className = 'bi' + (n ? '' : ' zero');
-    const extra = it === 'flashlight' && n ? ` · pin ${Math.ceil(player.battery / BATTERY_TIME * 100)}%` : '';
+    const extra = it === 'flashlight' && n ? ` · pin ${Math.ceil(player.battery / (BATTERY_TIME * player.mod.battery) * 100)}%` : '';
     d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${ITEMS[it].name}<br><span class="n">×${n}${extra}</span></span>`;
     let acts = null;
     const btn = (label, fn, cls) => {
@@ -1797,12 +1876,312 @@ function resetWorldState() {
 
 
 
+
+// ================= BOT ĐỒNG ĐỘI =================
+// Nhân vật không ai chọn sẽ là bot do chủ phòng (hoặc máy chơi luyện tập) điều khiển:
+// đi theo người chơi gần nhất, đánh zombie, gục thì chờ cứu, nghe lệnh dùng kỹ năng riêng.
+let bots = [];
+const botViews = new Map();
+const BOT_FLAGS = { moving: 1, firing: 2, down: 4, out: 8 };
+function botChars() {
+  const taken = new Set([player.char]);
+  if (net.active) for (const rp of net.players.values()) if (rp.inited || rp.j) taken.add(rp.char);
+  if (net.active) for (const m of roomMembers()) taken.add(m.me ? myChar : m.c);
+  return CHARS.map((c, i) => i).filter((i) => !taken.has(i));
+}
+function clearBots() {
+  for (const b of bots) scene.remove(b.sp.group);
+  bots = [];
+  for (const v of botViews.values()) scene.remove(v.sp.group);
+  botViews.clear();
+}
+function botSprite(ci) {
+  const C = CHARS[ci];
+  const sp = makeSprite(charSet(ci), C.color);
+  sp.group.scale.setScalar(C.scale || 1);
+  return sp;
+}
+function makeBots() {
+  clearBots();
+  botChars().forEach((ci, k) => {
+    const C = CHARS[ci], m = { ...computeMod(C.id, new Set()) };
+    const b = { ci, k, r: 0.34, hp: C.hp, maxHp: C.hp, aim: 0, weapon: C.id === 'tien' ? 4 : 0, walk: 0, cd: rand(0, 0.5), state: 'ok', downT: 0, task: null, sp: botSprite(ci), side: k % 2 ? 1 : -1, stuck: 0, hitT: 0, moving: false, firing: false, pinnedBy: 0, mod: m, x: 0, z: 0 };
+    bots.push(b);
+  });
+  placeBots();
+}
+function placeBots() {
+  bots.forEach((b, k) => {
+    for (let t = 0; t < 12; t++) {
+      const x = clamp(player.x + (k + 1) * 0.9 * (player.x > 0 ? -1 : 1) + rand(-0.3, 0.3), BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5);
+      const z = clamp(player.z + (k % 2 ? 0.7 : -0.6) + rand(-0.3, 0.3), BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.3);
+      if (!insideSolid(x, z, 0.4) || t === 11) { b.x = x; b.z = z; break; }
+    }
+    b.task = null; b.pinnedBy = 0;
+  });
+}
+const botName = (ci) => CHARS[ci].name + ' (bot)';
+const findBot = (ci) => bots.find((b) => b.ci === ci);
+// danh sách bot để hiển thị / tương tác (chủ phòng: bot thật, khách: bản sao theo ảnh chụp)
+function allBots() {
+  if (!net.active || net.host) return bots.map((b) => ({ ci: b.ci, x: b.x, z: b.z, hp: b.hp, maxHp: b.maxHp, state: b.state }));
+  return [...botViews.values()].map((v) => ({ ci: v.ci, x: v.x, z: v.z, hp: v.hp, maxHp: CHARS[v.ci].hp, state: v.flags & 8 ? 'out' : v.flags & 4 ? 'down' : 'ok' }));
+}
+const botAvail = (id) => allBots().find((b) => CHARS[b.ci].id === id && b.state === 'ok');
+const botBusy = (id, poi) => bots.some((b) => CHARS[b.ci].id === id && b.task && b.task.poi === poi) || (net.active && !net.host && net.taskSent && net.taskSent[poi] > gtime);
+function hurtBot(key, dmg) {
+  const b = bots.find((o) => 'b' + o.ci === key);
+  if (!b || b.state !== 'ok') return;
+  b.hp -= dmg; b.hitT = 0.15;
+  for (let i = 0; i < 6; i++) fx.blood.spawn(b.x, rand(0.7, 1.3), b.z, rand(-2, 2), rand(0.5, 2.5), rand(-2, 2), 1.4, rand(0.05, 0.09), '#a51c16', { grav: 11, drag: 0.8 });
+  if (b.hp <= 0) {
+    b.hp = 0; b.state = 'down'; b.downT = 40; b.task = null; b.pinnedBy = 0;
+    showMsg(`${CHARS[b.ci].name.toUpperCase()} (BOT) GỤC NGÃ`, 'Lại gần giữ E để cứu');
+  }
+}
+function reviveBot(ci, byMe) {
+  const b = findBot(ci);
+  if (!b || b.state !== 'down') return;
+  b.state = 'ok'; b.hp = Math.round(b.maxHp * 0.5); b.hitT = 0;
+  floaters.push({ x: b.x, y: 2.4, z: b.z, text: 'ĐÃ CỨU!', t: 1.1, color: '#7fe07f' });
+  if (byMe) gainXP(10, true);
+}
+function giveToBot(key, it, mul) {
+  const ci = +String(key).slice(1);
+  if (net.active && !net.host) { netEvent('gbot', ci, it, Math.round(mul * 100)); return; }
+  const b = findBot(ci), def = ITEMS[it];
+  if (!b) return;
+  if (def.heal) b.hp = Math.min(b.maxHp, b.hp + Math.round(def.heal * mul));
+  floaters.push({ x: b.x, y: 2.4, z: b.z, text: def.heal ? `+${Math.round(def.heal * mul)} MÁU` : 'CẢM ƠN!', t: 1.1, color: '#7fe07f' });
+}
+function botMelee(b, z) {
+  const C = CHARS[b.ci];
+  b.cd = 0.62 * (C.id === 'ama' ? 0.8 : 1);
+  b.firing = true;
+  const dmg = Math.round(34 * (b.mod.meleeDmg || 1));
+  damageZombie(z, dmg, Math.atan2(z.z - b.z, z.x - b.x), 0.4, z.x, z.z, true);
+  for (let i = 0; i < 5; i++) { const a = b.aim + (i / 4 - 0.5) * 1.4; fx.spark.spawn(b.x + Math.cos(a), 1.0, b.z + Math.sin(a), 0, 0, 0, 0.1, 0.06, '#e8f0ff', { grav: 0, drag: 9, mode: 1 }); }
+  sound.swing(true);
+}
+function botShoot(b, z) {
+  b.cd = 1.1; b.firing = true;
+  const a = Math.atan2(z.z - b.z, z.x - b.x) + rand(-0.03, 0.03), mx = b.x + Math.cos(a) * 0.7, mz = b.z + Math.sin(a) * 0.7;
+  bullets.push({ x: mx, z: mz, px: mx, pz: mz, vx: Math.cos(a) * 26, vz: Math.sin(a) * 26, dmg: 52, life: 0.8, pierce: 0, arrow: true, mine: false, bot: true });
+  sound.swing(false);
+}
+// lệnh cho bot dùng kỹ năng riêng tại một điểm (cổng sắt, camera)
+function botTask(id, poi) {
+  if (net.active && !net.host) { net.taskSent = net.taskSent || {}; net.taskSent[poi] = gtime + 6; netEvent('btask', id, poi); return; }
+  const b = bots.find((o) => CHARS[o.ci].id === id && o.state === 'ok');
+  if (!b || !world.pois[poi] || (b.task && b.task.poi === poi)) return;
+  b.task = { poi, t: 0, stuckT: 0 };
+  floaters.push({ x: b.x, y: 2.5, z: b.z, text: 'Để tôi!', t: 1.2, color: CHARS[b.ci].color });
+}
+function updateBots(dt) {
+  if (net.active && !net.host) { updateBotViews(dt); return; }
+  const humans = TG.filter((t) => !t.bot);
+  for (const b of bots) {
+    const s = b.sp;
+    b.firing = false; b.moving = false; b.hitT -= dt;
+    if (b.state === 'out') { s.group.visible = false; continue; }
+    s.group.visible = true;
+    if (b.state === 'down') {
+      b.downT -= dt;
+      s.mesh.rotation.x = -Math.PI / 2; s.group.position.set(b.x, 0.05, b.z);
+      if (b.downT <= 0) { b.state = 'out'; showMsg(`${CHARS[b.ci].name.toUpperCase()} ĐÃ NGẤT`, 'Bot sẽ tỉnh lại và quay về khi trời sáng'); }
+      continue;
+    }
+    s.mesh.rotation.x = 0;
+    if (b.pinnedBy) {
+      b.pinT = (b.pinT || 0) + dt; b.pinDmgT = (b.pinDmgT || 0.5) - dt;
+      if (b.pinDmgT <= 0) { b.pinDmgT = 0.5; hurtBot('b' + b.ci, 5); }
+      const z = zombies.find((o) => o.id === b.pinnedBy);
+      if (!z || z.state !== 'pin' || b.pinT > 3.5) { if (z && z.state === 'pin') releasePin(z, 2.2, true); b.pinnedBy = 0; b.pinT = 0; }
+      s.mesh.rotation.x = -Math.PI / 2; s.group.position.set(b.x, 0.05, b.z);
+      continue;
+    }
+    b.cd -= dt;
+    let gx, gz, tz = null, td = 1e9;
+    for (const z of zombies) {
+      if (z.state === 'dead' || z.y > 0.3 || z.state === 'rise' || (z.type === 'weeper' && !z.aggro)) continue;
+      const d = Math.hypot(z.x - b.x, z.z - b.z), range = b.weapon === 4 ? 11 : 6.5;
+      if (d < range && (z.aggro || d < 2.5) && d < td) { td = d; tz = z; }
+    }
+    let leader = null, ld = 1e9;
+    for (const t of humans) { const d = Math.hypot(t.x - b.x, t.z - b.z); if (d < ld) { ld = d; leader = t; } }
+    if (b.task && world.pois[b.task.poi]) {
+      const P = world.pois[b.task.poi], d = Math.hypot(P.x - b.x, P.z - b.z);
+      if (d > 0.9) { gx = P.x; gz = P.z; b.task.stuckT += dt; if (b.task.stuckT > 6) { b.x = P.x + 0.4; b.z = P.z; } }
+      else {
+        b.task.t += dt; b.aim = Math.atan2(P.z - b.z, P.x - b.x);
+        if (b.task.t > 1.6) { botDoTask(b, b.task.poi); b.task = null; }
+      }
+    } else if (tz) {
+      b.aim = Math.atan2(tz.z - b.z, tz.x - b.x);
+      if (b.weapon === 4) {
+        if (td < 3.5) { gx = b.x - Math.cos(b.aim) * 2; gz = b.z - Math.sin(b.aim) * 2; }
+        if (b.cd <= 0 && navLOS(b.x, b.z, tz.x, tz.z)) botShoot(b, tz);
+      } else if (td > 1.0) { gx = tz.x; gz = tz.z; }
+      else if (b.cd <= 0) botMelee(b, tz);
+    } else if (leader && ld > 2.6) {
+      gx = leader.x - b.side * (1.2 + b.k * 0.5); gz = leader.z + (b.k % 2 ? 0.6 : -0.6);
+      if (ld > 26) { b.x = leader.x - b.side * 1.5; b.z = leader.z; }
+    } else if (!tz) b.hp = Math.min(b.maxHp, b.hp + dt * 2.5);
+    if (gx !== undefined) {
+      let dx = gx - b.x, dz = gz - b.z;
+      const d = Math.hypot(dx, dz) || 1;
+      dx /= d; dz /= d;
+      if (d > 3 && !navLOS(b.x, b.z, gx, gz) && navDir(b)) { dx = navOut.x; dz = navOut.z; }
+      if (b.stuck > 0.6) { const sx = -dz * b.side, sz = dx * b.side; dx = dx * 0.4 + sx * 0.6; dz = dz * 0.4 + sz * 0.6; b.stuck -= dt; if (b.stuck > 1.2) { b.stuck = 0; b.side *= -1; } }
+      const spd = CHARS[b.ci].speed * (d > 7 ? 1.35 : 0.95), ox = b.x, oz = b.z;
+      b.x += dx * spd * dt; b.z += dz * spd * dt * 0.85;
+      if (collide(b) && Math.hypot(b.x - ox, b.z - oz) < spd * dt * 0.4) b.stuck += dt; else b.stuck = Math.max(0, b.stuck - dt);
+      b.moving = true; b.walk += dt * spd * 1.6;
+      if (!tz) b.aim = Math.atan2(dz, dx);
+    }
+    setSpriteMap(s, b.weapon);
+    setFrame(s, dirFromAngle(b.aim), b.moving ? Math.floor(b.walk) % 4 : 0);
+    s.group.position.set(b.x, 0, b.z);
+    s.mat.color.setScalar(b.hitT > 0 ? 2.2 : 1);
+  }
+}
+function botDoTask(b, poi) {
+  const id = CHARS[b.ci].id;
+  if (poi === 'gate' && id === 'hamble') gateAct('lift', botName(b.ci));
+  if (poi === 'cctv' && id === 'lycas') camHack(b.mod.camTime, b.mod.camLoot, botName(b.ci));
+}
+function dawnBots() {
+  for (const b of bots) if (b.state === 'out' || b.state === 'down') { b.state = 'ok'; b.hp = Math.round(b.maxHp * 0.6); }
+  if (bots.length) placeBots();
+}
+// khách: dựng bot theo ảnh chụp của chủ phòng
+function syncBotViews(list) {
+  const seen = new Set();
+  for (const a of list) {
+    if (!Array.isArray(a)) continue;
+    const ci = clamp(a[0] | 0, 0, CHARS.length - 1);
+    seen.add(ci);
+    let v = botViews.get(ci);
+    if (!v) { v = { ci, sp: botSprite(ci), x: a[1] / 10, z: a[2] / 10, walk: 0, fireT: 0 }; botViews.set(ci, v); }
+    v.tx = a[1] / 10; v.tz = a[2] / 10; v.aim = a[3] / 100; v.weapon = clamp(a[4] | 0, 0, 4); v.flags = a[5] | 0; v.hp = a[6] | 0;
+  }
+  for (const [ci, v] of botViews) if (!seen.has(ci)) { scene.remove(v.sp.group); botViews.delete(ci); }
+}
+function updateBotViews(dt) {
+  for (const v of botViews.values()) {
+    const k = Math.min(1, dt * 10), ox = v.x, oz = v.z;
+    v.x += ((v.tx ?? v.x) - v.x) * k; v.z += ((v.tz ?? v.z) - v.z) * k;
+    v.walk += Math.hypot(v.x - ox, v.z - oz) * 1.6;
+    const sp = v.sp;
+    sp.group.visible = !(v.flags & 8);
+    const down = v.flags & 4;
+    sp.mesh.rotation.x = down ? -Math.PI / 2 : 0;
+    setSpriteMap(sp, v.weapon);
+    setFrame(sp, dirFromAngle(v.aim || 0), v.flags & 1 ? Math.floor(v.walk) % 4 : 0);
+    sp.group.position.set(v.x, down ? 0.05 : 0, v.z);
+    v.fireT -= dt;
+    if (v.flags & 2 && !down && v.fireT <= 0 && v.weapon === 4) {
+      v.fireT = 1.0;
+      const a = v.aim, mx = v.x + Math.cos(a) * 0.7, mz = v.z + Math.sin(a) * 0.7;
+      bullets.push({ x: mx, z: mz, px: mx, pz: mz, vx: Math.cos(a) * 26, vz: Math.sin(a) * 26, dmg: 0, life: 0.6, pierce: 0, cosmetic: true });
+    }
+  }
+}
+
+// ================= CỔNG SẮT (HAMBLE) · CAMERA (LYCAS) =================
+const gateStates = {};      // chủ phòng/solo: trạng thái cổng của từng khu
+const GATE_CODES = ['closed', 'held', 'open'];
+function gateVisual(st) {
+  const g = world.pois.gate;
+  if (!g) return;
+  if (g.state === st && g.applied) return;
+  g.state = st; g.applied = true;
+  if (st === 'closed') {
+    g.gate.position.y = 0; g.gate.rotation.x = -1.2;
+    if (!world.colliders.boxes.includes(g.box)) world.colliders.boxes.push(g.box);
+  } else {
+    g.gate.position.y = 2.35; g.gate.rotation.x = -Math.PI / 2;
+    const i = world.colliders.boxes.indexOf(g.box); if (i >= 0) world.colliders.boxes.splice(i, 1);
+  }
+  g.plank.visible = st === 'open';
+  navBuild();
+}
+function gateAct(act, who) {
+  if (net.active && !net.host) { netEvent('gate', act); return; }
+  const g = world.pois.gate;
+  if (!g) return;
+  const st = gateStates[ZONE.id] || { s: 'closed', t: 0 };
+  if (act === 'lift' && st.s === 'closed') {
+    gateStates[ZONE.id] = { s: 'held', t: 18, bt: 0 };
+    showMsg('CỔNG ĐÃ ĐƯỢC NÂNG', (who || 'Hamble') + ' đang giữ cổng · chèn gỗ giữ cổng (cần 1 thanh gỗ)');
+    sound.unlock(); shake = Math.max(shake, 0.25);
+  } else if (act === 'prop' && st.s === 'held') {
+    gateStates[ZONE.id] = { s: 'open', t: 0 };
+    showMsg('ĐÃ CHÈN CỔNG', 'Lối hẻm đã mở cho cả đội');
+    sound.unlock();
+  }
+  gateVisual(gateStates[ZONE.id].s);
+}
+function updateGate(dt) {
+  const g = world.pois.gate;
+  if (!g || (net.active && !net.host)) return;
+  const st = gateStates[ZONE.id] || (gateStates[ZONE.id] = { s: 'closed', t: 0 });
+  gateVisual(st.s);
+  if (st.s !== 'held') return;
+  st.t -= dt; st.bt = (st.bt || 0) + dt;
+  // không có ai khác chèn: một bot (không phải Hamble) tự lấy gỗ chèn cổng
+  const helper = bots.find((b) => b.state === 'ok' && CHARS[b.ci].id !== 'hamble');
+  if (helper && st.bt > 3) { floaters.push({ x: helper.x, y: 2.5, z: helper.z, text: 'Tôi chèn cho!', t: 1.2, color: CHARS[helper.ci].color }); gateAct('prop', botName(helper.ci)); return; }
+  if (st.t <= 0) { gateStates[ZONE.id] = { s: 'closed', t: 0 }; gateVisual('closed'); showMsg('CỔNG SẬP XUỐNG', 'Không ai chèn kịp · nâng lại lần nữa'); sound.hit(g.x, g.z); }
+}
+function describeGate() {
+  const g = world.pois.gate, st = g.state || 'closed';
+  if (st === 'open') return { label: 'Cổng đã được chèn', can: false };
+  if (st === 'held') {
+    if (player.mod.lift) return { label: 'Đang giữ cổng · chờ bạn chèn gỗ', can: false };
+    return player.bag.wood > 0 ? { label: 'Chèn gỗ giữ cổng', can: true, time: 1.2 } : { label: 'Cần 1 thanh gỗ để chèn cổng', can: false };
+  }
+  if (player.mod.lift) return { label: 'Nâng cổng sắt', can: true, time: 2.2 * player.mod.liftTime };
+  if (botBusy('hamble', 'gate')) return { label: 'Hamble (bot) đang tới nâng cổng…', can: false };
+  if (botAvail('hamble')) return { label: 'Gọi Hamble (bot) nâng cổng', can: true, time: 0.3 };
+  const rh = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'hamble');
+  if (rh) return { label: `Cổng quá nặng · gọi ${rh.name} (Hamble)`, can: false };
+  return { label: 'Cổng sắt quá nặng · chỉ Hamble nâng nổi', can: false };
+}
+function doGate() {
+  const st = world.pois.gate.state || 'closed';
+  if (st === 'held' && !player.mod.lift && player.bag.wood > 0) { player.bag.wood--; gateAct('prop'); gainXP(5, true); return; }
+  if (st === 'closed' && player.mod.lift) { gateAct('lift', CHARS[player.char].name); gainXP(8, true); return; }
+  if (st === 'closed' && botAvail('hamble')) botTask('hamble', 'gate');
+}
+function describeCam() {
+  if (camReveal > 0) return { label: 'Đang xem camera…', can: false };
+  if (player.mod.hack) return { label: 'Hack camera an ninh', can: true, time: 1.5 };
+  if (botBusy('lycas', 'cctv')) return { label: 'Lycas (bot) đang tới hack camera…', can: false };
+  if (botAvail('lycas')) return { label: 'Gọi Lycas (bot) hack camera', can: true, time: 0.3 };
+  const rl = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'lycas');
+  if (rl) return { label: `Màn hình khoá mật khẩu · gọi ${rl.name} (Lycas)`, can: false };
+  return { label: 'Màn hình khoá mật khẩu · cần Lycas', can: false };
+}
+function doCam() {
+  if (player.mod.hack) { camHack(player.mod.camTime, player.mod.camLoot, CHARS[player.char].name); gainXP(8, true); }
+  else if (botAvail('lycas')) botTask('lycas', 'cctv');
+}
+// hack camera: cả đội trong khu đều thấy zombie (và chỗ còn đồ nếu đã học kỹ năng)
+let camLootOn = false;
+function camHack(sec, loot, who) {
+  if (net.active) netEvent('cam', Math.round(sec), loot ? 1 : 0);
+  camReveal = sec; camLootOn = !!loot;
+  showMsg('CAMERA AN NINH', `${who || 'Lycas'} đã hack camera · thấy mọi zombie trong ${Math.round(sec)} giây` + (loot ? ' · đánh dấu chỗ còn đồ' : ''));
+  sound.radio();
+}
+
 // ================= ZOMBIE ĐẶC BIỆT =================
 // Phình (nổ dịch xanh dụ cả bầy), Phun (axit), Vồ (đè người), Húc (lao húc văng),
 // Khóc (ngồi khóc, làm phiền thì nổi điên), Khổng lồ. Chủ phòng điều khiển; hiệu ứng lên người chơi
 // gửi qua sự kiện để máy của từng người tự áp dụng.
 let acidPools = [], globs = [];
-const keyOf = (t) => (t.me ? 'me' : t.peer);
+const keyOf = (t) => (t.me ? 'me' : t.bot || t.peer);
 function noticeSpecials() {
   for (const z of zombies) {
     if (z.state === 'dead' || !SPECIAL[z.skin] || seenSpecial.has(z.skin)) continue;
@@ -1944,10 +2323,15 @@ function specialState(z, dt) {
 function pinTarget(z, t) {
   z.state = 'pin'; z.pinKey = keyOf(t); z.pinT = 0; z.pinDmg = 0;
   if (t.me) setPinned(z.id);
+  else if (t.bot) { const b = bots.find((o) => 'b' + o.ci === t.bot); if (b) { b.pinnedBy = z.id; b.pinT = 0; } }
   else netEvent('pin', t.peer, z.id);
 }
 function releasePin(z, stun, fromVictim = false) {
-  if (!fromVictim) { if (z.pinKey === 'me') player.pinned = 0; else if (z.pinKey) netEvent('unpin', z.pinKey, z.id); }
+  if (!fromVictim) {
+    if (z.pinKey === 'me') player.pinned = 0;
+    else if (z.pinKey && z.pinKey[0] === 'b') { const b = bots.find((o) => 'b' + o.ci === z.pinKey); if (b) b.pinnedBy = 0; }
+    else if (z.pinKey) netEvent('unpin', z.pinKey, z.id);
+  }
   z.pinKey = null; z.state = 'stun'; z.stunT = stun; z.y = 0;
   z.x += rand(-0.8, 0.8); z.z += rand(-0.4, 0.4); collide(z);
 }
@@ -1965,6 +2349,7 @@ function breakPin() {
 }
 function chargeHit(z, t) {
   if (t.me) knockPlayer(z.cdx, z.cdz, z.dmg);
+  else if (t.bot) { const b = bots.find((o) => 'b' + o.ci === t.bot); if (b) { b.x += z.cdx * 2; b.z += z.cdz * 2; collide(b); hurtBot(t.bot, z.dmg); } }
   else netEvent('chg', t.peer, Math.round(z.cdx * 100), Math.round(z.cdz * 100), z.dmg);
 }
 function knockPlayer(dx, dz, dmg) {
@@ -2135,6 +2520,7 @@ function loadZone(id, entry) {
   curBuilding = null; interact.target = null; interact.t = 0; player.action = null; player.searching = false;
   camReveal = 0;
   if (player.zombie) { placeAtEntry(entry); turnZombiePlace(); } else placeAtEntry(entry);
+  if (!net.active || net.host) placeBots(); else { for (const v of botViews.values()) scene.remove(v.sp.group); botViews.clear(); }
   if (state.mode === 'play' && (!net.active || net.host)) {
     spawnLurkers();
     for (let i = 0; i < (phase === 'night' ? 1 : 2); i++) spawnStray();
@@ -2241,7 +2627,7 @@ function toggleFlashlight() {
   sound.reload(); hud.dirty = true;
 }
 function consumeBattery() {
-  if (player.bag.battery > 0) { player.bag.battery--; player.battery = BATTERY_TIME; lootFeed('battery', 'Thay pin đèn pin'); hud.dirty = true; return true; }
+  if (player.bag.battery > 0) { player.bag.battery--; player.battery = BATTERY_TIME * player.mod.battery; lootFeed('battery', 'Thay pin đèn pin'); hud.dirty = true; return true; }
   lootFeed('flashlight', 'Đèn pin hết pin · cần thêm Pin', true);
   return false;
 }
@@ -2339,27 +2725,29 @@ function pickDrop(d) {
 function nearMates(r = 2.6) {
   const out = [];
   if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && !(rp.flags & (8 | 16 | 128)) && Math.hypot(rp.x - player.x, rp.z - player.z) < r) out.push(rp);
+  for (const b of allBots()) if (b.state === 'ok' && Math.hypot(b.x - player.x, b.z - player.z) < r) out.push({ peer: 'b' + b.ci, name: CHARS[b.ci].name, bot: true, flags: 0 });
   return out;
 }
 function giveTo(it, rp) {
   const def = ITEMS[it];
   if (!def.give || !(player.bag[it] > 0) || player.action || state.mode !== 'play') return;
   if (it === 'antidote' && !(rp.flags & 64)) { lootFeed(it, `${rp.name} chưa nhiễm virus`, true); return; }
-  player.action = { item: it, t: 0, dur: def.time, target: rp.peer, targetName: rp.name };
+  if (rp.bot && !def.heal) { lootFeed(it, `${rp.name} (bot) không cần`, true); return; }
+  player.action = { item: it, t: 0, dur: def.time, target: rp.peer, targetName: rp.name, bot: !!rp.bot };
   player.reloading = 0;
   sound.use(def.use);
 }
-function receiveGift(it, rp) {
+function receiveGift(it, rp, mul = 1) {
   const def = ITEMS[it];
   if (!def || !def.give) return;
   const who = rp && rp.name ? rp.name : 'Đồng đội';
   if (def.use === 'cure') { if (player.infected > 0) cureInfection(who); return; }
-  applyItemEffect(it);
+  applyItemEffect(it, mul);
   showMsg('ĐƯỢC GIÚP', `${who} đã dùng ${def.name.toLowerCase()} cho bạn`);
 }
-function applyItemEffect(it) {
+function applyItemEffect(it, mul = 1) {
   const def = ITEMS[it];
-  if (def.heal) { player.hp = Math.min(player.maxHp, player.hp + def.heal); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${def.heal} MÁU`, t: 1.2, color: '#7fe07f' }); }
+  if (def.heal) { const h = Math.round(def.heal * mul); player.hp = Math.min(player.maxHp, player.hp + h); floaters.push({ x: player.x, y: 2.3, z: player.z, text: `+${h} MÁU`, t: 1.2, color: '#7fe07f' }); }
   if (def.food) { player.food = Math.min(100, player.food + def.food); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NO BỤNG', t: 1.0, color: '#e8a860' }); }
   if (def.water) { player.water = Math.min(100, player.water + def.water); floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'HẾT KHÁT', t: 1.0, color: '#7ac8f0' }); }
   sound.pickup(); hud.dirty = true; renderBagIfOpen();
@@ -2376,16 +2764,116 @@ function craft(id) {
     lootFeed(R.out, 'Thiếu ' + miss, true);
     return;
   }
-  player.action = { item: 'craft', recipe: R.id, t: 0, dur: R.time, label: R.label + '…' };
+  player.action = { item: 'craft', recipe: R.id, t: 0, dur: R.time * player.mod.craftTime, label: R.label + '…' };
   player.reloading = 0;
   sound.use('heal');
 }
 function finishCraft(R) {
   if (!canCraft(R)) return;
   for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
-  const got = addItem(R.out, R.n);
+  const M = player.mod;
+  const n = R.out === 'antidote' ? M.antidoteOut : R.out === 'arrow' ? M.arrows : R.out === 'ammo9' ? R.n + M.ammoCraft : R.out === 'shells' ? R.n + Math.ceil(M.ammoCraft / 2) : R.n;
+  const got = addItem(R.out, n);
+  gainXP(4, true);
   lootFeed(R.out, `+${got} ${ITEMS[R.out].name}`); sound.unlock(); hud.dirty = true; renderBagIfOpen();
   if (R.out === 'antidote' && player.infected > 0) useItem('antidote');
+}
+
+
+// ================= NHÂN VẬT: CHỌN, KỸ NĂNG =================
+function pickChar(ci) {
+  myChar = clamp(ci | 0, 0, CHARS.length - 1);
+  store.set('deadnight_char', String(myChar));
+  if (net.room) net.room.presence({ c: myChar }).catch(() => {});
+  renderRoom(); renderCharSel();
+}
+function charCard(ci, taken, compact) {
+  const c = CHARS[ci], d = document.createElement('button');
+  d.className = 'cc' + (ci === myChar ? ' on' : '') + (taken ? ' taken' : '') + (compact ? ' compact' : '');
+  d.disabled = !!taken;
+  const cv = charPortrait(ci, c.pal, compact ? 2 : 3);
+  cv.className = 'cp';
+  d.appendChild(cv);
+  const t = document.createElement('div');
+  t.className = 'ct';
+  const prog = loadProgress(ci);
+  t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span>(${c.nat})</span><br><i>${c.role}</i> · ♥${c.hp} · cấp ${prog.level}` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
+  d.appendChild(t);
+  d.addEventListener('click', () => pickChar(ci));
+  return d;
+}
+function renderCharPick(el, taken = new Map()) {
+  if (!el) return;
+  el.innerHTML = '';
+  CHARS.forEach((c, i) => el.appendChild(charCard(i, taken.get(i), true)));
+}
+function renderCharSel() {
+  const el = $('cs-grid');
+  if (!el || $('charsel').classList.contains('hidden')) return;
+  el.innerHTML = '';
+  CHARS.forEach((c, i) => el.appendChild(charCard(i, null, false)));
+}
+function openCharSel() { $('title').classList.add('hidden'); $('charsel').classList.remove('hidden'); renderCharSel(); }
+function closeCharSel() { $('charsel').classList.add('hidden'); if (state.mode === 'title') $('title').classList.remove('hidden'); }
+
+// ---------- cây kỹ năng ----------
+let skillsOpen = false;
+function toggleSkills(force) {
+  if (state.mode !== 'play') return;
+  skillsOpen = force !== undefined ? force : !skillsOpen;
+  $('skills').classList.toggle('hidden', !skillsOpen);
+  if (!net.active) state.paused = skillsOpen || bagOpen || mapOpen;
+  if (skillsOpen) renderSkills();
+}
+function renderSkills() {
+  const c = CHARS[player.char];
+  $('sk-title').textContent = `${c.name.toUpperCase()} · CẤP ${player.level}`;
+  $('sk-xp').innerHTML = `Kinh nghiệm ${player.xp}/${xpNeed(player.level)} · <b style="color:var(--gold)">${player.sp} điểm kỹ năng</b> · ${c.role}: ${c.desc}`;
+  const grid = $('sk-grid');
+  grid.innerHTML = '';
+  for (const br of SKILLS[c.id]) {
+    const col = document.createElement('div'); col.className = 'skb';
+    col.innerHTML = `<h3>${br.name}</h3>` + (br.locked ? `<div class="sk-lock">${br.locked}</div>` : '');
+    br.nodes.forEach((n, i) => {
+      const have = player.learned.has(n.id), prev = i === 0 || player.learned.has(br.nodes[i - 1].id);
+      const can = !br.locked && !have && prev && player.sp > 0;
+      const b = document.createElement('button');
+      b.className = 'skn' + (have ? ' have' : can ? ' can' : '');
+      b.disabled = !can;
+      b.innerHTML = `<b>${have ? '✓ ' : ''}${n.name}</b><br><small>${n.desc}</small>`;
+      b.addEventListener('click', () => {
+        if (!can) return;
+        player.sp--; player.learned.add(n.id);
+        applyMods(); saveProgress(); sound.unlock(); renderSkills();
+        lootFeed(null, `Đã học: ${n.name}`);
+      });
+      col.appendChild(b);
+    });
+    grid.appendChild(col);
+  }
+}
+// Hamble: húc văng zombie xung quanh (cần học kỹ năng)
+function shove() {
+  if (!player.mod.shove || state.mode !== 'play' || player.zombie || player.pinned) return;
+  if (player.shoveT > 0) { lootFeed(null, `Húc lại sau ${Math.ceil(player.shoveT)} giây`, true); return; }
+  player.shoveT = 7 * player.mod.shoveCd;
+  shake = Math.max(shake, 0.4); sound.hit(player.x, player.z);
+  for (let i = 0; i < 18; i++) { const a = (i / 18) * TAU; fx.lit.spawn(player.x + Math.cos(a) * 0.8, 0.2, player.z + Math.sin(a) * 0.5, Math.cos(a) * 4, rand(0.5, 1.5), Math.sin(a) * 3, 0.6, 0.12, '#8a7a62', { grav: 3, drag: 3 }); }
+  if (net.active && !net.host) netEvent('shv', Math.round(player.x * 10), Math.round(player.z * 10));
+  else shoveAt(player.x, player.z);
+  floaters.push({ x: player.x, y: 2.4, z: player.z, text: 'HÚC!', t: 0.8, color: '#f2a13e' });
+}
+function shoveAt(x, z0) {
+  for (const z of zombies) {
+    if (z.state !== 'walk' && z.state !== 'pin' && z.state !== 'charge') continue;
+    const dx = z.x - x, dz = z.z - z0, d = Math.hypot(dx, dz);
+    if (d > 2.4 || d < 0.01) continue;
+    if (z.state === 'pin') releasePin(z, 2.5);
+    const k = z.type === 'brute' || z.type === 'charger' ? 0.8 : 2.2;
+    z.x += dx / d * k; z.z += dz / d * k; collide(z);
+    z.state = 'stun'; z.stunT = 1.6; if (!z.aggro) wake(z);
+    damageZombie(z, 12, Math.atan2(dz, dx), 0, z.x, z.z, true);
+  }
 }
 
 // ================= HUD =================
@@ -2408,7 +2896,7 @@ function updateHud() {
   const hh = ((atmos.hour % 24) + 24) % 24, clock = String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0');
   setText('night', phase === 'day' || phase === 'dawn' ? `NGÀY ${Math.max(1, dayNo)}` : `ĐÊM ${phase === 'dusk' ? wave + 1 : wave}`);
   setText('atmo', `${clock} · ${atmos.weatherName}`);
-  if (phase === 'day' || net.active) hud.dirty = true;
+  if (phase === 'day' || net.active || bots.length) hud.dirty = true;
   if (!hud.dirty) return;
   hud.dirty = false;
   const w = WEAPONS[player.weapon], g = curGun();
@@ -2431,16 +2919,22 @@ function updateHud() {
   if (net.active) {
     const rows = [];
     const mmss = (sec) => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-    for (const rp of net.players.values()) if (rp.inited) rows.push(`<div style="color:${PLAYER_COLORS[rp.color || 0]}">${rp.name.replace(/[<>&]/g, '')} · ${rp.flags & 16 ? 'đã lên trực thăng' : rp.flags & 128 ? '<b style="color:#b8e08a;font-weight:400">ZOMBIE · cần hoa</b>' : rp.flags & 4 ? '<b style="color:#ff6a5a;font-weight:400">GỤC NGÃ</b>' : '♥ ' + rp.hp + (rp.flags & 64 ? ` <b style="color:#9aff7a;font-weight:400">virus ${mmss(rp.inf || 0)}</b>` : '')}</div>`);
+    for (const rp of net.players.values()) if (rp.inited) rows.push(`<div style="color:${CHARS[rp.char || 0].color}">${rp.name.replace(/[<>&]/g, '')} (${CHARS[rp.char || 0].name}) · ${rp.flags & 16 ? 'đã lên trực thăng' : rp.flags & 128 ? '<b style="color:#b8e08a;font-weight:400">ZOMBIE · cần hoa</b>' : rp.flags & 4 ? '<b style="color:#ff6a5a;font-weight:400">GỤC NGÃ</b>' : '♥ ' + rp.hp + (rp.flags & 64 ? ` <b style="color:#9aff7a;font-weight:400">virus ${mmss(rp.inf || 0)}</b>` : '')}</div>`);
+    for (const b of allBots()) rows.push(`<div style="color:${CHARS[b.ci].color}">${botName(b.ci)} · ${b.state === 'out' ? 'đã ngất' : b.state === 'down' ? '<b style="color:#ff6a5a;font-weight:400">GỤC NGÃ</b>' : '♥ ' + Math.round(b.hp)}</div>`);
     const html = rows.join('');
     if (hud.last.team !== html) { hud.last.team = html; team.innerHTML = html; }
-  } else if (hud.last.team) { hud.last.team = ''; team.innerHTML = ''; }
+  } else {
+    const html = allBots().map((b) => `<div style="color:${CHARS[b.ci].color}">${botName(b.ci)} · ${b.state === 'out' ? 'đã ngất' : b.state === 'down' ? '<b style="color:#ff6a5a;font-weight:400">GỤC NGÃ</b>' : '♥ ' + Math.round(b.hp)}</div>`).join('');
+    if (hud.last.team !== html) { hud.last.team = html; team.innerHTML = html; }
+  }
   document.querySelectorAll('#quick .qi').forEach((el) => {
     const it = el.dataset.it, n = player.bag[it] || 0;
-    el.querySelector('b').textContent = it === 'flashlight' ? (n ? Math.ceil(player.battery / BATTERY_TIME * 100) + '%' : '0') : it === 'torch' && player.torchT > 0 ? Math.ceil(player.torchT) + 's' : n;
+    el.querySelector('b').textContent = it === 'flashlight' ? (n ? Math.ceil(player.battery / (BATTERY_TIME * player.mod.battery) * 100) + '%' : '0') : it === 'torch' && player.torchT > 0 ? Math.ceil(player.torchT) + 's' : n;
     el.classList.toggle('zero', it === 'flashlight' ? !n || !player.flashOn : it === 'torch' ? !n && !(player.torchT > 0) : !n);
   });
   setText('zone-tag', ZONE.name);
+  setText('char-tag', `${CHARS[player.char].name} · cấp ${player.level}` + (player.sp ? ` · ${player.sp} điểm KN` : ''));
+  $('xp-fill').style.width = Math.min(100, player.xp / xpNeed(player.level) * 100).toFixed(1) + '%';
 }
 
 // ================= ÁNH SÁNG, KHÍ QUYỂN =================
@@ -2655,7 +3149,7 @@ function updatePlayer(dt) {
   if (player.infected > 0) {
     player.infected -= dt;
     player.coughT -= dt;
-    if (player.coughT <= 0) { player.coughT = rand(9, 20) * (0.35 + player.infected / INFECT_TIME); sound.cough(); }
+    if (player.coughT <= 0) { player.coughT = rand(9, 20) * (0.35 + player.infected / (player.infMax || INFECT_TIME)); sound.cough(); }
     if (player.infected <= 0) { turnZombie(); return; }
   }
   if (player.bile > 0) player.bile -= dt;
@@ -2684,6 +3178,7 @@ function updatePlayer(dt) {
     if (Math.abs(player.kx) + Math.abs(player.kz) < 0.25) player.kx = player.kz = 0;
   }
   if (player.stunT > 0) player.stunT -= dt;
+  if (player.shoveT > 0) player.shoveT -= dt;
   let mx = 0, mz = 0;
   if (keys.KeyW || keys.ArrowUp) mz -= 1;
   if (keys.KeyS || keys.ArrowDown) mz += 1;
@@ -2695,7 +3190,7 @@ function updatePlayer(dt) {
   if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
   if (player.stunT > 0) { mx = mz = 0; mag = 0; }
   const sprint = (keys.ShiftLeft || keys.ShiftRight || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
-  player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22) * dt, 0, 1);
+  player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22 * player.mod.stamina) * dt, 0, 1);
   const spd = player.speed * (sprint ? 1.55 : 1) * mag * (player.action || player.searching ? 0.45 : 1);
   player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
   collide(player);
@@ -2835,7 +3330,7 @@ function updateZombies(dt) {
       // chưa phát hiện: đứng lắc lư / đi lang thang quanh chỗ cũ; tỉnh khi người chơi lại gần
       const zb = buildingAt(z.x, z.z);
       let near = false;
-      for (const t of TG) { const pd = Math.hypot(t.x - z.x, t.z - z.z), same = zb === t.b; if (pd < (same ? 6.5 : 3.2) || (same && !t.b && pd < 8.5)) near = true; }
+      for (const t of TG) { const pd = Math.hypot(t.x - z.x, t.z - z.z) / (t.det || 1), same = zb === t.b; if (pd < (same ? 6.5 : 3.2) || (same && !t.b && pd < 8.5)) near = true; }
       if (state.mode === 'play' && near) wake(z);
       else {
         z.wt = (z.wt || 0) - dt;
@@ -2888,6 +3383,9 @@ function updateZombies(dt) {
       z.atkT = z.atkCd;
       hurtPlayer(z, d);
       if (state.mode !== 'play') return;
+    } else if (T.bot && d < z.r + 0.34 + 0.28 && z.atkT <= 0) {
+      z.atkT = z.atkCd;
+      hurtBot(T.bot, z.dmg);
     }
   }
 }
@@ -2899,7 +3397,7 @@ function updateBullets(dt) {
     b.x += b.vx * dt; b.z += b.vz * dt; b.life -= dt;
     let dead = b.life <= 0 || b.x < BOUNDS.x0 - 6 || b.x > BOUNDS.x1 + 6 || b.z > BOUNDS.z1 + 14;
     if (!dead && bulletBlocked(b.x, b.z)) {
-      dead = true;
+      dead = true; b.wall = true;
       for (let k = 0; k < 6; k++) fx.spark.spawn(b.x, 1, b.z, rand(-3, 3), rand(0, 3), rand(-3, 3), rand(0.1, 0.25), 0.06, '#ffe0a0', { grav: 8, mode: 1 });
       for (let k = 0; k < 3; k++) fx.lit.spawn(b.x, 1, b.z, rand(-1, 1), rand(0, 2), rand(-1, 1), 0.8, 0.08, '#8a8070', { grav: 9 });
       sound.hit(b.x, b.z);
@@ -2913,12 +3411,18 @@ function updateBullets(dt) {
         const t = clamp(((z.x - b.px) * sx + (z.z - b.pz) * sz) / sl, 0, 1);
         const cx = b.px + sx * t, cz = b.pz + sz * t;
         if ((z.x - cx) ** 2 + (z.z - cz) ** 2 < (z.r + 0.14) ** 2) {
-          damageZombie(z, b.dmg, Math.atan2(b.vz, b.vx), 0.16, cx, cz);
+          damageZombie(z, b.dmg, Math.atan2(b.vz, b.vx), b.arrow ? 0.3 : 0.16, cx, cz, !!b.bot);
           if (b.pierce-- <= 0) { dead = true; break; }
         }
       }
     }
-    if (dead) bullets.splice(i, 1);
+    if (dead) {
+      if (b.arrow && b.mine && Math.random() < player.mod.arrowRecover) {
+        const ax = b.wall ? b.px : b.x, az = b.wall ? b.pz : b.z;
+        addDropLocal({ id: dropTmp--, it: 'arrow', n: 1, x: clamp(ax, BOUNDS.x0, BOUNDS.x1), z: clamp(az, BOUNDS.z0, BOUNDS.z1) });
+      }
+      bullets.splice(i, 1);
+    }
   }
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), E = new THREE.Euler();
   let n = 0;
@@ -3026,7 +3530,7 @@ function draw2D() {
         const left = sx < 30, ex = left ? 36 : W - 36, ey = H * 0.42 + (rp.color || 0) * 26;
         g.font = '18px "VT323", monospace';
         g.fillStyle = 'rgba(10,8,14,.8)'; g.fillRect(ex - 58, ey - 15, 116, 22);
-        g.fillStyle = rp.flags & 128 ? '#b8e08a' : PLAYER_COLORS[rp.color || 0];
+        g.fillStyle = rp.flags & 128 ? '#b8e08a' : CHARS[rp.char || 0].color;
         g.fillText(`${left ? '◀ ' : ''}${rp.name} ${Math.round(Math.abs(rp.x - player.x))}m${left ? '' : ' ▶'}`, ex, ey + 1);
       }
     }
@@ -3044,9 +3548,32 @@ function draw2D() {
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
     g.font = '18px "VT323", monospace';
     g.fillStyle = '#000'; g.fillText(rp.name, x + 1, y + 1);
-    g.fillStyle = PLAYER_COLORS[rp.color || 0]; g.fillText(rp.name, x, y);
+    g.fillStyle = CHARS[rp.char || 0].color; g.fillText(rp.name, x, y);
     if (down) { g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('GỤC NGÃ · giữ E để cứu', x, y - 18); }
     else { g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 16, y + 4, 32, 5); g.fillStyle = '#7fe07f'; g.fillRect(x - 15, y + 5, 30 * clamp(rp.hp / 100, 0, 1), 3); }
+  }
+  // bot đồng đội: tên + máu
+  if (state.mode !== 'title') for (const b of allBots()) {
+    if (b.state === 'out') continue;
+    const down = b.state === 'down';
+    tmpV.set(b.x, down ? 0.9 : 2.3, b.z).project(camera);
+    const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
+    g.font = '17px "VT323", monospace';
+    const nm = botName(b.ci);
+    g.fillStyle = '#000'; g.fillText(nm, x + 1, y + 1); g.fillStyle = CHARS[b.ci].color; g.fillText(nm, x, y);
+    if (down) { g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('GỤC NGÃ · giữ E để cứu', x, y - 17); }
+    else { g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 16, y + 4, 32, 5); g.fillStyle = '#7fe07f'; g.fillRect(x - 15, y + 5, 30 * clamp(b.hp / b.maxHp, 0, 1), 3); }
+  }
+  // camera an ninh + kỹ năng đánh dấu đồ: chỗ còn đồ chưa lục
+  if (state.mode === 'play' && camReveal > 0 && camLootOn) {
+    for (const c of world.containers) {
+      if (player.looted.has(c.id) || Math.abs(c.x - camTarget.x) > 20) continue;
+      tmpV.set(c.x, 1.6, c.z).project(camera);
+      const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+      g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x - 5, y - 5, 10, 10);
+      g.fillStyle = Math.floor(gtime * 3) % 2 ? '#f2c14e' : '#fff0b0'; g.fillRect(x - 3, y - 3, 6, 6);
+    }
   }
   if (state.mode === 'play' && interact.target && !bagOpen) {
     const tg = interact.target, inf = tg.info;
@@ -3143,8 +3670,8 @@ function startGame() {
   setSpriteMap(player.sprite, player.weapon);
   wave = 0; kills = 0; score = 0; shake = 0; hurtFlash = 0;
   state.mode = 'play'; state.paused = false; playStart = gtime;
-  for (const id of ['title', 'over', 'pause', 'win', 'bag']) $(id).classList.add('hidden');
-  bagOpen = false;
+  for (const id of ['title', 'over', 'pause', 'win', 'bag', 'charsel', 'skills', 'citymap']) $(id).classList.add('hidden');
+  bagOpen = false; skillsOpen = false; mapOpen = false;
   document.body.classList.add('playing');
   hud.dirty = true;
   resetWorldState(); questReset();
@@ -3155,6 +3682,8 @@ function startGame() {
   player.downed = 0; player.dead = false; player.boarded = false;
   setZombieLook(false); clearFlowers(); flowerDay = -1; $('t-use').textContent = 'LỤC';
   if (!net.active || net.host) { spawnLurkers(); for (let i = 0; i < 3; i++) spawnStray(); }
+  for (const k in gateStates) delete gateStates[k];
+  if (!net.active || net.host) makeBots(); else clearBots();
   net.gameId = Math.floor(Math.random() * 1e9);
   sound.generator(false); sound.heli(false);
   // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<giờ>&w=<rain|storm|fog|blood>&px=..
@@ -3188,6 +3717,7 @@ function gameOver(title) {
   setTimeout(() => $('over').classList.remove('hidden'), 900);
 }
 function toMenu() {
+  clearBots();
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = []; floaters = [];
   for (const id of ['over', 'win', 'pause', 'bag']) $(id).classList.add('hidden');
@@ -3299,6 +3829,8 @@ function init() {
   if (QS.has('debug')) window.__dbgGive = (it, n) => addItem(it, n);
   if (QS.has('debug')) window.__dbgGod = () => { player.hp = player.maxHp = 1e5; };
   if (QS.has('debug')) window.__dbgHurt = (n) => { player.hp = Math.max(1, player.hp - n); };
+  if (QS.has('debug')) window.__bots = () => ({ bots: bots.map((b) => [CHARS[b.ci].id, b.state, +b.x.toFixed(1), +b.z.toFixed(1), Math.round(b.hp), b.task ? b.task.poi : null]), views: [...botViews.values()].map((v) => [CHARS[v.ci].id, +v.x.toFixed(1), v.flags]), gate: world.pois.gate ? world.pois.gate.state : null, gs: gateStates[ZONE.id] || null, cam: +camReveal.toFixed(1), me: CHARS[player.char].id, lv: player.level, sp: player.sp, xp: player.xp, hp: [Math.round(player.hp), player.maxHp], zone: ZONE.id, pos: [+player.x.toFixed(1), +player.z.toFixed(1)] });
+  if (QS.has('debug')) window.__sp = (n) => { player.sp += n; hud.dirty = true; };
   if (QS.has('debug')) window.__hostZone = (id, entry) => { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = entry; net.zoneSeqSeen = net.zoneSeq; requestZone(id, entry); };
   if (QS.has('debug')) window.__net = () => { const hp = net.room && net.room.peers().find((q) => q.peer === net.hostPeer); return { host: net.host, hostPeer: net.hostPeer, me: net.me, seen: net.zoneSeqSeen, seq: net.zoneSeq, zn: hp && hp.presence && hp.presence.w ? hp.presence.w.zn : null, busy: zt.busy, zone: ZONE.id }; };
   if (QS.has('debug')) window.__dbgDown = () => { player.maxHp = 100; player.hp = 0; playerDied(); };
@@ -3346,7 +3878,7 @@ function frame(now) {
       if (k) { gtime += dt; U.time.value = gtime; }
       if (zt.busy) break;
       updatePlayer(dt);
-      if (state.mode === 'play') updateZombies(dt);
+      if (state.mode === 'play') { updateZombies(dt); updateBots(dt); updateGate(dt); }
       if (state.mode === 'play') {
         updateBullets(dt); updatePickups(dt);
         if (!net.active || net.host) { updateWaves(dt); if (phase !== 'shot') updatePhase(dt); }
@@ -3389,7 +3921,7 @@ function frame(now) {
   // nhiễm virus: màn hình ngả xanh dần; khi là zombie: nhạt màu, ánh lục
   if (state.mode === 'play' && player.zombie) { post.params.tint = [0.82, 1.08, 0.78]; post.params.sat *= 0.55; post.params.vignette = Math.min(1, post.params.vignette + 0.35); }
   else if (state.mode === 'play' && player.bile > 0) { post.params.tint = [0.85, 1.12, 0.7]; post.params.vignette = Math.min(1, post.params.vignette + 0.3); }
-  else if (state.mode === 'play' && player.infected > 0) { const k = 1 - player.infected / INFECT_TIME; post.params.tint = [1 - 0.14 * k, 1 + 0.04 * k, 1 - 0.2 * k]; post.params.vignette = Math.min(1, post.params.vignette + 0.3 * k + 0.08 * k * Math.sin(gtime * 3)); }
+  else if (state.mode === 'play' && player.infected > 0) { const k = 1 - player.infected / (player.infMax || INFECT_TIME); post.params.tint = [1 - 0.14 * k, 1 + 0.04 * k, 1 - 0.2 * k]; post.params.vignette = Math.min(1, post.params.vignette + 0.3 * k + 0.08 * k * Math.sin(gtime * 3)); }
   else post.params.tint = [1, 1, 1];
   aura.position.set(player.x, 2.2, player.z + 0.6); aura.intensity = (fOn || player.torchT > 0 ? 3.5 : 2.2) * A.flash;
   beam.visible = state.mode === 'play' && fOn;
@@ -3434,7 +3966,13 @@ function frame(now) {
 }
 
 // ================= NÚT BẤM =================
-$('start-btn').addEventListener('click', startGame);
+$('start-btn').addEventListener('click', openCharSel);
+$('cs-go').addEventListener('click', () => { $('charsel').classList.add('hidden'); startGame(); });
+$('cs-back').addEventListener('click', closeCharSel);
+$('sk-close').addEventListener('click', () => toggleSkills(false));
+$('t-skill').addEventListener('touchstart', (e) => { e.preventDefault(); toggleSkills(); }, { passive: false });
+$('t-skill').addEventListener('click', () => toggleSkills());
+$('t-shove').addEventListener('touchstart', (e) => { e.preventDefault(); shove(); }, { passive: false });
 $('view-btn').addEventListener('click', startView);
 $('px-btn').addEventListener('click', cyclePixel);
 $('dur-btn').addEventListener('click', () => {
@@ -3483,7 +4021,7 @@ addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
 $('help').innerHTML = isTouch
   ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn · Giữ LỤC: lục soát/nhặt<br>R: nạp đạn · ⇄: đổi vũ khí · TÚI: túi đồ, chế tạo, vứt/cho đồ · MAP: bản đồ · Nên xoay ngang màn hình'
-  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát/nhặt<br>R: nạp đạn · 1-4/Q: đổi vũ khí · F: băng bó · C: ăn/uống · V: thuốc giải · T: đuốc · L: đèn pin · I: túi đồ · M: bản đồ';
+  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát/nhặt<br>R: nạp đạn · 1-5/Q: đổi vũ khí · F: băng bó · C: ăn/uống · V: thuốc giải · T: đuốc · L: đèn pin · I: túi đồ · M: bản đồ · K: kỹ năng · G: húc (Hamble)';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

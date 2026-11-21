@@ -192,7 +192,9 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
       rect(lx0, t0 + 6 + swing, lx0 + aw - 1, t0 + 7 + swing, pal.skin);
       rect(rx0, t0 + 1, rx0 + aw - 1, t0 + 5 - swing, (x) => (x === rx0 + aw - 1 ? pal.topS : pal.top));
       rect(rx0, t0 + 6 - swing, rx0 + aw - 1, t0 + 7 - swing, pal.skin);
-      if (view === 'down') {
+      if (view === 'down' && o.weapon === 'bow') {
+        for (let k = 0; k < 9; k++) put(lx0 - 2 + (k > 1 && k < 7 ? -1 : 0), t0 + 3 + swing + k, '#8a5a2a');
+      } else if (view === 'down') {
         const gl = o.weapon === 'shotgun' ? 5 : o.weapon === 'smg' ? 4 : 3;
         rect(lx0 - 1, t0 + 7 + swing, lx0, t0 + 7 + swing + gl, (x, y) => (x === lx0 - 1 ? pal.gunL : pal.gun));
       }
@@ -212,7 +214,12 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
       const w = o.weapon;
       const gl = w === 'shotgun' ? 9 : w === 'smg' ? 6 : 4;
       if (w === 'knife') { rect(cx + 6, sy, cx + 9, sy, pal.gunL); put(cx + 10, sy, pal.gunL); put(cx + 5, sy, pal.gun); put(cx + 5, sy + 1, pal.gun); }
-      else {
+      else if (w === 'bow') {
+        // cung gỗ dựng đứng trước người + dây cung
+        for (let k = -6; k <= 6; k++) put(cx + 7 + (Math.abs(k) < 4 ? 1 : 0) - (Math.abs(k) > 5 ? 1 : 0), sy + k, k === 0 ? '#3a2414' : '#8a5a2a');
+        for (let k = -5; k <= 5; k++) put(cx + 6, sy + k, '#e8e0d0');
+        put(cx + 5, sy, pal.gun);
+      } else {
       rect(cx + 5, sy - 1, cx + 5 + gl, sy, (x, y) => (y === sy - 1 ? pal.gunL : pal.gun));
       rect(cx + 5, sy + 1, cx + 6, sy + 2, pal.gun);
       }
@@ -319,7 +326,23 @@ function survivorSet(pal) {
     pistol: buildAtlas(SPEC.normal, pal, { weapon: 'pistol' }),
     shotgun: buildAtlas(SPEC.normal, pal, { weapon: 'shotgun' }),
     smg: buildAtlas(SPEC.normal, pal, { weapon: 'smg' }),
+    bow: buildAtlas(SPEC.normal, pal, { weapon: 'bow' }),
   };
+}
+// bộ hình của từng nhân vật chơi được (bảng màu riêng)
+const charCache = [];
+export function charSprites(i, pal) {
+  if (!charCache[i]) charCache[i] = survivorSet({ ...PAL_SURVIVOR, ...pal });
+  return charCache[i];
+}
+// chân dung nhỏ cho màn chọn nhân vật (khung nhìn thẳng, đứng yên)
+export function charPortrait(i, pal, scale = 4) {
+  const a = charSprites(i, pal).knife;
+  const fw = Math.round(a.w * PPU), fh = Math.round(a.h * PPU);
+  const c = document.createElement('canvas'); c.width = fw * scale; c.height = fh * scale;
+  const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  g.drawImage(a.canvas, 0, 0, fw, fh, 0, 0, fw * scale, fh * scale);
+  return c;
 }
 const playerCache = [];
 export function playerSprites(i) {
@@ -348,7 +371,7 @@ export function makeCharacterSprites() {
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 22, P = new Pix(16 * N, 16);
+  const N = 23, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
   // 0 đạn 9mm
   { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
@@ -396,6 +419,8 @@ export function makeItemIcons() {
   { const r = at(20); for (let i = 0; i < 2; i++) { r(3 + i * 6, 3, 4, 11, '#2a6ac8'); r(3 + i * 6, 3, 1, 11, '#5a9ae8'); r(4 + i * 6, 1, 2, 2, '#c8c8c8'); r(3 + i * 6, 10, 4, 4, '#1a1a1e'); } }
   // 21 súng lục
   { const r = at(21); r(2, 5, 11, 3, '#2a2a30'); r(2, 5, 11, 1, '#6a6a7c'); r(9, 8, 4, 6, '#3a2a22'); r(9, 8, 1, 6, '#5a4232'); r(7, 8, 2, 2, '#2a2a30'); }
+  // 22 tên (mũi tên)
+  { const r = at(22); for (let i = 0; i < 3; i++) { const o = i * 3; for (let k = 0; k < 10; k++) r(3 + k + (i === 1 ? 1 : 0), 14 - k - o, 1, 1, '#a8845a'); r(12 + (i === 1 ? 1 : 0), 5 - o, 2, 2, '#c8c8d0'); r(2 + (i === 1 ? 1 : 0), 13 - o, 2, 2, '#e84a3a'); } }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
 }

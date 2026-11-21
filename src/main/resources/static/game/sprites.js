@@ -383,6 +383,8 @@ export function makeCharacterSprites() {
     brute: [21].map((s) => buildAtlas(SPEC.brute, zombiePalette(s, 'brute'), { zombie: true, kind: 'brute' })),
     cop: [31, 32].map((s) => buildAtlas(SPEC.normal, uni(s, ['#2a3a5a', '#1a2640', '#4a5a7a'], ['#1e2230', '#12141e']), { zombie: true, kind: 'walker' })),
     soldier: [41, 42].map((s) => buildAtlas(SPEC.normal, uni(s, ['#4a5a3a', '#34402a', '#66764e'], ['#3a4a2e', '#28321e']), { zombie: true, kind: 'walker' })),
+    // học sinh đồng phục (áo trắng, quần xanh đậm)
+    student: [5, 6, 8].map((s) => buildAtlas(SPEC.normal, uni(s, ['#dcdce0', '#acacb8', '#f0f0f4'], ['#2a3a6a', '#1c2848']), { zombie: true, kind: 'walker' })),
     // zombie đặc biệt
     bloater: [buildAtlas(SPEC.fat, { ...zombiePalette(51, 'brute'), skin: '#a8b060', skinS: '#7a8240', skinL: '#c8d080', top: '#c8c0a0', topS: '#9a9478', topL: '#e0d8b8', glowEye: '#d8ff4a', blood: '#6a8a1a', bloodL: '#9ac83a' }, { zombie: true, kind: 'brute' })],
     spitter: [buildAtlas(SPEC.thin, { ...zombiePalette(61, 'runner'), skin: '#8ab070', skinS: '#5a7a48', skinL: '#a8cc8a', top: '#3a4a3a', topS: '#28322a', topL: '#4e604e', glowEye: '#7aff4a', mouth: '#5aff3a', blood: '#3a8a1a', bloodL: '#6ad83a' }, { zombie: true, kind: 'runner' })],
@@ -395,7 +397,7 @@ export function makeCharacterSprites() {
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 45, P = new Pix(16 * N, 16);
+  const N = 46, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
   // 0 đạn 9mm
   { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
@@ -484,6 +486,8 @@ export function makeItemIcons() {
   { const r = at(43); r(5, 5, 6, 9, '#4a7a5a'); r(5, 5, 1, 9, '#8ac0a0'); r(6, 2, 4, 3, '#c8b8a0'); r(7, 0, 2, 2, '#ff9a2a'); r(6, 8, 4, 3, '#c83a2a'); }
   // 44 cung gỗ
   { const r = at(44); for (let k = 0; k < 13; k++) r(4 + Math.round(Math.sin(k / 12 * Math.PI) * 4), 1 + k, 1, 1, '#8a5a2a'); r(4, 1, 1, 13, '#e8e0d0'); }
+  // 45 kềm cắt (cán đỏ, lưỡi thép)
+  { const r = at(45); for (let k = 0; k < 7; k++) { r(2 + k, 13 - k, 2, 2, '#c8281e'); r(7 + k, 13 - k, 2, 2, '#a81e16'); } r(6, 6, 3, 3, '#8a8a92'); for (let k = 0; k < 4; k++) { r(7 + k, 4 - k, 2, 2, '#c8ccd4'); r(9 + k, 6 - k, 2, 2, '#9aa0a8'); } r(6, 6, 1, 1, '#e8ecf0'); }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
 }

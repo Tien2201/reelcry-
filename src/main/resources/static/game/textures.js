@@ -435,7 +435,7 @@ export function groundTex(L) {
   const g = mask.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   const X = (x) => (x - L.x0) * PPU, Y = (z) => (z - L.z0) * PPU;
-  const col = (k) => `rgb(${k * 30},0,0)`;
+  const col = (k) => `rgb(${k * 20},0,0)`;
   g.lineCap = 'round'; g.lineJoin = 'round';
   for (const s of L.shapes) {
     g.fillStyle = g.strokeStyle = col(s.kind);
@@ -453,7 +453,7 @@ export function groundTex(L) {
   const md = g.getImageData(0, 0, W, H).data;
   const kindAt = (x, y) => {
     x = clamp(x | 0, 0, W - 1); y = clamp(y | 0, 0, H - 1);
-    return Math.round(md[(y * W + x) * 4] / 30);
+    return Math.round(md[(y * W + x) * 4] / 20);
   };
   const P = new Pix(W, H);
   const grass = ['#1e3414', '#28421a', '#32521e', '#3e6224', '#4a722a', '#5a8232'];
@@ -512,6 +512,18 @@ export function groundTex(L) {
         c = edge ? (hash(x, y, 20) > 0.7 ? '#2e4a1e' : '#2a2a2c') : ramp(['#4a4a4e', '#56565a', '#626266', '#6e6e72'], 0.25 + n * 0.55, x, y, 0.5);
         if (n > 0.93 && !edge) c = mixc(c, '#141416', 0.6);
         h = edge ? 0 : 0.8;
+      } else if (k === 10) {
+        // gạch men hành lang trường học: ô 50cm, ron xám, mòn và bẩn theo lối đi
+        const T = Math.max(4, Math.round(8 * PPU / 16));
+        const tx2 = Math.floor(x / T), ty2 = Math.floor(y / T);
+        const edge = x % T === 0 || y % T === 0;
+        const alt = (tx2 + ty2) & 1;
+        const n = hash(tx2, ty2, 61);
+        c = edge ? '#8a8478' : ramp(alt ? ['#c8bca4', '#d2c6ae', '#dcd0b8'] : ['#b8ac94', '#c2b69e', '#ccc0a8'], 0.3 + n * 0.5, x, y, 0.4);
+        const wear = fbm(x * 0.03, y * 0.05, 62, 3);
+        if (!edge && wear > 0.62) c = mixc(c, '#8a7e6a', (wear - 0.62) * 1.4);
+        if (!edge && n > 0.96) c = mixc(c, '#6a5e4e', 0.35);
+        h = edge ? 0 : 0.6;
       } else if (k === 4) {
         const furrow = Math.floor(y / 6) % 2 === 0;
         c = ramp(['#2a1c12', '#3a281a', '#4a3424', '#5a4230'], (furrow ? 0.7 : 0.25) + hash(x, y, 4) * 0.3, x, y, 0.8);
@@ -755,7 +767,7 @@ export function townFacadeTex(o) {
         const n = fbm(x * 0.07, y * 0.07, o.seed, 3);
         c = ramp(pal, 0.55 + (n - 0.5) * 0.7, x, y, 0.6);
         // mảng vữa bong lộ gạch
-        const peel = fbm(x * 0.05 + 30, y * 0.06, o.seed + 5, 3);
+        const peel = o.clean ? 0 : fbm(x * 0.05 + 30, y * 0.06, o.seed + 5, 3);
         if (peel > 0.68) {
           const row = Math.floor(y / 4), off = (row & 1) * 4;
           c = y % 4 === 3 || (x + off) % 8 === 0 ? '#3e302a' : ramp(['#6a3a2a', '#7a4632', '#8a523a'], hash(x >> 3, row, 3), x, y, 0.4);
@@ -788,7 +800,7 @@ export function townFacadeTex(o) {
       const cxp = Math.round(W * (i + 1) / (n + 1));
       if (f === 0 && door && cxp + 9 > door.x - 3 && cxp - 9 < door.x + door.w + 3) continue;
       const roll = r();
-      const state = kind === 'police' && f === 0 ? 'barred' : roll < (o.litChance || 0.06) ? 'lit' : roll < 0.4 ? 'dark' : roll < 0.7 ? 'boarded' : 'broken';
+      const state = kind === 'police' && f === 0 ? 'barred' : roll < (o.litChance || 0.06) ? 'lit' : o.clean || roll < 0.4 ? 'dark' : roll < 0.7 ? 'boarded' : 'broken';
       wins.push({ x: cxp - 7, y: top, w: 14, h: 18, state, f });
     }
   }
@@ -880,7 +892,7 @@ export function townFacadeTex(o) {
     o.signBox = { x: bx, y: by, w: bw, h: bh };
     if (s.cross) { const cx = bx - 9, cy = by + 1; P.rect(cx, cy, 8, 11, '#e8e8e0', 1.2); P.rect(cx + 3, cy + 2, 2, 7, '#2a9a4a', 1.4); P.rect(cx + 1, cy + 4, 6, 3, '#2a9a4a', 1.4); }
   }
-  grime(P, 0, 0, W, H - FH, o.seed || 1, o.damage === undefined ? 1 : o.damage);
+  grime(P, 0, 0, W, H - FH, o.seed || 1, o.clean ? 0.15 : o.damage === undefined ? 1 : o.damage);
   // áp phích, vết máu, graffiti
   for (let k = 0; k < (o.posters || 0); k++) {
     const x = 6 + Math.floor(r() * (W - 22)), y = Math.round(wallH - floorH * 0.55);

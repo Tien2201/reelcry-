@@ -5,7 +5,7 @@ import { CHARS } from './chars.js';
 import { charSprites, npcAtlas, npcZombieAtlas } from './sprites.js';
 
 const W = 320, H = 180;
-let cv, g, root, ovEl, boxEl, whoEl, txtEl, ptEl, capEl, titleEl, skipEl;
+let cv, g, root, ovEl, boxEl, whoEl, txtEl, ptEl, capEl, titleEl, skipEl, fadeEl;
 let sound = null, ZA = null;
 let cur = null;
 
@@ -724,7 +724,8 @@ SH.pendant = {
 };
 
 const SEQ = {
-  prologue: [SH.lab, SH.council, SH.escort, SH.camp, SH.bomb, SH.tv, SH.manhole, SH.sewer, SH.cat, SH.gate, SH.cls, titleShot('DEAD NIGHT', 'CHƯƠNG 0 · TIẾT HỌC CUỐI', 'Mục tiêu: lục lọi trường học, tìm vũ khí và đường thoát')],
+  prologue: [SH.lab, SH.council, SH.escort, SH.camp, SH.bomb, SH.tv, SH.manhole, SH.sewer, SH.cat, SH.gate, titleShot('SÁNG HÔM SAU', 'Trường Quốc tế Vân Lâm', 'Một ngày đi học như mọi ngày…', 4.2)],
+  pixelClass: [SH.cls],
   ch1: [SH.citySmoke, SH.lockdown, titleShot('CHƯƠNG 1', 'THÀNH PHỐ BỊ ĐÓNG', 'Mục tiêu: tìm bộ đàm ở đồn cảnh sát để gọi cứu hộ')],
   lord: [SH.lordRoof],
   call: [SH.radioRoom, SH.bombOrder, titleShot('CẦM CỰ TỚI BÌNH MINH', 'Trực thăng tới bãi đáp lúc 6:00', 'Bom sẽ rơi cùng lúc · đừng để lỡ chuyến bay', 4.6)],
@@ -738,12 +739,13 @@ function ensureDom() {
   root = document.createElement('div'); root.id = 'cine'; root.className = 'hidden';
   root.innerHTML = '<div id="cine-wrap"><div id="cine-stage"><canvas id="cine-cv" width="320" height="180"></canvas><div id="cine-ov"></div><div id="cine-cap"><b></b><small></small></div><div id="cine-title"><b></b><span></span><em></em></div></div></div>'
     + '<div id="cine-box"><canvas width="72" height="60"></canvas><div class="cb"><b class="who"></b><p class="txt"></p></div><i class="nx">▼</i></div>'
-    + '<button id="cine-skip" type="button">Bỏ qua ▶▶</button>';
+    + '<div id="cine-fade"></div><button id="cine-skip" type="button">Bỏ qua ▶▶</button>';
   document.body.appendChild(root);
   cv = root.querySelector('#cine-cv'); g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
   ovEl = root.querySelector('#cine-ov'); capEl = root.querySelector('#cine-cap'); titleEl = root.querySelector('#cine-title');
   boxEl = root.querySelector('#cine-box'); whoEl = boxEl.querySelector('.who'); txtEl = boxEl.querySelector('.txt'); ptEl = boxEl.querySelector('canvas');
   skipEl = root.querySelector('#cine-skip');
+  fadeEl = root.querySelector('#cine-fade');
   skipEl.addEventListener('click', (e) => { e.stopPropagation(); skip(); });
   skipEl.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); skip(); }, { passive: false });
   root.addEventListener('mousedown', (e) => { if (e.target !== skipEl) advance(); });
@@ -767,6 +769,8 @@ function portrait(key) {
 function startShot() {
   const sh = cur.shot;
   cur.t = 0; cur.li = -1; cur.fired = new Set(); cur.typedAll = false;
+  root.classList.toggle('three', !!sh.three);
+  if (sh.three && sh.enter) { try { sh.enter(); } catch (e) { console.error(e); } }
   ovEl.innerHTML = '';
   cur.ov = (sh.ov || []).map((o) => {
     const el = document.createElement('div'); el.className = 'cov ' + (o.cls || '');
@@ -784,7 +788,12 @@ function startShot() {
   }
   boxEl.className = 'off';
 }
+function exitShot() {
+  const sh = cur && cur.shot;
+  if (sh && sh.three && sh.exit) { try { sh.exit(); } catch (e) { console.error(e); } }
+}
 function nextShot() {
+  exitShot();
   cur.i++;
   if (cur.i >= cur.list.length) { finish(); return; }
   cur.shot = cur.list[cur.i];
@@ -792,6 +801,10 @@ function nextShot() {
 }
 function finish() {
   if (!cur) return;
+  exitShot();
+  if (cur.onEnd) { try { cur.onEnd(); } catch (e) { console.error(e); } }
+  root.classList.remove('three'); document.body.classList.remove('cine');
+  fadeEl.style.opacity = '0';
   const done = cur.resolve;
   cur = null; cinema.active = false;
   root.classList.add('hidden'); ovEl.innerHTML = ''; boxEl.className = 'off';
@@ -816,14 +829,22 @@ function frame(dt) {
   const t = cur.t;
   for (const c of sh.cues || []) if (!cur.fired.has(c) && t >= c[0]) { cur.fired.add(c); try { c[1](sound); } catch (e) { /* âm thanh lỗi thì bỏ qua */ } }
   const cam = camOf(t);
-  const sk = sh.shake ? sh.shake(t) : 0;
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  g.setTransform(cam.z, 0, 0, cam.z, W / 2 - cam.x * cam.z + (sk ? (Math.random() - 0.5) * sk * 2 : 0), H / 2 - cam.y * cam.z + (sk ? (Math.random() - 0.5) * sk * 2 : 0));
-  sh.draw(t);
-  g.setTransform(1, 0, 0, 1, 0, 0);
   const fin = sh.title ? 0.2 : 0.5;
-  fade('#000', Math.max(1 - t / fin, 1 - (sh.dur - t) / 0.45));
+  const fa = clamp(Math.max(1 - t / fin, 1 - (sh.dur - t) / 0.45), 0, 1);
+  if (sh.three) {
+    // cảnh dựng trong thế giới 3D: game tự vẽ, ở đây chỉ chạy kịch bản và làm mờ đầu/cuối cảnh
+    if (sh.update) { try { sh.update(t, Math.min(dt, 0.1)); } catch (e) { console.error(e); } }
+    fadeEl.style.opacity = String(sh.noFade ? 0 : fa);
+  } else {
+    fadeEl.style.opacity = '0';
+    const sk = sh.shake ? sh.shake(t) : 0;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    g.setTransform(cam.z, 0, 0, cam.z, W / 2 - cam.x * cam.z + (sk ? (Math.random() - 0.5) * sk * 2 : 0), H / 2 - cam.y * cam.z + (sk ? (Math.random() - 0.5) * sk * 2 : 0));
+    sh.draw(t);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    fade('#000', fa);
+  }
   for (const { o, el } of cur.ov) {
     const vis = t >= (o.from ?? 0) && t <= (o.to ?? 1e9) && t < sh.dur - 0.35;
     el.style.opacity = vis ? '1' : '0';
@@ -851,18 +872,22 @@ function frame(dt) {
   }
   if (t >= sh.dur) nextShot();
 }
-function play(id) {
+function play(id, opts = {}) {
   ensureDom();
   if (cur) finish();
   const list = SEQ[id];
   if (!list) return Promise.resolve();
   return new Promise((resolve) => {
-    cur = { list, i: -1, resolve, typed: 0 };
+    cur = { list, i: -1, resolve, typed: 0, onEnd: opts.onEnd };
     cinema.active = true; cinema.id = id;
     root.classList.remove('hidden');
+    document.body.classList.add('cine');
     nextShot();
   });
 }
+// cảnh 3D do game định nghĩa (dựng bằng chính thế giới trong game)
+function define(id, shots) { SEQ[id] = shots; }
+const is3D = () => !!(cur && cur.shot && cur.shot.three);
 const AMB0 = { rain: 0, wind: 0.15, crickets: 0, birds: 0, fire: 0, music: 0, water: 0, gen: 0, heli: 0, drone: 0 };
 function amb() { return cur ? { ...AMB0, ...(cur.shot.amb || {}) } : AMB0; }
 function init(o) { sound = o.sound; ZA = o.zombies; }
@@ -870,4 +895,4 @@ function init(o) { sound = o.sound; ZA = o.zombies; }
 // gỡ lỗi: nhảy tới cảnh i, thời điểm t
 function jump(i, t = 0) { if (!cur) return; cur.i = i - 1; nextShot(); cur.t = t; cur.fired = new Set((cur.shot.cues || []).filter((c) => c[0] < t)); }
 function state() { return cur ? { id: cinema.id, i: cur.i, n: cur.list.length, t: +cur.t.toFixed(2) } : null; }
-export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state };
+export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot };

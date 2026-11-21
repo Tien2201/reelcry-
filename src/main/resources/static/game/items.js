@@ -53,13 +53,14 @@ export const ITEMS = {
   armor: { name: 'Áo giáp đệm', max: 2, icon: 41, use: 'armor', time: 1.5 },
   pack: { name: 'Ba lô tự may', max: 1, icon: 42, use: 'pack', time: 1.0 },
   molotov: { name: 'Bom xăng', max: 4, icon: 43, throw: true },
+  cutters: { name: 'Kềm cắt', max: 1, icon: 45, quest: true },
 };
 export const ITEM_ORDER = [
   'book_basic', 'book_med', 'book_arms', 'book_bow', 'book_surv',
   'knife', 'shiv', 'club', 'nailbat', 'spear', 'pipe', 'molotov', 'armor', 'pack',
   'bandage', 'medkit', 'food', 'water', 'antidote', 'antibio', 'syringe', 'flower', 'torch', 'flashlight', 'battery',
   'wood', 'cloth', 'nails', 'tape', 'scrap', 'cord', 'bottle', 'alcohol', 'powder', 'casing',
-  'ammo9', 'shells', 'arrow', 'fuel', 'part', 'key',
+  'ammo9', 'shells', 'arrow', 'cutters', 'fuel', 'part', 'key',
 ];
 // vũ khí cận chiến: chỉ số và độ bền (số đòn trúng trước khi gãy)
 export const MELEE = {
@@ -118,6 +119,12 @@ const L = {
   med_shelf: [[0.6, 'bandage', 1, 2], [0.3, 'medkit', 1, 1], [0.6, 'antibio', 1, 2], [0.45, 'syringe', 1, 1], [0.5, 'alcohol', 1, 1]],
   med_cabinet: [[0.6, 'medkit', 1, 1], [0.4, 'bandage', 1, 2], [0.7, 'antibio', 1, 1], [0.6, 'syringe', 1, 1], [0.6, 'alcohol', 1, 2]],
   counter_med: [[0.5, 'bandage', 1, 2], [0.15, 'medkit', 1, 1], [0.4, 'syringe', 1, 1], [0.3, 'antibio', 1, 1], [0.4, 'alcohol', 1, 1]],
+  // trường học (bên trong): thư viện, kho dụng cụ, phòng thí nghiệm, bình nước hành lang
+  z_student: [[0.4, 'cloth', 1, 1], [0.3, 'food', 1, 1], [0.2, 'bandage', 1, 1], [0.15, 'tape', 1, 1], [0.15, 'water', 1, 1]],
+  bookshelf: [[0.35, 'book_surv', 1, 1], [0.4, 'cloth', 1, 1], [0.25, 'tape', 1, 1], [0.2, 'cord', 1, 1]],
+  tool_shelf: [[0.9, 'nails', 2, 6], [0.7, 'tape', 1, 2], [0.7, 'scrap', 1, 3], [0.6, 'wood', 1, 2], [0.5, 'cord', 1, 2], [0.3, 'pipe', 1, 1]],
+  lab_shelf: [[0.8, 'alcohol', 1, 2], [0.7, 'bottle', 1, 2], [0.4, 'cloth', 1, 2], [0.3, 'syringe', 1, 1], [0.25, 'antibio', 1, 1]],
+  water_cooler: [[0.85, 'water', 1, 2]],
   toolbox: [[0.8, 'nails', 2, 5], [0.5, 'tape', 1, 2], [0.6, 'scrap', 1, 2], [0.35, 'powder', 1, 1], [0.4, 'battery', 1, 2], [0.12, 'flashlight', 1, 1], [0.2, 'pipe', 1, 1]],
   parts_shelf: [[0.7, 'scrap', 1, 3], [0.5, 'nails', 2, 4], [0.5, 'battery', 1, 2], [0.3, 'casing', 1, 3], [0.3, 'cord', 1, 1]],
   backpack: [[0.7, 'food', 1, 2], [0.6, 'water', 1, 2], [0.5, 'cloth', 1, 2], [0.35, 'bandage', 1, 1], [0.25, 'antibio', 1, 1], [0.3, 'battery', 1, 1], [0.3, 'cord', 1, 1]],
@@ -169,6 +176,7 @@ const FIXED = {
   guard_desk: [['pistol', 1], ['flashlight', 1], ['book_arms', 1]],
   mall_guard: [['flashlight', 1]],
   teacher_desk: [['book_basic', 1]],
+  tool_shelf: [['cutters', 1]],
   med_cabinet: [['book_med', 1]],
   sports_rack: [['book_bow', 1], ['bow', 1]],
   canteen_counter: [['knife', 1]],

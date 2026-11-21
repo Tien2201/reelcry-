@@ -8,7 +8,7 @@ import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite, charSprites, charPortrait, npcAtlas, npcZombieAtlas } from './sprites.js';
 import { CHARS, SKILLS, computeMod, xpNeed } from './chars.js';
 import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME, MELEE, MELEE_ORDER, BOOKS, ARMOR_PTS } from './items.js';
-import { openTransport, makeCode, roomName, cleanCode, cleanName } from './net.js';
+import { openTransport, makeCode, roomName, cleanCode, cleanName, transportError } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
 import { cinema } from './cinema.js';
@@ -998,7 +998,7 @@ function setCoopNote(t) { $('lobby-note').textContent = t; }
 function updateCoopBtn() {
   const b = $('coop-btn');
   b.querySelector('b').textContent = net.pending ? 'CHƠI CÙNG BẠN BÈ…' : 'CHƠI CÙNG BẠN BÈ';
-  b.querySelector('small').textContent = net.pending ? 'Đang kết nối kênh co-op…' : net.transport ? 'Co-op 2–5 người · thiếu người thì bot' : 'Chỉ chạy khi mở bằng link trên Claude';
+  b.querySelector('small').textContent = net.pending ? 'Đang kết nối máy chủ online…' : net.transport ? 'Co-op 2–4 người · thiếu người thì bot' : 'Chưa kết nối được máy chủ online';
   b.classList.toggle('dim', !net.pending && !net.transport);
 }
 function openLobby() {
@@ -1007,7 +1007,7 @@ function openLobby() {
   $('nick').value = net.name || store.get('deadnight_nick', '') || ('Người sống sót ' + (10 + Math.floor(Math.random() * 89)));
   showLobbyPane(net.room ? 'room' : 'main');
   if (net.pending) setCoopNote('Đang kết nối kênh co-op…');
-  else if (!net.transport) setCoopNote('Co-op chỉ chạy khi mở game bằng link artifact trên Claude. Bạn bè cần tài khoản Claude và được bạn chia sẻ link (nút Share).');
+  else if (!net.transport) setCoopNote(transportError || 'Chưa kết nối được máy chủ online. Kiểm tra mạng rồi tải lại trang.');
   else setCoopNote('Tạo phòng rồi gửi MÃ PHÒNG cho bạn bè, hoặc bấm vào phòng đang mở bên dưới.');
   renderOpenGames();
 }
@@ -1209,7 +1209,7 @@ function netTick(dt) {
   // gửi
   net.sendT -= dt;
   if (net.sendT > 0) return;
-  net.sendT = 1 / 12;
+  net.sendT = net.transport && net.transport.kind === 'firebase' ? 1 / 8 : 1 / 12;   // Firebase: tiết kiệm dung lượng
   for (const [id, h] of net.hits) netEvent('h', id, Math.round(h.dmg), Math.round(h.a * 100));
   net.hits.clear();
   const now = performance.now();
@@ -4950,6 +4950,7 @@ function init() {
   if (QS.has('shot')) setTimeout(startGame, 50);
   openTransport(QS.has('mockroom')).then((t) => {
     net.transport = t; net.pending = false; updateCoopBtn(); watchLobby();
+    if (t && t.kind === 'firebase') t.onError = (m) => setCoopNote(m);
     if (!$('lobby').classList.contains('hidden')) openLobby();
   });
   updateCoopBtn();

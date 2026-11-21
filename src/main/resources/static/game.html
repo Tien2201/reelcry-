@@ -352,6 +352,8 @@
   #toolbar { gap: 3px; padding: 3px; }
   /* nút ít dùng gom vào "⋯" */
   #tb-extra { display: none; gap: 3px; }
+  /* không còn cây kỹ năng / cấp độ */
+  #tb-skill, .who .bar.xp, #t-shove { display: none !important; }
   #toolbar.open #tb-extra { display: flex; }
   #toolbar.open #tb-more { border-color: var(--edge); background: #2a2430; }
   .tb:hover { border-color: var(--edge); background: #2a2430; }
@@ -739,7 +741,7 @@
           <button class="tb" id="tb-skill" title="Kỹ năng (K)"><img alt=""><span>Kỹ năng</span><kbd>K</kbd><em class="dot hidden"></em></button>
           <button class="tb" id="tb-view" title="Góc nhìn (Z)"><img alt=""><span>Góc nhìn</span><kbd>Z</kbd></button>
         </div>
-        <button class="tb" id="tb-more" title="Thêm: chế đồ, kỹ năng, góc nhìn" aria-expanded="false"><img alt=""><span>Thêm</span><em class="dot hidden"></em></button>
+        <button class="tb" id="tb-more" title="Thêm: chế đồ, góc nhìn" aria-expanded="false"><img alt=""><span>Thêm</span><em class="dot hidden"></em></button>
         <button class="tb" id="tb-pause" title="Tạm dừng (P)"><img alt=""><span>Dừng</span><kbd>P</kbd></button>
       </div>
       <div id="quest-box" class="win" title="Bấm để xem chi tiết"><div id="q-title">NHIỆM VỤ <i>▾</i></div><div id="q-text"></div><div id="q-sub"></div></div>

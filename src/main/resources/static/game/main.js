@@ -238,15 +238,8 @@ function applyMods() {
   hud.dirty = true;
 }
 // kinh nghiệm: giết zombie, lục đồ, chế tạo, cứu bạn, làm nhiệm vụ, sống qua đêm
-function gainXP(n, why) {
-  if (!player || state.mode !== 'play' || player.zombie || !(n > 0)) return;
-  player.xp += n;
-  if (why) floaters.push({ x: player.x, y: 2.75, z: player.z, text: `+${n} XP`, t: 0.9, color: '#b8a8ff' });
-  let up = false;
-  while (player.xp >= xpNeed(player.level)) { player.xp -= xpNeed(player.level); player.level++; player.sp++; up = true; }
-  if (up) { showMsg(`LÊN CẤP ${player.level}`, `${CHARS[player.char].name} có điểm kỹ năng mới · ` + (isTouch ? 'bấm Kỹ năng' : 'phím ' + KN('skills'))); sound.revive(); }
-  saveProgress(); hud.dirty = true;
-}
+// không còn cấp độ / điểm kỹ năng: giữ hàm để các chỗ gọi cũ không phải sửa
+function gainXP() {}
 const CORPSE_LIFE = 60;
 let zid = 0;
 const ZT = {
@@ -558,7 +551,7 @@ function newPlayer() {
     flashOn: true, battery: 0, torchT: 0, exit: null,
     looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     infected: 0, zombie: false, picked: new Set(), groanT: 0, coughT: 12,
-    sprite: sp, char: ci, xp: prog.xp, level: prog.level, sp: prog.sp, learned: prog.learned, shoveT: 0,
+    sprite: sp, char: ci, xp: 0, level: 1, sp: 0, learned: new Set(), shoveT: 0,
   };
   p0.mod = computeMod(C.id, p0.learned);
   p0.maxHp = C.hp + p0.mod.maxHp; p0.hp = p0.maxHp; p0.speed = C.speed + p0.mod.speed;
@@ -2200,7 +2193,6 @@ function botTakeWeapon(b, it, from) {
   const def = ITEMS[it];
   if (!def) return false;
   if (it === 'bow') {
-    if (CHARS[b.ci].id !== 'tien' && !from) return false;
     if (b.weapon === 4) return false;
     b.weapon = 4;
   } else if (def.melee) {
@@ -2312,7 +2304,7 @@ function giveToBot(key, it, mul) {
 }
 function botMelee(b, z) {
   const C = CHARS[b.ci], w = MELEE[b.melee] || MELEE.fist;
-  b.cd = Math.max(0.45, w.rate * 1.35) * (C.id === 'ama' ? 0.8 : 1);
+  b.cd = Math.max(0.45, w.rate * 1.35);
   b.firing = true;
   const dmg = Math.round(Math.max(16, w.dmg) * (b.mod.meleeDmg || 1));
   damageZombie(z, dmg, Math.atan2(z.z - b.z, z.x - b.x), 0.4, z.x, z.z, true);
@@ -2368,7 +2360,7 @@ function updateBots(dt) {
     for (const t of humans) { const d = Math.hypot(t.x - b.x, t.z - b.z); if (d < ld) { ld = d; leader = t; } }
     if (b.task && world.pois[b.task.poi]) {
       const P = world.pois[b.task.poi], d = Math.hypot(P.x - b.x, P.z - b.z);
-      if (d > 0.9) { gx = P.x; gz = P.z; b.task.stuckT += dt; if (b.task.stuckT > 6) { b.x = P.x + 0.4; b.z = P.z; } }
+      if (d > 1.7) { gx = P.x; gz = P.z; b.task.stuckT += dt; if (b.task.stuckT > 6) { b.x = P.x + 0.4; b.z = P.z; } }
       else {
         b.task.t += dt; b.aim = Math.atan2(P.z - b.z, P.x - b.x);
         if (b.task.t > 1.6) { botDoTask(b, b.task.poi); b.task = null; }
@@ -2430,8 +2422,8 @@ function updateBots(dt) {
 }
 function botDoTask(b, poi) {
   const id = CHARS[b.ci].id;
-  if (poi === 'gate' && id === 'hamble') gateAct('lift', botName(b.ci));
-  if (poi === 'cctv' && id === 'lycas') camHack(b.mod.camTime, b.mod.camLoot, botName(b.ci));
+  if (poi === 'gate') gateAct('lift', CHARS[b.ci].name, 'b' + b.ci);
+  if (poi === 'cctv') camHack(25, 0, CHARS[b.ci].name);
 }
 function dawnBots() {
   for (const b of bots) if (b.state === 'out' || b.state === 'down') { b.state = 'ok'; b.hp = Math.round(b.maxHp * 0.6); }
@@ -2489,14 +2481,15 @@ function gateVisual(st) {
   g.plank.visible = st === 'open';
   navBuild();
 }
-function gateAct(act, who) {
+let gateMine = false;
+function gateAct(act, who, lifter) {
   if (net.active && !net.host) { netEvent('gate', act); return; }
   const g = world.pois.gate;
   if (!g) return;
   const st = gateStates[ZONE.id] || { s: 'closed', t: 0 };
   if (act === 'lift' && st.s === 'closed') {
-    gateStates[ZONE.id] = { s: 'held', t: 18, bt: 0 };
-    showMsg('CỔNG ĐÃ ĐƯỢC NÂNG', (who || 'Hamble') + ' đang giữ cổng · chèn gỗ giữ cổng (cần 1 thanh gỗ)');
+    gateStates[ZONE.id] = { s: 'held', t: 18, bt: 0, by: lifter || '' };
+    showMsg('CỔNG ĐÃ ĐƯỢC NÂNG', (who || 'Một bạn') + ' đang giữ cổng · bạn khác chèn gỗ (cần 1 thanh gỗ)');
     sound.unlock(); shake = Math.max(shake, 0.25);
   } else if (act === 'prop' && st.s === 'held') {
     gateStates[ZONE.id] = { s: 'open', t: 0 };
@@ -2512,58 +2505,47 @@ function updateGate(dt) {
   gateVisual(st.s);
   if (st.s !== 'held') return;
   st.t -= dt; st.bt = (st.bt || 0) + dt;
-  // không có ai khác chèn: một bot (không phải Hamble) tự lấy gỗ chèn cổng
-  const helper = bots.find((b) => b.state === 'ok' && CHARS[b.ci].id !== 'hamble');
+  // không có ai khác chèn: một bot khác (không phải bot đang giữ cổng) tự lấy gỗ chèn
+  const helper = bots.find((b) => b.state === 'ok' && st.by !== 'b' + b.ci);
   if (helper && st.bt > 3) { floaters.push({ x: helper.x, y: 2.5, z: helper.z, text: 'Tôi chèn cho!', t: 1.2, color: CHARS[helper.ci].color }); gateAct('prop', botName(helper.ci)); return; }
   if (st.t <= 0) { gateStates[ZONE.id] = { s: 'closed', t: 0 }; gateVisual('closed'); showMsg('CỔNG SẬP XUỐNG', 'Không ai chèn kịp · nâng lại lần nữa'); sound.hit(g.x, g.z); }
 }
 function describeGate() {
   const g = world.pois.gate, st = g.state || 'closed';
+  if (st !== 'held') gateMine = false;
   if (st === 'open') return { label: 'Cổng đã được chèn', can: false };
   if (st === 'held') {
-    if (player.mod.lift) return { label: 'Đang giữ cổng · chờ bạn chèn gỗ', can: false };
+    if (gateMine) return { label: 'Đang giữ cổng · chờ bạn chèn gỗ', can: false };
     return player.bag.wood > 0 ? { label: 'Chèn gỗ giữ cổng', can: true, time: 1.2 } : { label: 'Cần 1 thanh gỗ để chèn cổng', can: false };
   }
-  if (player.mod.lift) return { label: 'Nâng cổng sắt', can: true, time: 2.2 * player.mod.liftTime };
-  if (botBusy('hamble', 'gate')) return { label: 'Hamble (bot) đang tới nâng cổng…', can: false };
-  if (botAvail('hamble')) return { label: 'Gọi Hamble (bot) nâng cổng', can: true, time: 0.3 };
-  const rh = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'hamble');
-  if (rh) return { label: `Cổng quá nặng · gọi ${rh.name} (Hamble)`, can: false };
-  // Hamble không đi cùng đội: bẩy cổng bằng ống thép rồi chèn gỗ
-  if (!partyIds().includes('hamble')) {
-    if (player.bag.pipe > 0 && player.bag.wood > 0) return { label: 'Bẩy cổng bằng ống thép và chèn gỗ', can: true, time: 4.0 };
-    return { label: 'Cổng sắt quá nặng · cần ỐNG THÉP để bẩy + 1 thanh gỗ', can: false };
-  }
-  return { label: 'Cổng sắt quá nặng · chỉ Hamble nâng nổi', can: false };
+  if (player.bag.pipe > 0 && player.bag.wood > 0) return { label: 'Bẩy cổng bằng ống thép và chèn gỗ', can: true, time: 4.0 };
+  const busy = bots.find((b) => b.task && b.task.poi === 'gate') || (net.active && !net.host && net.taskSent && net.taskSent.gate > gtime);
+  if (busy) return { label: 'Bạn đang tới nâng cổng…', can: false };
+  const b = allBots().find((o) => o.state === 'ok');
+  if (b) return { label: `Nhờ ${CHARS[b.ci].name} nâng cổng`, can: true, time: 0.3 };
+  return { label: 'Nâng cổng sắt (bạn khác chèn gỗ)', can: true, time: 2.2 };
 }
 function doGate() {
   const st = world.pois.gate.state || 'closed';
-  if (st === 'held' && !player.mod.lift && player.bag.wood > 0) { player.bag.wood--; gateAct('prop'); gainXP(5, true); return; }
-  if (st === 'closed' && player.mod.lift) { gateAct('lift', CHARS[player.char].name); gainXP(8, true); return; }
-  if (st === 'closed' && botAvail('hamble')) { botTask('hamble', 'gate'); return; }
-  if (st === 'closed' && !partyIds().includes('hamble') && player.bag.pipe > 0 && player.bag.wood > 0) {
-    player.bag.wood--; gateAct('lift', CHARS[player.char].name); gateAct('prop'); gainXP(8, true); hud.dirty = true;
-  }
+  if (st === 'held' && !gateMine && player.bag.wood > 0) { player.bag.wood--; gateAct('prop'); hud.dirty = true; return; }
+  if (st !== 'closed') return;
+  if (player.bag.pipe > 0 && player.bag.wood > 0) { player.bag.wood--; gateAct('lift', CHARS[player.char].name); gateAct('prop'); hud.dirty = true; return; }
+  const b = allBots().find((o) => o.state === 'ok');
+  if (b) { botTask(CHARS[b.ci].id, 'gate'); return; }
+  gateMine = true; gateAct('lift', CHARS[player.char].name, 'me');
 }
+// camera an ninh: ai cũng xem được
 function describeCam() {
   if (camReveal > 0) return { label: 'Đang xem camera…', can: false };
-  if (player.mod.hack) return { label: 'Hack camera an ninh', can: true, time: 1.5 };
-  if (botBusy('lycas', 'cctv')) return { label: 'Lycas (bot) đang tới hack camera…', can: false };
-  if (botAvail('lycas')) return { label: 'Gọi Lycas (bot) hack camera', can: true, time: 0.3 };
-  const rl = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'lycas');
-  if (rl) return { label: `Màn hình khoá mật khẩu · gọi ${rl.name} (Lycas)`, can: false };
-  return { label: partyIds().includes('lycas') ? 'Màn hình khoá mật khẩu · cần Lycas' : 'Màn hình khoá mật khẩu · Lycas không đi cùng đội', can: false };
+  return { label: 'Xem camera an ninh', can: true, time: 1.5 };
 }
-function doCam() {
-  if (player.mod.hack) { camHack(player.mod.camTime, player.mod.camLoot, CHARS[player.char].name); gainXP(8, true); }
-  else if (botAvail('lycas')) botTask('lycas', 'cctv');
-}
+function doCam() { camHack(25, 0, CHARS[player.char].name); }
 // hack camera: cả đội trong khu đều thấy zombie (và chỗ còn đồ nếu đã học kỹ năng)
 let camLootOn = false;
 function camHack(sec, loot, who) {
   if (net.active) netEvent('cam', Math.round(sec), loot ? 1 : 0);
   camReveal = sec; camLootOn = !!loot;
-  showMsg('CAMERA AN NINH', `${who || 'Lycas'} đã hack camera · thấy mọi zombie trong ${Math.round(sec)} giây` + (loot ? ' · đánh dấu chỗ còn đồ' : ''));
+  showMsg('CAMERA AN NINH', `${who || 'Bạn'} đang xem camera · thấy mọi zombie trong ${Math.round(sec)} giây` + (loot ? ' · đánh dấu chỗ còn đồ' : ''));
   sound.radio();
 }
 
@@ -3516,7 +3498,7 @@ function charCard(ci, taken, compact) {
   const t = document.createElement('div');
   t.className = 'ct';
   const prog = loadProgress(ci);
-  t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span class="nat">(${c.nat})</span><br><span class="stat"><i class="role">${c.role} · </i>♥${c.hp} · cấp ${prog.level}</span>` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
+  t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span class="nat">(${c.nat})</span><br><span class="stat"><i class="role">${c.role} · </i>♥${c.hp} · ${c.speed >= 4.6 ? 'nhanh' : c.speed <= 4.1 ? 'chậm' : 'vừa'}</span>` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
   d.appendChild(t);
   if (!compact) {
     fixBench();
@@ -3681,8 +3663,7 @@ function updateHud() {
   $('tb-more').querySelector('.dot').classList.toggle('hidden', $('tb-skill').querySelector('.dot').classList.contains('hidden') && $('tb-craft').querySelector('.dot').classList.contains('hidden'));
   $('t-reload').classList.toggle('off', !!WEAPONS[player.weapon].melee);
   setText('zone-tag', ZONE.name);
-  setText('char-tag', `${CHARS[player.char].name} · cấp ${player.level}` + (player.sp ? ` · ${player.sp} điểm KN` : ''));
-  $('xp-fill').style.width = Math.min(100, player.xp / xpNeed(player.level) * 100).toFixed(1) + '%';
+  setText('char-tag', `${CHARS[player.char].name} · ♥${player.maxHp}`);
 }
 
 // ================= ÁNH SÁNG, KHÍ QUYỂN =================
@@ -5168,8 +5149,8 @@ function saveSettings() { store.set(SET_KEY, JSON.stringify(settings)); }
 const ACTIONS = [
   ['up', 'Đi lên', 'KeyW'], ['down', 'Đi xuống', 'KeyS'], ['left', 'Sang trái', 'KeyA'], ['right', 'Sang phải', 'KeyD'], ['run', 'Chạy', 'ShiftLeft'],
   ['use', 'Lục soát, nhặt đồ (giữ)', 'KeyE'], ['reload', 'Nạp đạn', 'KeyR'], ['swap', 'Đổi vũ khí', 'KeyQ'], ['heal', 'Băng bó', 'KeyF'], ['eat', 'Ăn, uống', 'KeyC'],
-  ['cure', 'Thuốc giải', 'KeyV'], ['torch', 'Đốt đuốc', 'KeyT'], ['light', 'Đèn pin', 'KeyL'], ['throw', 'Ném bom xăng', 'KeyX'], ['shove', 'Húc (Hamble)', 'KeyG'], ['holster', 'Cất vũ khí (tay không)', 'KeyH'],
-  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'], ['view', 'Đổi góc nhìn thứ nhất / thứ ba', 'KeyZ'], ['mine', 'Đặt mìn tự chế', 'KeyY'],
+  ['cure', 'Thuốc giải', 'KeyV'], ['torch', 'Đốt đuốc', 'KeyT'], ['light', 'Đèn pin', 'KeyL'], ['throw', 'Ném bom xăng', 'KeyX'], ['holster', 'Cất vũ khí (tay không)', 'KeyH'],
+  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'], ['view', 'Đổi góc nhìn thứ nhất / thứ ba', 'KeyZ'], ['mine', 'Đặt mìn tự chế', 'KeyY'],
 ];
 const ALT_KEYS = { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], run: ['ShiftRight'], bag: ['Tab'], pause: ['Escape'] };
 const KB = {};
@@ -5192,12 +5173,12 @@ function keyName(code) {
 const KN = (a) => keyName(KB[a]);
 const QUICK_ACT = { bandage: 'heal', medkit: 'heal', food: 'eat', water: 'eat', antidote: 'cure', torch: 'torch', flashlight: 'light', molotov: 'throw', mine: 'mine' };
 function helpHtml() {
-  if (isTouch) return 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên: Túi đồ, Chế đồ, Bản đồ, Kỹ năng, Dừng';
+  if (isTouch) return 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên: Túi đồ, ⋯ (Chế đồ, Góc nhìn), Dừng · bấm bản đồ nhỏ để xem bản đồ';
   return `${KN('up')}${KN('left')}${KN('down')}${KN('right')}: đi · ${KN('run')}: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ ${KN('use')}: lục soát, nhặt đồ · ${KN('reload')}: nạp đạn · 1-5/${KN('swap')}: đổi vũ khí<br>`
-    + `${KN('bag')}: túi đồ · ${KN('craft')}: bàn chế · ${KN('map')}: bản đồ · ${KN('skills')}: kỹ năng · ${KN('heal')}: băng bó · ${KN('eat')}: ăn uống · ${KN('cure')}: thuốc giải · ${KN('torch')}: đuốc · ${KN('light')}: đèn pin · ${KN('throw')}: ném bom xăng · ${KN('shove')}: húc · ${KN('view')}: góc nhìn thứ nhất/thứ ba · ${KN('pause')}/Esc: menu`;
+    + `${KN('bag')}: túi đồ · ${KN('craft')}: bàn chế · ${KN('map')}: bản đồ · ${KN('heal')}: băng bó · ${KN('eat')}: ăn uống · ${KN('cure')}: thuốc giải · ${KN('torch')}: đuốc · ${KN('light')}: đèn pin · ${KN('throw')}: ném bom xăng · ${KN('view')}: góc nhìn thứ nhất/thứ ba · ${KN('pause')}/Esc: menu`;
 }
 function refreshKeyHints() {
-  for (const [id, a] of [['tb-bag', 'bag'], ['tb-craft', 'craft'], ['tb-map', 'map'], ['tb-skill', 'skills'], ['tb-view', 'view'], ['tb-pause', 'pause']]) {
+  for (const [id, a] of [['tb-bag', 'bag'], ['tb-craft', 'craft'], ['tb-map', 'map'], ['tb-view', 'view'], ['tb-pause', 'pause']]) {
     const b = $(id); if (!b) continue;
     b.querySelector('kbd').textContent = KN(a);
     b.title = b.querySelector('span').textContent + ' (' + KN(a) + ')';

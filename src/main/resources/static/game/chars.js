@@ -1,5 +1,5 @@
-// Năm nhân vật chơi được: mỗi người có chỉ số, kỹ năng riêng và cây kỹ năng 3 nhánh.
-// Hiệu ứng kỹ năng quy về các hệ số (mod) mà gameplay đọc qua player.mod.
+// Năm nhân vật chơi được: không có kỹ năng riêng, chỉ khác nhau ở máu và tốc độ
+// (bạn nam trâu hơn, bạn nữ di chuyển nhanh hơn). Hệ số gameplay chung nằm trong BASE_MOD.
 
 export const BASE_MOD = {
   meleeDmg: 1, meleeRate: 1, gunDmg: 1, bowDmg: 1, bowRate: 1, bowPierce: 0, reload: 1,
@@ -11,33 +11,33 @@ export const BASE_MOD = {
 
 export const CHARS = [
   {
-    id: 'lycas', name: 'Lycas', nat: 'Mỹ', role: 'Trinh sát công nghệ', color: '#6aa0e8', hp: 85, speed: 4.45, scale: 0.88,
-    desc: 'Nhỏ con nhưng rất thông minh. Hack camera an ninh để thấy mọi zombie trong khu; đi nhẹ nên zombie khó phát hiện.',
-    mod: { hack: 1, detect: 0.75, search: 0.85, camTime: 30 },
+    id: 'lycas', name: 'Lycas', nat: 'Mỹ', role: 'Nam · mê công nghệ', color: '#6aa0e8', hp: 110, speed: 4.25, scale: 0.88,
+    desc: 'Nhỏ con nhưng lanh lợi. Máu khá, tốc độ bình thường.',
+    mod: {},
     pal: { hair: '#7a4a2a', hairS: '#4e2e18', hairL: '#a06a3e', top: '#4a5a6a', topS: '#34404c', topL: '#6a7a8a', scarf: '#3a7ac8', scarfS: '#2a5a96' },
   },
   {
-    id: 'ama', name: 'Ama', nat: 'Đức', role: 'Cận chiến', color: '#e86a5a', hp: 110, speed: 4.4, scale: 1,
-    desc: 'Đội trưởng đội võ của trường. Đánh cận chiến mạnh gấp đôi, hạ gục im lặng zombie chưa phát hiện mình.',
-    mod: { meleeDmg: 2, takedown: 1, bite: 0.8, stamina: 1.2 },
+    id: 'ama', name: 'Ama', nat: 'Đức', role: 'Nữ · đội trưởng đội võ', color: '#e86a5a', hp: 95, speed: 4.75, scale: 1,
+    desc: 'Đội trưởng đội võ của trường. Di chuyển nhanh, máu ít hơn các bạn nam.',
+    mod: {},
     pal: { hair: '#e8c86a', hairS: '#b8943a', hairL: '#fff0a8', top: '#c83a3a', topS: '#962424', topL: '#e86a5a', scarf: '#f0ece4', scarfS: '#b8b4ac' },
   },
   {
-    id: 'naryne', name: 'Naryne', nat: 'Nhật', role: 'Hoá sinh · y tế', color: '#c88ae8', hp: 90, speed: 4.3, scale: 0.96,
-    desc: 'Tiểu thư mê hoá sinh. Chế đồ nhanh gấp đôi, mỗi lần chế thuốc giải ra 2 lọ, băng bó hồi nhiều máu hơn, cứu bạn nhanh hơn.',
-    mod: { craftTime: 0.5, antidoteOut: 2, healMul: 1.4, reviveTime: 0.7 },
+    id: 'naryne', name: 'Naryne', nat: 'Nhật', role: 'Nữ · mê hoá sinh', color: '#c88ae8', hp: 90, speed: 4.8, scale: 0.96,
+    desc: 'Tiểu thư mê hoá sinh, người duy nhất biết tự chế súng, đạn và mìn. Nhanh nhất nhóm, máu ít nhất.',
+    mod: {},
     pal: { hair: '#1a1a24', hairS: '#0c0c12', hairL: '#3a3a4a', top: '#e8e4f0', topS: '#b8b0c8', topL: '#ffffff', scarf: '#c8283a', scarfS: '#8a1a28' },
   },
   {
-    id: 'hamble', name: 'Hamble', nat: 'Angola', role: 'Xung phong · mang vác', color: '#f2a13e', hp: 150, speed: 4.1, scale: 1.13,
-    desc: 'Cầu thủ bóng rổ to khoẻ. Máu trâu, mang được nhiều đồ, 8 phút mới hoá zombie, một mình nâng được cổng sắt cho cả đội qua.',
-    mod: { maxHp: 0, carry: 1.5, infectTime: 480, lift: 1, meleeDmg: 1.3 },
+    id: 'hamble', name: 'Hamble', nat: 'Angola', role: 'Nam · cầu thủ bóng rổ', color: '#f2a13e', hp: 150, speed: 4.05, scale: 1.13,
+    desc: 'Cầu thủ bóng rổ to khoẻ. Máu trâu nhất nhóm, đi chậm nhất.',
+    mod: {},
     pal: { skin: '#7a4a2e', skinS: '#5a321c', skinL: '#9a6440', hair: '#14100e', hairS: '#080606', hairL: '#2a2420', top: '#e86a1a', topS: '#b04a10', topL: '#ff9a4a', scarf: '#2a2a30', scarfS: '#16161a', blush: '#9a5a4a', mouth: '#5a2a22' },
   },
   {
-    id: 'tien', name: 'Tiến', nat: 'Việt Nam', role: 'Thiện xạ', color: '#88c870', hp: 100, speed: 4.35, scale: 1.02,
-    desc: 'Hot boy toàn diện. Có cung: bắn xa, không gây tiếng ồn, nhặt lại được tên; dùng súng cũng chuẩn hơn người khác.',
-    mod: { bowDmg: 1, gunDmg: 1.15, reload: 0.85, arrows: 4 },
+    id: 'tien', name: 'Tiến', nat: 'Việt Nam', role: 'Nam · hot boy', color: '#88c870', hp: 120, speed: 4.3, scale: 1.02,
+    desc: 'Hot boy toàn diện. Máu trâu, tốc độ bình thường.',
+    mod: {},
     pal: { hair: '#14141c', hairS: '#08080c', hairL: '#34344a', top: '#2a3a5a', topS: '#1c2840', topL: '#4a5a7a', scarf: '#88c870', scarfS: '#5a9a48' },
   },
 ];
@@ -72,16 +72,8 @@ export const SKILLS = {
     { name: 'Toàn diện', nodes: [N('t7', 'Xạ thủ', 'Súng mạnh hơn 30%', { gunDmg: 1.3 }), N('t8', 'Thay đạn nhanh', 'Nạp đạn nhanh hơn', { reload: 0.65 }), N('t9', 'Thể lực', 'Hồi sức chạy nhanh hơn', { stamina: 1.3 })] },
   ],
 };
-export function computeMod(charId, learned) {
-  const c = CHARS[charIndex(charId)];
-  const m = { ...BASE_MOD, ...c.mod };
-  for (const br of SKILLS[c.id]) for (const n of br.nodes) if (learned.has(n.id)) {
-    for (const k in n.mod) {
-      const v = n.mod[k];
-      if (k === 'maxHp') m.maxHp += v;
-      else m[k] = v;
-    }
-  }
-  return m;
+// không còn kỹ năng riêng / cây kỹ năng: ai cũng dùng hệ số chung
+export function computeMod() {
+  return { ...BASE_MOD };
 }
 export const xpNeed = (lv) => 60 + lv * 45;

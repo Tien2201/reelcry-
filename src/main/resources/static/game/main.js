@@ -102,6 +102,19 @@ const reflHide = [];
 function hideRefl(...ms) { for (const m of ms) { reflHide.push(m); if (world) world.hideInReflection.push(m); } }
 const camTarget = new THREE.Vector3(0, 1, 1);
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+// ---------- góc nhìn thứ nhất (cùng thế giới HD-2D, camera đặt ở tầm mắt nhân vật) ----------
+const FP = { on: false, yaw: -Math.PI / 2, pitch: 0, bobT: 0, bob: 0, sway: 0, swayY: 0, hand: 0, lastSwing: 0, locked: false, lockFailed: false, releasing: false };
+const SPRITES = new Set();
+const DIR_ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
+const Y_AXIS = new THREE.Vector3(0, 1, 0), qYaw = new THREE.Quaternion();
+// hướng khung hình theo vị trí camera: zombie đi về phía mình thì thấy mặt, đi ra xa thì thấy lưng
+function fpDir(s, dir) {
+  const p = s.group.position, c = camera.position;
+  const r = angDiff(DIR_ANG[dir] ?? 0, Math.atan2(c.z - p.z, c.x - p.x)), a = Math.abs(r);
+  if (a < Math.PI / 4) return 'down';
+  if (a > 3 * Math.PI / 4) return 'up';
+  return r < 0 ? 'right' : 'left';
+}
 
 function placeCamera(shake = 0) {
   const r = () => (Math.random() - 0.5) * shake;
@@ -142,6 +155,8 @@ function makeSprite(atlasList, xray) {
   return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, cur: 0, w: a0.w, h: a0.h };
 }
 function setFrame(s, dir, frame) {
+  s._dir = dir; s._fr = frame; SPRITES.add(s);
+  if (FP.on) dir = fpDir(s, dir);
   const ox = frame / 4, oy = 1 - (DIR_ROW[dir] + 1) / 4;
   s.maps[s.cur].offset.set(ox, oy);
   if (s.emap) s.emap.offset.set(ox, oy);
@@ -290,6 +305,7 @@ addEventListener('keydown', (e) => {
   if (act === 'throw') throwMolotov();
   if (act === 'map') toggleMap();
   if (act === 'mute') { settings.mute = !settings.mute; sound.muted = settings.mute; saveSettings(); toast(settings.mute ? 'Đã tắt tiếng' : 'Đã bật tiếng'); }
+  if (act === 'view') toggleView();
   if (act === 'pause') togglePause();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -297,7 +313,7 @@ canvas.addEventListener('mousemove', (e) => {
   if (view.drag) { view.pan -= (e.clientX - view.drag.x) * viewPxToWorld(); view.drag.x = e.clientX; }
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
 });
-canvas.addEventListener('mousedown', (e) => { sound.init(); if (state.mode === 'view') { view.drag = { x: e.clientX }; return; } if (e.button === 0) mouse.down = true; });
+canvas.addEventListener('mousedown', (e) => { sound.init(); if (state.mode === 'view') { view.drag = { x: e.clientX }; return; } if (FP.on && fpLock()) return; if (e.button === 0) mouse.down = true; });
 addEventListener('mouseup', () => { mouse.down = false; view.drag = null; });
 canvas.addEventListener('wheel', (e) => {
   if (state.mode === 'view') view.zoom = clamp(view.zoom * (1 + e.deltaY * 0.0012), 0.5, 1.8);
@@ -534,6 +550,7 @@ function reload() {
   player.reloading = w.reload * (w.bow ? player.mod.bowRate : player.mod.reload); if (!w.bow) sound.reload(); hud.dirty = true;
 }
 function muzzlePos(out) {
+  if (FP.on) { const c = Math.cos(player.aim), s2 = Math.sin(player.aim); return out.set(player.x + c * 0.75 - s2 * 0.12, camera.position.y - 0.28, player.z + s2 * 0.75 + c * 0.12); }
   return out.set(player.x + Math.cos(player.aim) * 0.75, 1.0, player.z + Math.sin(player.aim) * 0.75);
 }
 let muzzleT = 0;
@@ -564,7 +581,7 @@ function shoot() {
     const a = aim + rand(-w.spread, w.spread) * (w.pellets > 1 ? 1 : 0.6);
     const sp = w.speed * rand(0.92, 1.05);
     const dmg = Math.round(w.dmg * (w.bow ? player.mod.bowDmg : player.mod.gunDmg));
-    bullets.push({ x: m.x, z: m.z, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg, life: w.bow ? 0.75 : 0.6, pierce: w.bow ? player.mod.bowPierce : w.pellets > 1 ? 0 : 1, arrow: !!w.bow, mine: true });
+    bullets.push({ x: m.x, z: m.z, y: m.y, px: m.x, pz: m.z, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, dmg, life: w.bow ? 0.75 : 0.6, pierce: w.bow ? player.mod.bowPierce : w.pellets > 1 ? 0 : 1, arrow: !!w.bow, mine: true });
   }
   shake = Math.max(shake, w.shake);
   if (w.bow) { sound.swing(false); }
@@ -1431,20 +1448,13 @@ function setZombieLook(on) {
   player.sprite.group.visible = !on;
 }
 function updateZombieForm(dt) {
-  let mx = 0, mz = 0;
-  if (held('up')) mz -= 1;
-  if (held('down')) mz += 1;
-  if (held('left')) mx -= 1;
-  if (held('right')) mx += 1;
-  let mag = Math.hypot(mx, mz);
-  if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
-  const ms = stickVec(sticks.move);
-  if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
+  const [mx, mz, mag] = readMove();
   const spd = 2.6 * mag;
-  player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
+  player.x += mx * spd * dt; player.z += mz * spd * dt * (FP.on ? 1 : 0.8);
   collide(player);
   player.moving = mag > 0.1;
-  if (player.moving) { player.walk += dt * spd * 1.8; player.aim = Math.atan2(mz, mx); }
+  if (FP.on) { fpAim(dt, stickVec(sticks.aim)); if (player.moving) player.walk += dt * spd * 1.8; }
+  else if (player.moving) { player.walk += dt * spd * 1.8; player.aim = Math.atan2(mz, mx); }
   setFrame(zlook, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0);
   zlook.group.position.set(player.x, 0, player.z);
   player.firing = false; player.searching = false; interact.target = null;
@@ -1764,7 +1774,11 @@ function describe(tg) {
 function updateInteract(dt) {
   const list = state.mode === 'play' && !player.action ? interactTargets() : [];
   let best = null, bestS = 1e9;
-  for (const tg of list) { tg.info = describe(tg); const sc = tg.d + (tg.info.can ? 0 : 1.1); if (sc < bestS) { bestS = sc; best = tg; } }
+  for (const tg of list) {
+    let sc = tg.d;
+    if (FP.on) { const da = Math.abs(angDiff(Math.atan2(tg.z - player.z, tg.x - player.x), FP.yaw)); if (tg.d > 0.5 && da > 1.5) continue; sc += da * 0.8; }
+    tg.info = describe(tg); sc += tg.info.can ? 0 : 1.1; if (sc < bestS) { bestS = sc; best = tg; }
+  }
   if (best && best.info.done && best.d > 0.95) best = null;
   if (!best || !interact.target || best.id !== interact.target.id) interact.t = 0;
   interact.target = best;
@@ -1911,6 +1925,9 @@ function buildIcons() {
 const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L'], ['molotov', 'X']];
 // icon pixel 12×12 cho thanh công cụ
 const UI_PIX = {
+  view: { pal: { '#': '#140e0a', 1: '#f0ece0', 2: '#4a8ac8', x: '#101018' }, rows: [
+    '............', '............', '...######...', '..#111111#..', '.#11#22#11#.', '#11#2xx2#11#',
+    '#11#2xx2#11#', '.#11#22#11#.', '..#111111#..', '...######...', '............', '............'] },
   bag: { pal: { '#': '#140e0a', 1: '#9a6a34', 2: '#5a3a1a', 3: '#74502a', 4: '#c8945a', 5: '#f2c14e' }, rows: [
     '....####....', '...#2..2#...', '..########..', '.#11111111#.', '.#14444441#.', '.#22222222#.',
     '.#11155111#.', '.#11155111#.', '.#11111111#.', '.#13333331#.', '.#11111111#.', '..########..'] },
@@ -2187,6 +2204,12 @@ function updateBots(dt) {
         if (b.cd <= 0 && navLOS(b.x, b.z, tz.x, tz.z)) botShoot(b, tz);
       } else if (td > 1.0) { gx = tz.x; gz = tz.z; }
       else if (b.cd <= 0) botMelee(b, tz);
+    } else if (FP.on && leader && Math.abs(leader.x - player.x) < 0.01 && Math.abs(leader.z - player.z) < 0.01) {
+      // góc nhìn thứ nhất: bạn đi theo phía sau lưng, không đứng chắn tầm nhìn
+      const c = Math.cos(FP.yaw), s2 = Math.sin(FP.yaw), back = 2.1 + b.k * 0.75, side = b.side * (0.8 + (b.k % 2) * 0.5);
+      const sx = clamp(player.x - c * back - s2 * side, BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5), sz = clamp(player.z - s2 * back + c * side, BOUNDS.z0 + 0.3, BOUNDS.z1 - 0.3);
+      if (Math.hypot(sx - b.x, sz - b.z) > 1.3) { gx = sx; gz = sz; }
+      if (ld > 26) { b.x = sx; b.z = sz; }
     } else if (leader && ld > 2.6) {
       gx = leader.x - b.side * (1.2 + b.k * 0.5); gz = leader.z + (b.k % 2 ? 0.6 : -0.6);
       if (ld > 26) { b.x = leader.x - b.side * 1.5; b.z = leader.z; }
@@ -3451,7 +3474,7 @@ function applyAtmos(dt, t) {
   fx.shafts.update(t, A.shafts, A.sunColor, A.sunDir);
   fx.leaves.update(dt, t, A.leaves, world.canopies, camTarget, A.wind);
   fx.moths.update(t, world.lampHeads, camTarget, A.lamps > 0.5);
-  fx.sky.update(t, A, camera.position.x, lightning);
+  fx.sky.update(t, A, camera.position.x, lightning, camera.position);
   const wl = clamp(A.hemiI * 0.38 + A.sunI * 0.1 + lightning * 0.8, 0.3, 1.05);
   for (const m of world.waterMats) { m.uniforms.uLight.value = wl; m.uniforms.uTint.value.copy(A.hemiSky).lerp(new THREE.Color(1, 1, 1), 0.55); }
   fx.flock.update(dt, t, Math.max(A.birds, A.rain * 0.8 * (1 - A.night)), camTarget.x);
@@ -3618,20 +3641,12 @@ function updatePlayer(dt) {
   }
   if (player.stunT > 0) player.stunT -= dt;
   if (player.shoveT > 0) player.shoveT -= dt;
-  let mx = 0, mz = 0;
-  if (held('up')) mz -= 1;
-  if (held('down')) mz += 1;
-  if (held('left')) mx -= 1;
-  if (held('right')) mx += 1;
-  let mag = Math.hypot(mx, mz);
-  if (mag > 0) { mx /= mag; mz /= mag; mag = 1; }
-  const ms = stickVec(sticks.move);
-  if (ms.m > 0) { mx = ms.x; mz = ms.y; mag = ms.m; }
+  let [mx, mz, mag, ms] = readMove();
   if (player.stunT > 0) { mx = mz = 0; mag = 0; }
   const sprint = (held('run') || ms.m > 0.97) && mag > 0 && player.stamina > 0.05;
   player.stamina = clamp(player.stamina + (sprint ? -0.4 : 0.22 * player.mod.stamina) * dt, 0, 1);
   const spd = player.speed * (sprint ? 1.55 : 1) * mag * (player.action || player.searching ? 0.45 : 1);
-  player.x += mx * spd * dt; player.z += mz * spd * dt * 0.8;
+  player.x += mx * spd * dt; player.z += mz * spd * dt * (FP.on ? 1 : 0.8);
   collide(player);
   player.moving = mag > 0.1;
   updateExit(mx, mz);
@@ -3652,7 +3667,8 @@ function updatePlayer(dt) {
   }
   let firing = false;
   const as = stickVec(sticks.aim);
-  if (as.m > 0) { player.aim = Math.atan2(as.y * 0.8, as.x); firing = as.m > 0.35; }
+  if (FP.on) firing = fpAim(dt, as);
+  else if (as.m > 0) { player.aim = Math.atan2(as.y * 0.8, as.x); firing = as.m > 0.35; }
   else if (interact.atkHold) {
     const w = WEAPONS[player.weapon], range = w.melee ? MELEE[player.melee].reach * 2.2 : 10;
     let best = null, bd = range;
@@ -3667,7 +3683,7 @@ function updatePlayer(dt) {
     firing = mouse.down;
   } else if (player.moving) player.aim = Math.atan2(mz, mx);
   if (keys.Space) firing = true;
-  if (bagOpen || player.searching) firing = false;
+  if (bagOpen || player.searching || state.paused) firing = false;
   player.firing = firing && !player.action;
   player.cooldown -= dt;
   player.swing = Math.max(0, player.swing - dt);
@@ -3693,6 +3709,12 @@ function updatePlayer(dt) {
   sp.group.position.set(player.x - Math.cos(player.aim) * player.recoil, 0, player.z - Math.sin(player.aim) * player.recoil);
   sp.mat.color.setScalar(player.inv > 0 && Math.floor(player.inv * 20) % 2 ? 2.2 : 1);
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
+  if (FP.on) {
+    const cp = Math.cos(FP.pitch), ey = camera.position.y;
+    flashlight.position.set(player.x + ca * 0.25 - sa * 0.15, ey - 0.2, player.z + sa * 0.25 + ca * 0.15);
+    flashlight.target.position.set(player.x + ca * 9 * cp, Math.max(0, ey + Math.sin(FP.pitch) * 9 - 0.6), player.z + sa * 9 * cp);
+    return;
+  }
   flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
   flashlight.target.position.set(player.x + ca * 9, 0.15, player.z + sa * 9);
 }
@@ -3875,7 +3897,7 @@ function updateBullets(dt) {
   for (const b of bullets) {
     if (n >= 64) break;
     const a = Math.atan2(b.vz, b.vx), len = 1.1;
-    P.set(b.x - Math.cos(a) * len / 2, 1.0, b.z - Math.sin(a) * len / 2);
+    P.set(b.x - Math.cos(a) * len / 2, b.y || 1.0, b.z - Math.sin(a) * len / 2);
     Q.setFromEuler(E.set(0, -a, 0));
     M.compose(P, Q, S.set(len, 0.045, 0.045));
     tracerMesh.setMatrixAt(n++, M);
@@ -3927,6 +3949,15 @@ function updateCamera(dt) {
   // toà nhà người chơi đang đứng trong: tường trước tự "cắt" như nhà búp bê
   curBuilding = state.mode === 'title' ? null : buildingAt(player.x, player.z);
   if (curBuilding && curBuilding.portal && state.mode === 'play' && !zt.busy && !net.active) requestZone(curBuilding.portal, 'w');
+  const fpw = fpWanted();
+  if (fpw !== FP.on) fpApply(fpw);
+  if (FP.on) {
+    fpCamera(dt);
+    U.push.value[0].set(player.x, 0, player.z, 1.1);
+    const nearF = zombies.filter((z) => z.state === 'walk').map((z) => ({ z, d: Math.hypot(z.x - player.x, z.z - player.z) })).sort((a, b) => a.d - b.d);
+    for (let i = 1; i < 6; i++) { const o = nearF[i - 1]; if (o) U.push.value[i].set(o.z.x, 0, o.z.z, o.z.r + 0.5); else U.push.value[i].set(0, -99, 0, 0.01); }
+    return;
+  }
   for (const b of world.buildings) b.cut.value += ((curBuilding === b ? 1 : 0) - b.cut.value) * Math.min(1, dt * 6);
   camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
   placeCamera(settings.shake ? shake : 0);
@@ -3951,8 +3982,12 @@ function draw2D() {
   g.imageSmoothingEnabled = false;
   g.textAlign = 'center';
   g.font = '22px "VT323", monospace';
+  if (FP.on && state.mode === 'play') drawViewModel(g);
+  g.textAlign = 'center';
+  g.font = '22px "VT323", monospace';
   for (const f of floaters) {
     tmpV.set(f.x, f.y, f.z).project(camera);
+    if (tmpV.z > 1) continue;
     const x = (tmpV.x * 0.5 + 0.5) * W, y = (-tmpV.y * 0.5 + 0.5) * H;
     g.globalAlpha = clamp(f.t * 2.5, 0, 1);
     g.fillStyle = '#000'; g.fillText(f.text, Math.round(x) + 2, Math.round(y) + 2);
@@ -3962,6 +3997,7 @@ function draw2D() {
   for (const z of zombies) {
     if (z.state === 'dead' || (z.hp >= z.maxHp && z.type !== 'brute')) continue;
     tmpV.set(z.x, z.y + z.sprite.h + 0.25, z.z).project(camera);
+    if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
     const w = z.type === 'brute' ? 44 : 30;
@@ -3973,7 +4009,7 @@ function draw2D() {
     if (rp.flags & 128 || rp.pingT > 0) {
       tmpV.set(rp.x, 1.2, rp.z).project(camera);
       const sx = (tmpV.x * 0.5 + 0.5) * W;
-      if (sx < 30 || sx > W - 30) {
+      if (!FP.on && (sx < 30 || sx > W - 30)) {
         const left = sx < 30, ex = left ? 36 : W - 36, ey = H * 0.42 + (rp.color || 0) * 26;
         g.font = '18px "VT323", monospace';
         g.fillStyle = 'rgba(10,8,14,.8)'; g.fillRect(ex - 58, ey - 15, 116, 22);
@@ -3983,6 +4019,7 @@ function draw2D() {
     }
     if (rp.flags & 128) {
       tmpV.set(rp.x, 2.3, rp.z).project(camera);
+      if (tmpV.z > 1) continue;
       const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
       g.font = '18px "VT323", monospace';
       g.fillStyle = '#000'; g.fillText(rp.name, x + 1, y + 1); g.fillStyle = '#b8e08a'; g.fillText(rp.name, x, y);
@@ -3991,6 +4028,7 @@ function draw2D() {
     }
     const down = rp.flags & 4;
     tmpV.set(rp.x, down ? 0.9 : 2.3, rp.z).project(camera);
+    if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
     g.font = '18px "VT323", monospace';
@@ -4003,7 +4041,9 @@ function draw2D() {
   if (state.mode !== 'title') for (const b of allBots()) {
     if (b.state === 'out') continue;
     const down = b.state === 'down';
+    if (FP.on && !down && Math.hypot(b.x - player.x, b.z - player.z) > 7) continue;
     tmpV.set(b.x, down ? 0.9 : 2.3, b.z).project(camera);
+    if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
     g.font = '17px "VT323", monospace';
@@ -4017,6 +4057,7 @@ function draw2D() {
     for (const c of world.containers) {
       if (player.looted.has(c.id) || Math.abs(c.x - camTarget.x) > 20) continue;
       tmpV.set(c.x, 1.6, c.z).project(camera);
+      if (tmpV.z > 1) continue;
       const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
       g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x - 5, y - 5, 10, 10);
       g.fillStyle = Math.floor(gtime * 3) % 2 ? '#f2c14e' : '#fff0b0'; g.fillRect(x - 3, y - 3, 6, 6);
@@ -4025,7 +4066,8 @@ function draw2D() {
   if (state.mode === 'play' && interact.target && !bagOpen) {
     const tg = interact.target, inf = tg.info;
     tmpV.set(tg.x, 1.7, tg.z).project(camera);
-    const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.6); }
     const text = inf.can ? (isTouch ? inf.label : '[' + KN('use') + '] ' + inf.label) : inf.label;
     g.font = '20px "VT323", monospace';
     const tw = Math.ceil(g.measureText(text).width) + 20;
@@ -4052,7 +4094,8 @@ function draw2D() {
   }
   if (state.mode === 'play' && player.action) {
     tmpV.set(player.x, 2.35, player.z).project(camera);
-    const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
+    if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.56); }
     const k = Math.min(1, player.action.t / player.action.dur);
     g.font = '18px "VT323", monospace';
     const at = player.action.label || (player.action.target ? `Giúp ${player.action.targetName}…` : ACTION_TEXT[player.action.item] || '');
@@ -4062,8 +4105,8 @@ function draw2D() {
     g.fillStyle = '#7fe07f'; g.fillRect(x - 30, y - 1, 60 * k, 5);
   }
   if (state.mode === 'play' && !state.paused) {
-    if (!isTouch && mouse.has) {
-      const sp = 7 + player.recoil * 30, x = Math.round(mouse.x), y = Math.round(mouse.y);
+    if (FP.on || (!isTouch && mouse.has)) {
+      const sp = (FP.on ? 5 : 7) + player.recoil * 30, x = Math.round(FP.on ? W / 2 : mouse.x), y = Math.round(FP.on ? H / 2 : mouse.y);
       g.fillStyle = 'rgba(0,0,0,.6)';
       for (const [dx, dy, w, h] of [[-sp - 7, -1, 7, 4], [sp, -1, 7, 4], [-1, -sp - 7, 4, 7], [-1, sp, 4, 7]]) g.fillRect(x + dx, y + dy, w, h);
       g.fillStyle = '#fff6dc';
@@ -4084,10 +4127,315 @@ function draw2D() {
         g.font = '20px "VT323", monospace'; g.fillStyle = `rgba(255,240,210,${0.4 * ha})`;
         const lf = settings.lefty ? 0.75 : 0.25;
         if (!sticks.move) g.fillText(settings.lefty ? 'kéo để di chuyển →' : '← kéo để di chuyển', W * lf, H * 0.56);
-        if (!sticks.aim) g.fillText(settings.lefty ? '← kéo để ngắm & bắn' : 'kéo để ngắm & bắn →', W * (1 - lf), H * 0.56);
+        const lookT = FP.on ? 'kéo để nhìn quanh' : 'kéo để ngắm & bắn';
+        if (!sticks.aim) g.fillText(settings.lefty ? '← ' + lookT : lookT + ' →', W * (1 - lf), H * 0.56);
       }
     }
   }
+}
+
+// ================= GÓC NHÌN THỨ NHẤT =================
+// đọc phím / cần trái → hướng đi trong thế giới (góc nhìn thứ nhất: theo hướng đang nhìn)
+function readMove() {
+  let f = 0, st = 0;
+  if (FP.on) {
+    if (held('up')) f += 1;
+    if (held('down')) f -= 1;
+    if (keys[KB.left]) st -= 1;
+    if (keys[KB.right]) st += 1;
+  } else {
+    if (held('up')) f -= 1;
+    if (held('down')) f += 1;
+    if (held('left')) st -= 1;
+    if (held('right')) st += 1;
+  }
+  let mag = Math.hypot(f, st);
+  if (mag > 0) { f /= mag; st /= mag; mag = 1; }
+  const ms = stickVec(sticks.move);
+  if (ms.m > 0) { st = ms.x; f = FP.on ? -ms.y : ms.y; mag = ms.m; }
+  if (!FP.on) return [st, f, mag, ms];
+  const c = Math.cos(FP.yaw), s2 = Math.sin(FP.yaw);
+  return [c * f - s2 * st, s2 * f + c * st, mag, ms];
+}
+// xoay nhìn: chuột (khoá con trỏ), phím mũi tên trái/phải, cần phải trên điện thoại; trả về có đang bắn không
+function fpAim(dt, as) {
+  if (keys.ArrowLeft) FP.yaw -= dt * 2.2;
+  if (keys.ArrowRight) FP.yaw += dt * 2.2;
+  if (as.m > 0) {
+    const k = Math.pow(as.m, 1.6) * (settings.sens || 100) / 100;
+    FP.yaw += as.x * k * 3.0 * dt;
+    FP.pitch = clamp(FP.pitch - as.y * k * 1.8 * dt, -1.2, 1.2);
+  }
+  // không khoá được con trỏ (khung nhúng): đưa chuột sát mép màn hình để xoay tiếp
+  if (!isTouch && !FP.locked && mouse.has && !state.paused) {
+    const ex = mouse.x / W;
+    if (ex < 0.07) FP.yaw -= dt * 2.4 * (1 - ex / 0.07);
+    else if (ex > 0.93) FP.yaw += dt * 2.4 * ((ex - 0.93) / 0.07);
+  }
+  FP.yaw = angDiff(FP.yaw, 0);
+  let firing = !!interact.atkHold || (!isTouch && mouse.down && (FP.locked || FP.lockFailed));
+  // nút ĐÁNH/BẮN trên điện thoại: hút nhẹ tâm ngắm về zombie gần giữa màn hình
+  if (interact.atkHold) {
+    let best = null, bd = 0.4;
+    for (const z of zombies) {
+      if (z.state === 'dead' || (z.y || 0) > 1) continue;
+      const d = Math.hypot(z.x - player.x, z.z - player.z);
+      if (d > 14) continue;
+      const da = Math.abs(angDiff(Math.atan2(z.z - player.z, z.x - player.x), FP.yaw));
+      if (da < bd) { bd = da; best = z; }
+    }
+    if (best) FP.yaw += angDiff(Math.atan2(best.z - player.z, best.x - player.x), FP.yaw) * Math.min(1, dt * 6);
+  }
+  player.aim = FP.yaw;
+  return firing;
+}
+const fpWanted = () => settings.view === 'fp' && state.mode === 'play' && !cinema.active && !!player && !player.dead && !player.boarded;
+const fpBillboardMeshes = () => [...pickups.map((p) => p.mesh), ...drops.map((d) => d.mesh), ...flowers.map((f) => f.mesh)].filter(Boolean);
+function fpApply(on) {
+  FP.on = on;
+  if (world && world.fpOnly) world.fpOnly.visible = on;
+  if (fx.sky) fx.sky.setFP(on);
+  camera.near = on ? 0.05 : 1; camera.fov = on ? 72 : CAM.fov; camera.updateProjectionMatrix();
+  const pv = (sp, v) => { if (sp) { sp.mesh.visible = v; sp.blob.visible = v; } };
+  if (player) pv(player.sprite, !on);
+  pv(zlook, !on);
+  beam.visible = false;
+  if (on) {
+    FP.yaw = player ? player.aim : -Math.PI / 2; FP.pitch = 0;
+  } else {
+    for (const sp of SPRITES) { sp.group.rotation.y = 0; sp.xmat.visible = true; if (sp._dir) setFrame(sp, sp._dir, sp._fr); }
+    placeCamera(); camera.updateMatrixWorld(); camQuat.copy(camera.quaternion);
+    for (const o of fpBillboardMeshes()) o.quaternion.copy(camQuat);
+    if (world) for (const b of world.buildings) b.cut.value = 0;
+    if (document.pointerLockElement) { FP.releasing = true; document.exitPointerLock(); }
+  }
+  document.body.classList.toggle('fp', on);
+}
+// mọi sprite (zombie, bạn, NPC, đồ rơi) quay mặt về camera, chọn khung trước/sau/trái/phải theo góc nhìn
+function fpBillboard() {
+  const th = Math.atan2(-Math.cos(FP.yaw), -Math.sin(FP.yaw));
+  for (const sp of SPRITES) {
+    if (!sp.group.parent) { SPRITES.delete(sp); continue; }
+    if (!sp.group.visible) continue;
+    sp.group.rotation.y = th;
+    sp.xmat.visible = camReveal > 0;
+    if (sp._dir) {
+      const d = fpDir(sp, sp._dir), ox = sp._fr / 4, oy = 1 - (DIR_ROW[d] + 1) / 4;
+      sp.maps[sp.cur].offset.set(ox, oy);
+      if (sp.emap) sp.emap.offset.set(ox, oy);
+    }
+  }
+  qYaw.setFromAxisAngle(Y_AXIS, th);
+  for (const o of fpBillboardMeshes()) o.quaternion.copy(qYaw);
+}
+function fpCamera(dt) {
+  // cửa ra vào: tường trước chỉ "mở" khi đứng ngay ô cửa để đi xuyên qua
+  for (const b of world.buildings) {
+    const dc = (b.doorX0 + b.doorX1) / 2, hw = (b.doorX1 - b.doorX0) / 2;
+    const near = Math.abs(player.x - dc) < hw + 0.5 && Math.abs(player.z - b.zf) < 0.9;
+    b.cut.value += ((near ? 1 : 0) - b.cut.value) * Math.min(1, dt * 14);
+  }
+  camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
+  const low = player.downed > 0 || player.pinned;
+  const eyeH = low ? 0.5 : 1.5 * (CHARS[player.char] ? CHARS[player.char].scale || 1 : 1) * (player.zombie ? 0.94 : 1);
+  const run = player.moving && player.stamina > 0.05 && held('run');
+  if (player.moving) FP.bobT += dt * (run ? 12 : 8.5);
+  FP.bob += ((player.moving ? 1 : 0) - FP.bob) * Math.min(1, dt * 6);
+  FP.sway *= Math.exp(-dt * 8); FP.swayY *= Math.exp(-dt * 8);
+  const by = Math.abs(Math.sin(FP.bobT)) * 0.045 * FP.bob, bx = Math.cos(FP.bobT) * 0.025 * FP.bob;
+  const sk = settings.shake ? shake : 0;
+  const yaw = FP.yaw + (Math.random() - 0.5) * sk * 0.06;
+  const pitch = clamp(FP.pitch + player.recoil * 0.7 + (Math.random() - 0.5) * sk * 0.06, -1.3, 1.3);
+  const rx = -Math.sin(yaw), rz = Math.cos(yaw);
+  camera.position.set(player.x + rx * bx, eyeH + by, player.z + rz * bx);
+  const cp = Math.cos(pitch);
+  tmpV.set(camera.position.x + Math.cos(yaw) * cp, camera.position.y + Math.sin(pitch), camera.position.z + Math.sin(yaw) * cp);
+  camera.lookAt(tmpV);
+  camera.updateMatrixWorld();
+  camQuat.copy(camera.quaternion);
+  camTarget.x = player.x; camTarget.z = 1;
+  sound.setListener(player.x, player.z);
+  U.seeCenter.value.set(-9999, -9999); U.seeZ.value = 999; U.seeDepth.value = 0;
+  if (player.sprite.mesh.visible) { player.sprite.mesh.visible = false; player.sprite.blob.visible = false; }
+  if (zlook && zlook.mesh.visible) { zlook.mesh.visible = false; zlook.blob.visible = false; }
+  if (world.fpOnly && !world.fpOnly.visible) world.fpOnly.visible = true;
+  fpBillboard();
+}
+function toggleView() {
+  settings.view = settings.view === 'fp' ? 'tp' : 'fp'; saveSettings();
+  toast(settings.view === 'fp' ? 'Góc nhìn thứ nhất' + (isTouch ? ' · kéo bên phải để nhìn quanh' : ' · bấm chuột để khoá con trỏ') : 'Góc nhìn thứ ba (diorama)');
+  if (settingsOpen) renderSettings();
+}
+addEventListener('mousemove', (e) => {
+  if (!FP.on || state.paused || bagOpen || craftUI.open || mapOpen || skillsOpen || settingsOpen) return;
+  if (!FP.locked && e.target !== canvas) return;
+  const k = 0.0022 * (settings.sens || 100) / 100;
+  FP.yaw += e.movementX * k; FP.pitch = clamp(FP.pitch - e.movementY * k, -1.25, 1.25);
+  FP.sway = clamp(FP.sway - e.movementX * 0.06, -9, 9); FP.swayY = clamp(FP.swayY + e.movementY * 0.05, -6, 6);
+});
+document.addEventListener('pointerlockchange', () => {
+  FP.locked = document.pointerLockElement === canvas;
+  if (!FP.locked && !FP.releasing && FP.on && state.mode === 'play' && !state.paused && !bagOpen && !craftUI.open && !mapOpen && !skillsOpen) togglePause();
+  FP.releasing = false;
+});
+document.addEventListener('pointerlockerror', () => { FP.lockFailed = true; });
+function fpLock() {
+  if (FP.locked || FP.lockFailed || isTouch || !canvas.requestPointerLock) return false;
+  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { FP.lockFailed = true; }); } catch (e) { FP.lockFailed = true; return false; }
+  return true;
+}
+// thả con trỏ khi mở túi đồ / bảng / tạm dừng
+function fpReleaseCheck() {
+  if (FP.locked && (!FP.on || state.paused || bagOpen || craftUI.open || mapOpen || skillsOpen || settingsOpen || state.mode !== 'play' || cinema.active)) { FP.releasing = true; document.exitPointerLock(); }
+}
+
+// ---------- tay + vũ khí (pixel art vẽ tay, phóng to kiểu nearest) ----------
+const VM = { cv: null, g: null, W: 160, H: 96 };
+function drawViewModel(g) {
+  if (!VM.cv) { VM.cv = document.createElement('canvas'); VM.cv.width = VM.W; VM.cv.height = VM.H; VM.g = VM.cv.getContext('2d', { willReadFrequently: true }); }
+  const c = VM.g, Wv = VM.W, Hv = VM.H;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, Wv, Hv);
+  if (player.zombie) { drawZombieHands(c); return blitVM(g); }
+  const C = CHARS[player.char] || CHARS[0], pal = C.pal || {};
+  const skin = pal.skin || '#f6cba2', skinS = pal.skinS || '#d9977a', sl = pal.top || '#4a5a6a', slS = pal.topS || '#34404c', OL = '#1d1018';
+  const w = WEAPONS[player.weapon], mk = w.melee ? player.melee : null, mw = mk ? MELEE[mk] : null;
+  // nhịp bước, lắc theo chuột, giật khi bắn, hạ tay khi nạp đạn / lục đồ / băng bó
+  let ox = Math.cos(FP.bobT) * 4 * FP.bob + FP.sway, oy = Math.abs(Math.sin(FP.bobT)) * 3 * FP.bob + FP.swayY;
+  if (player.reloading > 0) { const rt = WEAPONS[player.weapon].reload * player.mod.reload; oy += Math.sin(clamp(1 - player.reloading / rt, 0, 1) * Math.PI) * 34; }
+  if (player.action || player.searching) oy += 30;
+  const D = FP.dbg || null;
+  oy += (D ? D.rec : player.recoil) * 70;
+  if (player.swing > 0 && FP.lastSwing <= 0) FP.hand ^= 1;
+  FP.lastSwing = player.swing;
+  const sw = D ? D.sw : player.swing > 0 ? 1 - player.swing / 0.2 : 0;   // 0 → 1 trong cú đánh
+  const muz = D ? D.mz : muzzleT > 0;
+  const arc = sw > 0 ? Math.sin(sw * Math.PI) : 0;
+  c.save(); c.translate(Math.round(ox), Math.round(oy));
+  const R = (x, y, ww, hh, col) => { c.fillStyle = col; c.fillRect(x, y, ww, hh); };
+  const RO = (x, y, ww, hh, col) => { R(x - 1, y - 1, ww + 2, hh + 2, OL); R(x, y, ww, hh, col); };
+  const arm = (hx, hy, ang, len = 60, wid = 15) => {
+    c.save(); c.translate(hx, hy); c.rotate(ang);
+    RO(-wid / 2, 4, wid, len, sl); R(-wid / 2, 4, 3, len, slS);
+    c.restore();
+  };
+  const fist = (x, y, k = 1) => {
+    c.save(); c.translate(x, y); c.scale(k, k);
+    RO(-10, -9, 20, 17, skin); R(-10, 2, 20, 6, skinS);
+    for (let i = 0; i < 3; i++) R(-6 + i * 6, -9, 1, 5, skinS);
+    RO(-12, -4, 4, 9, skin);
+    c.restore();
+  };
+  const grip = (x, y) => { RO(x - 10, y - 8, 20, 16, skin); R(x - 10, y + 4, 20, 4, skinS); R(x - 10, y - 8, 20, 2, '#ffffff22'); };
+  if (!w.melee) {
+    const k = w.key;
+    if (k === 'bow') {
+      // cung: tay trái cầm thân cung, tay phải kéo dây
+      const draw = player.cooldown > 0 ? 0 : 1;
+      arm(58, 58, 0.5, 60, 13); grip(58, 56);
+      c.strokeStyle = OL; c.lineWidth = 5; c.beginPath(); c.arc(80, 56, 44, Math.PI * 0.62, Math.PI * 1.38); c.stroke();
+      c.strokeStyle = '#8a5a2e'; c.lineWidth = 3; c.beginPath(); c.arc(80, 56, 44, Math.PI * 0.62, Math.PI * 1.38); c.stroke();
+      const sx = 80 + 44 * Math.cos(Math.PI * 0.62), sy1 = 56 + 44 * Math.sin(Math.PI * 1.38), sy2 = 56 + 44 * Math.sin(Math.PI * 0.62);
+      const px = sx + 18 + draw * 20;
+      c.strokeStyle = '#e8e0c8'; c.lineWidth = 1; c.beginPath(); c.moveTo(sx, sy1); c.lineTo(px, 62); c.lineTo(sx, sy2); c.stroke();
+      if (draw) { RO(px - 34, 60, 40, 2, '#b89060'); R(px - 40, 58, 6, 6, '#c8ccd4'); }
+      arm(px + 8, 70, -0.5, 60, 14); grip(px + 4, 64);
+    } else {
+      const long = k === 'shotgun' || k === 'smg';
+      let fx0, fy0;
+      if (long) {
+        // súng dài: chéo từ góc phải dưới vào giữa màn hình, tay trái đỡ ốp
+        c.save(); c.translate(124, 104); c.rotate(-0.4);
+        RO(-5, -100, 10, 46, '#26262c'); R(-5, -100, 3, 46, '#4a4a54');
+        RO(-9, -56, 18, 44, '#34343c'); R(-9, -56, 4, 44, '#50505a');
+        if (k === 'shotgun') { RO(-9, -86, 18, 22, '#7a4a26'); R(-9, -86, 18, 4, '#9a6a3a'); for (let i = 0; i < 4; i++) R(-9, -80 + i * 4, 18, 1, '#5a3418'); }
+        else { RO(-5, -34, 10, 26, '#1a1a1e'); RO(-7, -90, 14, 14, '#2a2a30'); }
+        RO(-10, -14, 20, 26, k === 'shotgun' ? '#5a3a22' : '#22222a');
+        c.restore();
+        fx0 = 124 + Math.sin(0.4) * 102 * -1 + 0; fy0 = 104 - Math.cos(0.4) * 102;
+        arm(70, 74, 0.75, 70, 15); grip(76, 66);
+        arm(122, 94, -0.3, 60, 17); grip(118, 88);
+      } else {
+        // súng lục: hai tay cầm, khe ngắm ở giữa
+        const gx = 96, gy = 38;
+        RO(gx - 9, gy, 18, 30, '#2e2e34'); R(gx - 9, gy, 18, 4, '#55555f'); R(gx - 9, gy + 4, 3, 26, '#3e3e46');
+        R(gx - 7, gy - 4, 4, 4, '#1a1a1e'); R(gx + 3, gy - 4, 4, 4, '#1a1a1e'); R(gx - 1, gy - 3, 2, 3, '#d8d8e0');
+        RO(gx - 8, gy + 28, 16, 22, '#1e1e22');
+        arm(gx - 14, gy + 56, 0.55, 70, 16); arm(gx + 8, gy + 58, -0.4, 70, 17);
+        grip(gx - 9, gy + 46); grip(gx + 4, gy + 42);
+        fx0 = gx; fy0 = gy - 8;
+      }
+      if (muz) {
+        c.fillStyle = '#fff6c8'; c.beginPath(); c.arc(fx0, fy0, 6, 0, TAU); c.fill();
+        c.fillStyle = '#ffb040';
+        for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + gtime * 9; c.fillRect(fx0 + Math.cos(a) * 7 - 2, fy0 + Math.sin(a) * 6 - 2, 4, 4); }
+      }
+    }
+  } else if (!mw || mk === 'fist') {
+    // tay không: hai nắm đấm, đấm xen kẽ trái / phải
+    const L = FP.hand === 0 && sw > 0 ? arc : 0, Rr = FP.hand === 1 && sw > 0 ? arc : 0;
+    arm(40 + L * 26, 82 - L * 26, 0.35 - L * 0.2, 60, 15); fist(40 + L * 26, 80 - L * 26, 1 + L * 0.25);
+    arm(120 - Rr * 26, 82 - Rr * 26, -0.35 + Rr * 0.2, 60, 15); fist(120 - Rr * 26, 80 - Rr * 26, 1 + Rr * 0.25);
+  } else if (mw.spr === 'knife') {
+    const hx = 112 - arc * 46, hy = 78 - arc * 18, ang = -0.5 - arc * 0.9;
+    arm(hx, hy, -0.4 + arc * 0.3, 60, 15);
+    c.save(); c.translate(hx, hy - 6); c.rotate(ang);
+    RO(-3, -4, 6, 12, '#3a2418'); RO(-3, -30, 6, 26, '#c8ccd4'); R(-3, -30, 2, 26, '#eef0f4'); R(1, -30, 2, 3, OL);
+    c.restore();
+    grip(hx, hy);
+  } else if (mw.spr === 'spear') {
+    const t = arc * 16;
+    c.save(); c.translate(124 - t * 0.9, 96 - t); c.rotate(-0.78);
+    RO(-3, -110, 6, 120, '#8a5a32'); R(-3, -110, 2, 120, '#a8784a');
+    RO(-6, -128, 12, 18, '#b8bcc4'); R(-2, -134, 4, 6, '#d8dce4');
+    c.restore();
+    arm(118 - t * 0.9, 86 - t, -0.4, 60, 15); grip(116 - t * 0.9, 82 - t);
+    arm(84 - t * 0.9, 60 - t, 0.25, 60, 13); grip(84 - t * 0.9, 58 - t);
+  } else {
+    // gậy / ống thép / gậy đóng đinh: vung ngang từ phải sang trái
+    const col = mk === 'pipe' ? '#8a9098' : '#8a5a32', colL = mk === 'pipe' ? '#b8c0c8' : '#a8784a';
+    const hx = 116 - arc * 52, hy = 84 - arc * 12, ang = -0.35 - sw * 1.6 * (sw > 0 ? 1 : 0);
+    c.save(); c.translate(hx, hy - 4); c.rotate(ang);
+    RO(-4, -64, 8, 64, col); R(-4, -64, 3, 64, colL);
+    if (mk === 'nailbat') for (let i = 0; i < 5; i++) { R(-8, -60 + i * 8, 3, 2, '#c8ccd4'); R(5, -56 + i * 8, 3, 2, '#c8ccd4'); }
+    RO(-4, -6, 8, 10, '#3a2418');
+    c.restore();
+    arm(hx, hy, -0.45 + arc * 0.4, 60, 15); grip(hx, hy);
+  }
+  // đuốc ở tay trái
+  if (player.torchT > 0 && !(w.melee && (!mw || mk === 'fist'))) {
+    const tx0 = 22, ty0 = 70;
+    {
+      arm(tx0, ty0 + 6, 0.3, 50, 13);
+      c.save(); c.translate(tx0, ty0); c.rotate(0.25);
+      RO(-3, -34, 6, 38, '#6a4226');
+      c.restore();
+      const fl = Math.sin(gtime * 20) * 2;
+      c.fillStyle = '#ff7a1a'; c.beginPath(); c.arc(tx0 + 9, ty0 - 34 + fl, 7, 0, TAU); c.fill();
+      c.fillStyle = '#ffd040'; c.beginPath(); c.arc(tx0 + 9, ty0 - 33 + fl, 4, 0, TAU); c.fill();
+      grip(tx0, ty0);
+    }
+  }
+  c.restore();
+  blitVM(g);
+}
+function drawZombieHands(c) {
+  const sk = '#8aa070', skS = '#5a7448', OL = '#1d1018', sw = Math.sin(gtime * 2) * 3;
+  for (const [x, a] of [[34, 0.4], [126, -0.4]]) {
+    c.save(); c.translate(x, 78 + sw * (x < 80 ? 1 : -1)); c.rotate(a);
+    c.fillStyle = OL; c.fillRect(-9, -13, 18, 80); c.fillStyle = sk; c.fillRect(-8, -12, 16, 78); c.fillStyle = skS; c.fillRect(-8, -12, 4, 78);
+    c.fillStyle = '#7a0e0c'; c.fillRect(-3, 10, 6, 4); c.fillRect(2, 30, 4, 6);
+    for (let i = 0; i < 4; i++) { c.fillStyle = OL; c.fillRect(-8 + i * 4, -20, 3, 9); c.fillStyle = sk; c.fillRect(-8 + i * 4, -19, 2, 7); }
+    c.restore();
+  }
+}
+// làm sắc mép (bỏ điểm ảnh nửa trong suốt) rồi phóng to kiểu nearest ở đáy màn hình
+function blitVM(g) {
+  const c = VM.g, img = c.getImageData(0, 0, VM.W, VM.H), d = img.data;
+  for (let i = 3; i < d.length; i += 4) d[i] = d[i] > 110 ? 255 : 0;
+  c.putImageData(img, 0, 0);
+  const h = Math.round(H * (isTouch ? 0.44 : 0.52)), w = Math.round(h * VM.W / VM.H);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(VM.cv, Math.round(W / 2 - w / 2), H - h + 2, w, h);
 }
 
 // ================= MÀN HÌNH =================
@@ -4306,6 +4654,8 @@ function init() {
   if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
   if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
   if (QS.has('debug')) { window.__set = () => ({ settings, KB: { ...KB } }); window.__save = () => loadSave(); window.__saveNow = () => saveGame(true); window.__story = () => [...story.seen]; }
+  if (QS.has('debug')) window.__vm = (sw, rec = 0, mz = false) => { FP.dbg = sw === null ? null : { sw, rec, mz }; };
+  if (QS.has('debug')) window.__fp = (yaw, pitch = 0) => { settings.view = 'fp'; FP.yaw = yaw; FP.pitch = pitch; return { on: FP.on, near: camera.near, fov: camera.fov, cam: camera.position.toArray().map((v) => +v.toFixed(2)) }; };
   if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }
   if (QS.has('debug')) window.__post = () => ({ flash: post.params.flash, gain: post.params.gain, lift: post.params.lift, hour: +atmos.hour.toFixed(2), kind: atmos.kind, hurt: hurtFlash, mode: state.mode });
   if (QS.has('debug')) window.__conts = (kind) => world.containers.filter((c) => !kind || c.kind === kind).map((c) => [c.id, c.kind, +c.x.toFixed(2), +c.z.toFixed(2), player.looted.has(c.id)]);
@@ -4432,6 +4782,8 @@ function frame(now) {
   post.params.maxBlur = quality === 'high' ? 7 : 5;
   post.params.range = 7; post.params.fall = 12; post.params.nearK = 1.3;
   post.params.dof = state.mode === 'view' ? view.dof : true;
+  if (FP.on) { post.params.focus = 14; post.params.range = 13; post.params.fall = 40; post.params.nearK = 0; post.params.maxBlur = 3; beam.visible = false; }
+  fpReleaseCheck();
   if (state.mode === 'view' && !view.bloom) post.params.bloom = 0;
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
   // bụi nước dưới chân thác
@@ -4460,7 +4812,7 @@ function frame(now) {
 
 // ================= CÀI ĐẶT · PHÍM · MENU · LƯU GAME · CỐT TRUYỆN =================
 const SET_KEY = 'deadnight_settings';
-const SET_DEF = { vol: { master: 85, music: 70, sfx: 90, amb: 75 }, mute: false, bright: 100, shake: true, cine: true, tsize: 100, talpha: 90, lefty: false, keys: {} };
+const SET_DEF = { vol: { master: 85, music: 70, sfx: 90, amb: 75 }, mute: false, bright: 100, shake: true, cine: true, tsize: 100, talpha: 90, lefty: false, view: 'tp', sens: 100, keys: {} };
 const settings = (() => {
   try { const s = JSON.parse(store.get(SET_KEY, '{}')) || {}; return { ...SET_DEF, ...s, vol: { ...SET_DEF.vol, ...(s.vol || {}) }, keys: { ...(s.keys || {}) } }; }
   catch (e) { return { ...SET_DEF, vol: { ...SET_DEF.vol }, keys: {} }; }
@@ -4471,7 +4823,7 @@ const ACTIONS = [
   ['up', 'Đi lên', 'KeyW'], ['down', 'Đi xuống', 'KeyS'], ['left', 'Sang trái', 'KeyA'], ['right', 'Sang phải', 'KeyD'], ['run', 'Chạy', 'ShiftLeft'],
   ['use', 'Lục soát, nhặt đồ (giữ)', 'KeyE'], ['reload', 'Nạp đạn', 'KeyR'], ['swap', 'Đổi vũ khí', 'KeyQ'], ['heal', 'Băng bó', 'KeyF'], ['eat', 'Ăn, uống', 'KeyC'],
   ['cure', 'Thuốc giải', 'KeyV'], ['torch', 'Đốt đuốc', 'KeyT'], ['light', 'Đèn pin', 'KeyL'], ['throw', 'Ném bom xăng', 'KeyX'], ['shove', 'Húc (Hamble)', 'KeyG'], ['holster', 'Cất vũ khí (tay không)', 'KeyH'],
-  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'],
+  ['bag', 'Túi đồ', 'KeyI'], ['craft', 'Bàn chế đồ', 'KeyB'], ['map', 'Bản đồ', 'KeyM'], ['skills', 'Kỹ năng', 'KeyK'], ['pause', 'Tạm dừng, menu', 'KeyP'], ['mute', 'Tắt tiếng', 'KeyN'], ['view', 'Đổi góc nhìn thứ nhất / thứ ba', 'KeyZ'],
 ];
 const ALT_KEYS = { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], run: ['ShiftRight'], bag: ['Tab'], pause: ['Escape'] };
 const KB = {};
@@ -4496,10 +4848,10 @@ const QUICK_ACT = { bandage: 'heal', medkit: 'heal', food: 'eat', water: 'eat', 
 function helpHtml() {
   if (isTouch) return 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên: Túi đồ, Chế đồ, Bản đồ, Kỹ năng, Dừng';
   return `${KN('up')}${KN('left')}${KN('down')}${KN('right')}: đi · ${KN('run')}: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ ${KN('use')}: lục soát, nhặt đồ · ${KN('reload')}: nạp đạn · 1-5/${KN('swap')}: đổi vũ khí<br>`
-    + `${KN('bag')}: túi đồ · ${KN('craft')}: bàn chế · ${KN('map')}: bản đồ · ${KN('skills')}: kỹ năng · ${KN('heal')}: băng bó · ${KN('eat')}: ăn uống · ${KN('cure')}: thuốc giải · ${KN('torch')}: đuốc · ${KN('light')}: đèn pin · ${KN('throw')}: ném bom xăng · ${KN('shove')}: húc · ${KN('pause')}/Esc: menu`;
+    + `${KN('bag')}: túi đồ · ${KN('craft')}: bàn chế · ${KN('map')}: bản đồ · ${KN('skills')}: kỹ năng · ${KN('heal')}: băng bó · ${KN('eat')}: ăn uống · ${KN('cure')}: thuốc giải · ${KN('torch')}: đuốc · ${KN('light')}: đèn pin · ${KN('throw')}: ném bom xăng · ${KN('shove')}: húc · ${KN('view')}: góc nhìn thứ nhất/thứ ba · ${KN('pause')}/Esc: menu`;
 }
 function refreshKeyHints() {
-  for (const [id, a] of [['tb-bag', 'bag'], ['tb-craft', 'craft'], ['tb-map', 'map'], ['tb-skill', 'skills'], ['tb-pause', 'pause']]) {
+  for (const [id, a] of [['tb-bag', 'bag'], ['tb-craft', 'craft'], ['tb-map', 'map'], ['tb-skill', 'skills'], ['tb-view', 'view'], ['tb-pause', 'pause']]) {
     const b = $(id); if (!b) continue;
     b.querySelector('kbd').textContent = KN(a);
     b.title = b.querySelector('span').textContent + ' (' + KN(a) + ')';
@@ -4590,12 +4942,14 @@ function renderSettings() {
       pane.appendChild(n);
     }
     pane.append(
+      sRow('Góc nhìn', (isTouch ? 'Nút GÓC NHÌN trên thanh công cụ' : 'Phím ' + KN('view')) + ' để đổi nhanh khi đang chơi', sSeg([['tp', 'Thứ ba · diorama'], ['fp', 'Thứ nhất']], () => settings.view, (v) => { settings.view = v; })),
       sRow('Độ pixel', 'Dựng cảnh ở độ phân giải thấp rồi phóng to sắc nét', sSeg([[1, '1x'], [2, '2x'], [3, '3x']], () => pixelK, (v) => { pixelK = v; store.set('deadnight_px', String(v)); post.setPixel(v); setQualityLabel(); })),
       sRow('Độ sáng', '', sRange(60, 160, () => settings.bright, (v) => { settings.bright = v; })),
       sRow('Rung màn hình', 'Khi bắn, nổ, bị đánh', sToggle(() => settings.shake, (v) => { settings.shake = v; })),
     );
     if (state.mode === 'title') pane.append(sRow('Ngắm cảnh', 'Xem thử đồ hoạ: đổi giờ, thời tiết, chụp ảnh', sButton('Mở', () => { closeSettings(); startView(); })));
   } else if (setTab === 'ctrl') {
+    pane.append(sRow('Độ nhạy nhìn quanh', 'Góc nhìn thứ nhất: chuột / kéo màn hình', sRange(30, 250, () => settings.sens, (v) => { settings.sens = v; })));
     if (isTouch) {
       pane.append(
         sRow('Cỡ nút bấm', 'Cụm nút LỤC, NẠP, ĐỔI, HÚC, NÉM', sRange(70, 150, () => settings.tsize, (v) => { settings.tsize = v; })),
@@ -5006,6 +5360,7 @@ function c3Update(dt) {
 const c3Cam = (px, py, pz, lx, ly, lz, fov = 34) => { C3.cam.pos.set(px, py, pz); C3.cam.look.set(lx, ly, lz); C3.cam.fov = fov; };
 const lerp3 = (a, b, k) => a + (b - a) * k;
 function cineRender(dt) {
+  if (FP.on) fpApply(false);
   gtime += dt; U.time.value = gtime;
   c3Update(dt);
   camTarget.x = C3.cam.look.x;
@@ -5257,6 +5612,7 @@ $('minimap').addEventListener('click', () => toggleMap(true));
 $('minimap').addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); toggleMap(true); }, { passive: false });
 tapBind('tb-skill', () => toggleSkills());
 tapBind('tb-pause', () => togglePause());
+tapBind('tb-view', () => { if (state.mode === 'play') toggleView(); });
 // cụm nút hành động trên điện thoại
 tapBind('t-reload', reload);
 (() => {

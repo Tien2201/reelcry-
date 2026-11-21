@@ -506,6 +506,10 @@ export function buildWorld(scene, quality) {
   const hi = quality === 'high';
   const root = new THREE.Group();
   scene.add(root);
+  // chỉ hiện ở góc nhìn thứ nhất: trần nhà, mặt trong tường trước, dãy nhà bên kia đường
+  const fpOnly = new THREE.Group(); fpOnly.visible = false; root.add(fpOnly);
+  const mCeil = new THREE.MeshLambertMaterial({ color: '#8c867c' });
+  const fpPlane = (w, h, m, x, y, z, ry = 0, rx = 0) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.receiveShadow = true; fpOnly.add(o); return o; };
   const batch = new Batch();
   const colliders = { circles: [], boxes: [] };
   const emitters = [], fires = [], smokeSources = [], graves = [], perches = [], lampHeads = [], canopies = [];
@@ -1208,6 +1212,14 @@ export function buildWorld(scene, quality) {
     const fuv = fg.attributes.uv; for (let i = 0; i < fuv.count; i++) fuv.setXY(i, fuv.getX(i) * (w - 0.24) / 2, fuv.getY(i) * (BLD_D - 0.1) / 2);
     fg.rotateX(-Math.PI / 2);
     batch.add(fg, floorCache[b.floor], mat4(cx, 0.012, zm + 0.05));
+    // góc nhìn thứ nhất: trần + mặt trong của tường trước (chừa ô cửa)
+    {
+      const dH = Math.min(ceil - 0.05, b.doorH || 2.1), xi0 = b.x0 + 0.12, xi1 = b.x1 - 0.12, zi = zf - 0.03;
+      fpPlane(w - 0.24, BLD_D - 0.1, mCeil, cx, ceil - 0.01, zm + 0.05, 0, Math.PI / 2);
+      if (b.doorX0 - xi0 > 0.02) fpPlane(b.doorX0 - xi0, ceil, mIn, (xi0 + b.doorX0) / 2, ceil / 2, zi, Math.PI);
+      if (xi1 - b.doorX1 > 0.02) fpPlane(xi1 - b.doorX1, ceil, mIn, (b.doorX1 + xi1) / 2, ceil / 2, zi, Math.PI);
+      fpPlane(b.doorX1 - b.doorX0, ceil - dH, mIn, (b.doorX0 + b.doorX1) / 2, (ceil + dH) / 2, zi, Math.PI);
+    }
     // ngưỡng cửa
     misc.add(b.door, 0.02, zf - 0.05, b.doorW, 0.04, 0.22, '#3a3632');
     // mái
@@ -2124,6 +2136,8 @@ export function buildWorld(scene, quality) {
       for (let x = XMIN + 0.3; x < XMAX; x += 0.5) leaves.add(x + (rng() - 0.5) * 0.2, 0.75 + rng() * 0.25, RAIL_Z + 0.75 + (rng() - 0.5) * 0.3, 0.55, 0.5 + rng() * 0.3, 0.5, rng() < 0.5 ? '#3e6a26' : '#4e7c2e');
     }
     addBox(XMIN, RAIL_Z - 0.02, XMAX, RAIL_Z + 0.6);
+    // góc nhìn thứ nhất: trần hành lang (đáy sàn tầng trên)
+    fpPlane(XMAX - XMIN, RAIL_Z + 0.4 - WALL_Z, mSlab, 0, FLOOR_H - 0.02, (RAIL_Z + 0.4 + WALL_Z) / 2, 0, Math.PI / 2);
     // mép sàn và mặt tiền các tầng dưới (nhìn từ sân lên)
     batch.add(boxGeo(XMAX - XMIN, 0.42, 0.52, 4, 1), mSlab, mat4(0, -0.21, RAIL_Z + 0.2));
     if (IN > 1) {
@@ -2328,12 +2342,32 @@ export function buildWorld(scene, quality) {
     }
   }
 
+  // góc nhìn thứ nhất: dãy nhà bên kia đường (phía nam) để quay lại không thấy khoảng trống
+  if (!IN) {
+    const fr = makeRng(Z.seed + 99);
+    const facs = [0, 1, 2, 3].map((i) => T.townFacadeTex({ w: 9, h: 7.2, floors: 2, kind: i % 2 ? 'house' : 'shop', wall: i === 2 ? 'brick' : 'plaster', seed: Z.seed % 1000 + i * 17, litChance: 0.12, blood: 0.2 }));
+    const fm = facs.map((f) => { const m = lamb({ map: f.map, normalMap: f.normalMap }); m.emissiveMap = f.emissiveMap; m.emissive.set('#ffffff'); m.emissiveIntensity = 1.4; windowMats.push(m); return m; });
+    const mSideB = lamb({ color: '#5a544c' }), mRoofB = lamb({ color: '#3a3634' });
+    for (let x = XMIN - 6; x < XMAX + 6;) {
+      const w = 7 + fr() * 6, h = 5 + fr() * 6, z = 30 + fr() * 6, d = 6;
+      fpPlane(w, h, fm[Math.floor(fr() * 4)], x + w / 2, h / 2, z, Math.PI);
+      fpPlane(d, h, mSideB, x, h / 2, z + d / 2, -Math.PI / 2);
+      fpPlane(d, h, mSideB, x + w, h / 2, z + d / 2, Math.PI / 2);
+      fpPlane(w, d, mRoofB, x + w / 2, h, z + d / 2, 0, -Math.PI / 2);
+      x += w + (fr() < 0.3 ? 2 + fr() * 3 : 0.1);
+    }
+    // hai đầu phố: nhà chắn ngang
+    for (const sx of [-1, 1]) {
+      const x = sx * (XMAX + 0.5);
+      fpPlane(60, 9, fm[sx > 0 ? 1 : 3], x, 4.5, 8, -sx * Math.PI / 2);
+    }
+  }
   const leafMeshes = leaves.build(root);
   for (const v of [trunks, stones, planks, crates, misc, hay, soil, bulbs, metals]) v.build(root);
   batch.build(root);
 
   return {
-    root, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
+    root, fpOnly, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
     hideInReflection, grassMeshes, water, leafMeshes, animated,
     campfire, cemetery, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, waterMats, waterfalls,
     buildings: BUILDINGS, containers, pois, sirens, powerMats, zone: Z,

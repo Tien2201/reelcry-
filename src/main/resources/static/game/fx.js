@@ -393,7 +393,7 @@ export class Sky {
     const mat = new THREE.ShaderMaterial({
       uniforms: this.u, depthWrite: false,
       vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `
+      fragmentShader: this.skyFrag = `
         uniform vec3 uTop, uHor, uGlow, uMoonCol, uCloudCol, uSunCol; uniform float uStars, uMoon, uClouds, uTime, uFlash, uSunVis; uniform vec2 uSunPos, uMoonPos;
         varying vec2 vP;
         float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -420,6 +420,7 @@ export class Sky {
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
+    this.skyMat = mat;
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(800, 260), mat);
     this.mesh.position.set(0, 60, -160);
     this.mesh.renderOrder = -10;
@@ -432,7 +433,7 @@ export class Sky {
     const hm = new THREE.ShaderMaterial({
       uniforms: this.hu, transparent: true, depthWrite: false,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform sampler2D map; uniform vec3 uFog, uDark; uniform float uOff; varying vec2 vUv;
+      fragmentShader: this.hillFrag = `uniform sampler2D map; uniform vec3 uFog, uDark; uniform float uOff; varying vec2 vUv;
         void main(){
           vec4 t = texture2D(map, vec2(vUv.x * 2.0 + uOff, vUv.y));
           if (t.a < 0.5) discard;
@@ -446,8 +447,37 @@ export class Sky {
     this.hills.renderOrder = -9;
     this.hills.frustumCulled = false;
     parent.add(this.hills);
+    this.parent = parent; this.fp = null;
   }
-  update(t, A, camX, flash) {
+  // góc nhìn thứ nhất: trời và đồi thành hình trụ bao quanh người chơi (toạ độ trụ quy về toạ độ tấm phẳng cũ)
+  setFP(on) {
+    if (on && !this.fp) {
+      const R = 150;
+      const sm = new THREE.ShaderMaterial({
+        uniforms: this.u, depthWrite: false, side: THREE.BackSide,
+        vertexShader: `varying vec2 vP; void main(){ vP = vec2(atan(position.x, -position.z) * ${R.toFixed(1)}, position.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: this.skyFrag,
+      });
+      const sky = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 900, 48, 1, true), sm);
+      sky.renderOrder = -10; sky.frustumCulled = false;
+      const cap = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      cap.rotation.x = Math.PI / 2; cap.position.y = 449; cap.renderOrder = -10; cap.frustumCulled = false;
+      const hm = new THREE.ShaderMaterial({
+        uniforms: this.hu, transparent: true, depthWrite: false, side: THREE.BackSide,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = vec2(uv.x * 4.0, uv.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: this.hillFrag,
+      });
+      const hills = new THREE.Mesh(new THREE.CylinderGeometry(110, 110, 44, 64, 1, true), hm);
+      hills.position.y = 12 - 60; hills.renderOrder = -9; hills.frustumCulled = false;
+      const g = new THREE.Group(); g.add(sky, cap, hills); g.visible = false;
+      this.parent.add(g);
+      this.fp = { g, cap };
+    }
+    if (this.fp) this.fp.g.visible = on;
+    this.mesh.visible = this.hills.visible = !on;
+  }
+  update(t, A, camX, flash, camPos) {
+    if (this.fp && this.fp.g.visible && camPos) { this.fp.g.position.set(camPos.x, 60, camPos.z); this.fp.cap.material.color.copy(A.skyTop); }
     this.mesh.position.x = camX;
     this.hills.position.x = camX;
     this.hu.uOff.value = camX * 0.25 / 420 * 2;

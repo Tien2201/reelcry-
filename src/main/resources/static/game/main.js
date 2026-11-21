@@ -103,7 +103,7 @@ function hideRefl(...ms) { for (const m of ms) { reflHide.push(m); if (world) wo
 const camTarget = new THREE.Vector3(0, 1, 1);
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 // ---------- góc nhìn thứ nhất (cùng thế giới HD-2D, camera đặt ở tầm mắt nhân vật) ----------
-const FP = { on: false, yaw: -Math.PI / 2, pitch: 0, bobT: 0, bob: 0, sway: 0, swayY: 0, hand: 0, lastSwing: 0, locked: false, lockFailed: false, releasing: false };
+const FP = { on: false, yaw: -Math.PI / 2, pitch: 0, bobT: 0, bob: 0, run: 0, strafe: 0, sway: 0, swayY: 0, hand: 0, lastSwing: 0, locked: false, lockFailed: false, releasing: false };
 const SPRITES = new Set();
 const DIR_ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0), qYaw = new THREE.Quaternion();
@@ -2396,7 +2396,7 @@ function updateBots(dt) {
       if (d < m) { const k = (m - d) / 2, ux = d > 0.001 ? dx / d : Math.cos(i + j), uz = d > 0.001 ? dz / d : Math.sin(i + j); a.x -= ux * k; a.z -= uz * k; c.x += ux * k; c.z += uz * k; }
     }
     for (const t of humans) {
-      const dx = a.x - t.x, dz = a.z - t.z, d = Math.hypot(dx, dz), m = 0.85;
+      const dx = a.x - t.x, dz = a.z - t.z, d = Math.hypot(dx, dz), m = FP.on ? 1.4 : 0.85;
       if (d < m) { const ux = d > 0.001 ? dx / d : 1, uz = d > 0.001 ? dz / d : 0; a.x += ux * (m - d); a.z += uz * (m - d); }
     }
     collide(a);
@@ -4510,11 +4510,23 @@ function fpCamera(dt) {
   camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
   const low = player.downed > 0 || player.pinned;
   const eyeH = low ? 0.5 : 1.5 * (CHARS[player.char] ? CHARS[player.char].scale || 1 : 1) * (player.zombie ? 0.94 : 1);
-  const run = player.moving && player.stamina > 0.05 && held('run');
+  const run = player.moving && player.stamina > 0.05 && (held('run') || stickVec(sticks.move).m > 0.97);
+  FP.run = (FP.run || 0) + ((run ? 1 : 0) - (FP.run || 0)) * Math.min(1, dt * 5);
+  if (!Number.isFinite(camera.fov)) camera.fov = 72;
+  const ph0 = Math.floor(FP.bobT / Math.PI);
   if (player.moving) FP.bobT += dt * (run ? 12 : 8.5);
+  if (player.moving && Math.floor(FP.bobT / Math.PI) !== ph0) sound.step();   // tiếng bước chân mỗi nhịp
   FP.bob += ((player.moving ? 1 : 0) - FP.bob) * Math.min(1, dt * 6);
   FP.sway *= Math.exp(-dt * 8); FP.swayY *= Math.exp(-dt * 8);
-  const by = Math.abs(Math.sin(FP.bobT)) * 0.045 * FP.bob, bx = Math.cos(FP.bobT) * 0.025 * FP.bob;
+  // vận tốc ngang so với hướng nhìn: nghiêng đầu khi đi ngang
+  const vx = (player.x - (FP.px ?? player.x)) / Math.max(dt, 1e-3), vz = (player.z - (FP.pz ?? player.z)) / Math.max(dt, 1e-3);
+  FP.px = player.x; FP.pz = player.z;
+  const strafe = clamp((vx * -Math.sin(FP.yaw) + vz * Math.cos(FP.yaw)) / 5, -1, 1);
+  FP.strafe = (FP.strafe || 0) + (strafe - (FP.strafe || 0)) * Math.min(1, dt * 6);
+  const bobA = 1 + FP.run * 0.6;
+  const by = Math.abs(Math.sin(FP.bobT)) * 0.05 * FP.bob * bobA, bx = Math.cos(FP.bobT) * 0.03 * FP.bob * bobA;
+  const wantFov = 72 + FP.run * 7;
+  if (Math.abs(camera.fov - wantFov) > 0.05) { camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
   const sk = settings.shake ? shake : 0;
   const yaw = FP.yaw + (Math.random() - 0.5) * sk * 0.06;
   const pitch = clamp(FP.pitch + player.recoil * 0.7 + (Math.random() - 0.5) * sk * 0.06, -1.3, 1.3);
@@ -4523,6 +4535,8 @@ function fpCamera(dt) {
   const cp = Math.cos(pitch);
   tmpV.set(camera.position.x + Math.cos(yaw) * cp, camera.position.y + Math.sin(pitch), camera.position.z + Math.sin(yaw) * cp);
   camera.lookAt(tmpV);
+  // nghiêng nhẹ theo bước chân và khi đi ngang (như đầu người thật)
+  camera.rotateZ(-FP.strafe * 0.035 + Math.cos(FP.bobT) * 0.008 * FP.bob * bobA);
   camera.updateMatrixWorld();
   camQuat.copy(camera.quaternion);
   camTarget.x = player.x; camTarget.z = 1;
@@ -4572,7 +4586,12 @@ function drawViewModel(g) {
   const skin = pal.skin || '#f6cba2', skinS = pal.skinS || '#d9977a', sl = pal.top || '#4a5a6a', slS = pal.topS || '#34404c', OL = '#1d1018';
   const w = WEAPONS[player.weapon], mk = w.melee ? player.melee : null, mw = mk ? MELEE[mk] : null;
   // nhịp bước, lắc theo chuột, giật khi bắn, hạ tay khi nạp đạn / lục đồ / băng bó
-  let ox = Math.cos(FP.bobT) * 4 * FP.bob + FP.sway, oy = Math.abs(Math.sin(FP.bobT)) * 3 * FP.bob + FP.swayY;
+  // đung đưa hình số 8 theo bước chân, thở khi đứng yên, nghiêng khi đi ngang, chạy thì hạ và xoay vũ khí
+  const bA = FP.bob * (1 + (FP.run || 0) * 0.8);
+  let ox = Math.cos(FP.bobT) * 7 * bA + FP.sway - (FP.strafe || 0) * 6;
+  let oy = Math.abs(Math.sin(FP.bobT)) * 6 * bA + FP.swayY + Math.sin(gtime * 1.7) * 1.5 * (1 - FP.bob) + (FP.run || 0) * 12;
+  const tilt = Math.cos(FP.bobT) * 0.04 * bA + (FP.strafe || 0) * 0.06 + (FP.run || 0) * 0.16;
+  const armSw = Math.sin(FP.bobT) * 6 * bA;   // hai tay vung so le khi đi
   if (player.reloading > 0) { const rt = WEAPONS[player.weapon].reload * player.mod.reload; oy += Math.sin(clamp(1 - player.reloading / rt, 0, 1) * Math.PI) * 34; }
   if (player.action || player.searching) oy += 30;
   const D = FP.dbg || null;
@@ -4582,7 +4601,7 @@ function drawViewModel(g) {
   const sw = D ? D.sw : player.swing > 0 ? 1 - player.swing / 0.2 : 0;   // 0 → 1 trong cú đánh
   const muz = D ? D.mz : muzzleT > 0;
   const arc = sw > 0 ? Math.sin(sw * Math.PI) : 0;
-  c.save(); c.translate(Math.round(ox), Math.round(oy));
+  c.save(); c.translate(Wv / 2, Hv); c.rotate(tilt); c.translate(-Wv / 2, -Hv); c.translate(Math.round(ox), Math.round(oy));
   const R = (x, y, ww, hh, col) => { c.fillStyle = col; c.fillRect(x, y, ww, hh); };
   const RO = (x, y, ww, hh, col) => { R(x - 1, y - 1, ww + 2, hh + 2, OL); R(x, y, ww, hh, col); };
   const arm = (hx, hy, ang, len = 60, wid = 15) => {
@@ -4656,8 +4675,9 @@ function drawViewModel(g) {
   } else if (!mw || mk === 'fist') {
     // tay không: hai nắm đấm, đấm xen kẽ trái / phải
     const L = FP.hand === 0 && sw > 0 ? arc : 0, Rr = FP.hand === 1 && sw > 0 ? arc : 0;
-    arm(40 + L * 26, 82 - L * 26, 0.35 - L * 0.2, 60, 15); fist(40 + L * 26, 80 - L * 26, 1 + L * 0.25);
-    arm(120 - Rr * 26, 82 - Rr * 26, -0.35 + Rr * 0.2, 60, 15); fist(120 - Rr * 26, 80 - Rr * 26, 1 + Rr * 0.25);
+    const ly = armSw, ry = -armSw;
+    arm(40 + L * 26, 82 - L * 26 + ly, 0.35 - L * 0.2, 60, 15); fist(40 + L * 26, 80 - L * 26 + ly, 1 + L * 0.25);
+    arm(120 - Rr * 26, 82 - Rr * 26 + ry, -0.35 + Rr * 0.2, 60, 15); fist(120 - Rr * 26, 80 - Rr * 26 + ry, 1 + Rr * 0.25);
   } else if (mw.spr === 'knife') {
     const hx = 112 - arc * 46, hy = 78 - arc * 18, ang = -0.5 - arc * 0.9;
     arm(hx, hy, -0.4 + arc * 0.3, 60, 15);

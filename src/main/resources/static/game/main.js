@@ -4741,7 +4741,7 @@ const isSchoolZone = (id) => /^sf\d/.test(id);
 function storyZone(id) {
   if (state.mode !== 'play') return;
   if (!isSchoolZone(id)) armBots();
-  if (!isSchoolZone(id) && !story.seen.has('ch1')) playStory('ch1');
+  if (!isSchoolZone(id) && !story.seen.has('ch1')) { defineCh1(); playStory('ch1'); }
   else if (id === 'market' && !story.seen.has('lord')) playStory('lord').then(lordHorde);
 }
 // Zombie Chúa gầm lên: cả bầy lao về phía người chơi
@@ -5021,7 +5021,7 @@ function cineRender(dt) {
   tmpV.copy(C3.cam.look).applyMatrix4(camera.matrixWorldInverse);
   post.params.focus = -tmpV.z; post.params.dof = true;
   post.params.maxBlur = 3; post.params.range = 3.5; post.params.fall = 9; post.params.nearK = 0.6;
-  U.seeZ.value = 999;
+  U.seeZ.value = 999; U.seeCenter.value.set(-9999, -9999);
   g2.setTransform(ODPR, 0, 0, ODPR, 0, 0); g2.clearRect(0, 0, W, H);
   hurtFlash = Math.max(0, hurtFlash - dt * 1.5);
   fx.blood.update(dt); fx.spark.update(dt); fx.lit.update(dt); fx.smoke.update(dt);
@@ -5120,6 +5120,102 @@ function defineOutbreak() {
   });
   shots.push(cinema.titleShot('CHƯƠNG 0', 'TIẾT HỌC CUỐI', 'Mục tiêu: tìm KỀM CẮT ở kho dụng cụ tầng 3 · cắt khoá cổng chính tầng 1', 5));
   cinema.define('outbreak', shots);
+}
+
+// --- chương 1: ra khỏi cổng trường (3D) ---
+let cineHeli = null;
+const CH1_TITLE = () => cinema.titleShot('CHƯƠNG 1', 'THÀNH PHỐ BỊ ĐÓNG', 'Mục tiêu: tìm bộ đàm ở đồn cảnh sát để gọi cứu hộ');
+function defineCh1() {
+  const b = world.buildings.find((q) => q.portal);
+  // co-op: game vẫn chạy ngầm nên dùng bản phim 2D
+  if (net.active || !b) { cinema.define('ch1', [cinema.shot('citySmoke'), cinema.shot('lockdown'), CH1_TITLE()]); return; }
+  const D = b.door, A = {};
+  const ids = ['lycas', 'ama', 'naryne', 'hamble', 'tien'];
+  const hero = (id) => charSprites(CHARS.findIndex((c) => c.id === id), CHARS.find((c) => c.id === id).pal).fist;
+  const SPOT = [[-2.2, 1.1], [-0.9, 1.6], [0.3, 1.0], [1.5, 1.5], [2.6, 1.15]];
+  // cột khói đen phía sau dãy nhà: thành phố đang cháy
+  const smokeCols = [[-24, -13], [-8, -15], [9, -12], [26, -14]];
+  const burn = (dt) => {
+    for (const [ox, z] of smokeCols) if (Math.random() < dt * 10) {
+      const c = rand(0.06, 0.15);
+      fx.smoke.spawn(D + ox + rand(-1.2, 1.2), rand(7, 9), z + rand(-1, 1), 0.45 + rand(-0.2, 0.2), rand(1.6, 2.4), 0, rand(6, 8), rand(1.8, 2.8), new THREE.Color(c, c * 0.95, c * 0.9), { grav: -0.03, drag: 0.12, mode: 2, spin: rand(-0.5, 0.5) });
+    }
+  };
+  const flyHeli = (k) => {
+    if (!cineHeli) cineHeli = makeHeli();
+    const g = cineHeli.group; g.visible = k > 0 && k < 1;
+    g.position.set(D + 30 - 60 * k, 11.5 + Math.sin(k * 6) * 0.3, -3.5);
+    g.rotation.set(0, Math.PI, 0.1);
+    cineHeli.rotor.rotation.y += 0.45; cineHeli.tail.rotation.z += 0.5;
+    cineHeli.beacon.visible = Math.floor(gtime * 2.5) % 2 === 0;
+  };
+  const shots = [];
+  shots.push({
+    three: true, dur: 8.4, cap: ['HẾT CHƯƠNG 0', 'Cổng Trường Quốc tế Vân Lâm'], amb: { wind: 0.6, heli: 0.2, drone: 0.4 },
+    lines: [[3.8, 'lycas', 'Không chỉ trường mình... cả thành phố đều như vậy.']],
+    enter() {
+      c3Begin(true);
+      for (const z of zombies) if (z.sprite.group.visible) { z.sprite.group.visible = false; C3.hidden.push(z.sprite.group); }
+      ids.forEach((id, i) => { A[id] = actor(hero(id), D + (i - 2) * 0.35, WALL_Z - 0.4, 'down'); });
+      for (let i = 0; i < 60; i++) burn(0.12);
+    },
+    update(t, dt) {
+      burn(dt);
+      const k = ease01(t / 8.4);
+      c3Cam(lerp3(D + 4.6, D + 2.4, k), lerp3(1.3, 1.15, k), lerp3(6.6, 5.9, k), lerp3(D - 0.2, D - 0.4, k), 1.5, lerp3(0, 0.3, k), 42);
+      ids.forEach((id, i) => { if (t > 0.4 + i * 0.55 && !A[id].go) { A[id].go = 1; walkTo(A[id], D + SPOT[i][0], SPOT[i][1], 2.2); } });
+      if (t > 5.4) { if (!A.lycas.path) A.lycas.dir = 'right'; if (!A.naryne.path) A.naryne.dir = 'left'; }
+    },
+  });
+  shots.push({
+    three: true, dur: 7.6, amb: { wind: 0.5, heli: 1, drone: 0.3 },
+    lines: [[1.4, 'hamble', 'Trực thăng quân đội! Này! Ở dưới này!'], [4.6, 'tien', 'Họ không dừng lại đâu. Mình phải tự tìm đường sống.']],
+    enter() { for (const id of ids) A[id].dir = 'down'; },
+    update(t, dt) {
+      burn(dt);
+      flyHeli(clamp((t - 0.2) / 6.6, 0, 1));
+      C3.shake = Math.max(C3.shake, t > 1.5 && t < 4.5 ? 0.35 : 0);
+      c3Cam(D + 0.8, 0.45, 6.2, D - 0.6, lerp3(4.2, 5.2, ease01(t / 7.6)), -2, 58);
+      const h = A.hamble;
+      if (t > 1.0 && !h.go2) { h.go2 = 1; walkTo(h, h.x + 0.3, h.z + 0.8, 2.6); }
+      h.y = t > 1.5 && t < 4.3 ? Math.abs(Math.sin(t * 9)) * 0.2 : 0;
+      if (t > 1.5 && t < 4.3 && !h.path) h.dir = Math.floor(t * 6) % 2 ? 'right' : 'left';
+      if (t > 4.3 && !h.path) h.dir = 'down';
+    },
+    exit() { if (cineHeli) cineHeli.group.visible = false; A.hamble.y = 0; },
+  });
+  shots.push({
+    three: true, dur: 8.2, amb: { wind: 0.4, drone: 0.8 },
+    lines: [[0.7, 'naryne', 'Phía sau! Có người... không, không phải người!'], [5.6, 'ama', 'Đi thôi. Trước khi cả bầy kéo tới.']],
+    cues: [[0.5, (s) => s.groan(0, 0, true)], [3.1, (s) => { s.swing(true); s.hit(); }], [3.25, (s) => s.groan(0, 0, true)], [4.35, (s) => s.bang()]],
+    enter() {
+      const zl = SPR.zombies.student || SPR.zombies.walker;
+      A.z = actor(zl[0], D - 9.5, 1.5, 'right');
+      walkTo(A.z, D - 6.0, 1.45, 1.5);
+      for (const id of ids) A[id].dir = 'left';
+    },
+    update(t, dt) {
+      burn(dt);
+      if (t < 2.0) c3Cam(D - 1.2, 1.5, 6.2, D - 4.6, 1.1, 1.2, 40);
+      else if (t < 5.0) c3Cam(D - 5.5, 1.3, 4.7, D - 6.3, 1.0, 1.4, 40);
+      else c3Cam(lerp3(D - 3.6, D - 1.6, ease01((t - 5) / 3.2)), 1.5, 6.4, D - 2.6, 1.1, 1.2, 44);
+      A.z.jit = t < 3.1 ? 0.03 : 0;
+      if (t > 2.0 && !A.amaGo) { A.amaGo = 1; walkTo(A.ama, D - 5.15, 1.45, 5.4); }
+      if (t > 3.1 && !A.punch) {
+        A.punch = 1; A.ama.path = null; A.ama.dir = 'left'; A.ama.x -= 0.22; A.z.path = null;
+        hitSpark(A.z.x + 0.3, 1.25, A.z.z + 0.1); bloodBurst(A.z.x, 1.2, A.z.z, 14, 0.9); C3.shake = 2;
+        walkTo(A.z, D - 7.2, 1.3, 7);
+      }
+      if (t > 3.25) { A.z.rot = Math.min(Math.PI / 2, (t - 3.25) * 4.5); A.z.y = 0.05; }
+      if (t > 3.5 && !A.step) { A.step = 1; walkTo(A.ama, D - 6.2, 1.4, 2.6); }
+      if (t > 4.3 && !A.stomp) { A.stomp = 1; A.ama.dir = 'left'; bloodBurst(A.z.x - 0.8, 0.25, A.z.z, 12, 0.7); C3.shake = 1; }
+      if (t > 5.0 && !A.go3) { A.go3 = 1; ids.forEach((id, i) => { if (id !== 'ama') walkTo(A[id], D + 4 + i * 0.6, 1.8 + (i % 2) * 0.5, 2.6); }); }
+      if (t > 6.2 && !A.amaOut) { A.amaOut = 1; walkTo(A.ama, D + 2, 1.5, 3); }
+    },
+    exit() { c3End(); },
+  });
+  shots.push(cinema.shot('lockdown'), CH1_TITLE());
+  cinema.define('ch1', shots);
 }
 
 // ================= NÚT BẤM =================

@@ -895,4 +895,4 @@ function init(o) { sound = o.sound; ZA = o.zombies; }
 // gỡ lỗi: nhảy tới cảnh i, thời điểm t
 function jump(i, t = 0) { if (!cur) return; cur.i = i - 1; nextShot(); cur.t = t; cur.fired = new Set((cur.shot.cues || []).filter((c) => c[0] < t)); }
 function state() { return cur ? { id: cinema.id, i: cur.i, n: cur.list.length, t: +cur.t.toFixed(2) } : null; }
-export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot };
+export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot, shot: (id) => SH[id] };

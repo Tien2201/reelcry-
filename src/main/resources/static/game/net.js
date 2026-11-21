@@ -83,16 +83,16 @@ class RoomTransport {
 }
 
 // ---------- Firebase Realtime Database (chạy ngoài Claude: GitHub Pages, web riêng) ----------
-// Dùng chung dự án Firebase với Tiên Đồ. Mỗi người chơi ghi trạng thái của mình vào
+// Dự án Firebase riêng của Dead Night (dead-night-b8197). Mỗi người chơi ghi trạng thái của mình vào
 // dn_rooms/<phòng>/<uid> = { d: JSON trạng thái, t: giờ máy chủ }; tự xoá khi rớt mạng.
 const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBYPZQt0hDyr2pQq4XOKqNB2uIdsxIYAg0',
-  authDomain: 'dau-hu-thui.firebaseapp.com',
-  databaseURL: 'https://dau-hu-thui-default-rtdb.asia-southeast1.firebasedatabase.app',
-  projectId: 'dau-hu-thui',
-  storageBucket: 'dau-hu-thui.firebasestorage.app',
-  messagingSenderId: '960591114586',
-  appId: '1:960591114586:web:e9d261b3d6ee865e5d4363',
+  apiKey: 'AIzaSyCIwPaLw_1453gchXZp91l38sMBnNHybCs',
+  authDomain: 'dead-night-b8197.firebaseapp.com',
+  databaseURL: 'https://dead-night-b8197-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'dead-night-b8197',
+  storageBucket: 'dead-night-b8197.firebasestorage.app',
+  messagingSenderId: '126933231124',
+  appId: '1:126933231124:web:11331f3832edd66aca2901',
 };
 const FB_VER = '10.12.2';
 class FireRoom {
@@ -201,7 +201,7 @@ async function signIn(A, auth) {
     try { return (await A.signInWithEmailAndPassword(auth, acc.e, acc.p)).user.uid; } catch (e) { /* tạo lại */ }
   }
   const rnd = () => Math.random().toString(36).slice(2, 10);
-  acc = { e: 'dn' + rnd() + rnd() + '@dauhuthui.game', p: rnd() + rnd() + 'X9' };
+  acc = { e: 'dn' + rnd() + rnd() + '@deadnight.game', p: rnd() + rnd() + 'X9' };
   const uid = (await A.createUserWithEmailAndPassword(auth, acc.e, acc.p)).user.uid;
   try { localStorage.setItem('dn_fbacc', JSON.stringify(acc)); } catch (e) { /* không lưu được */ }
   return uid;

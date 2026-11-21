@@ -192,7 +192,12 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
       rect(lx0, t0 + 6 + swing, lx0 + aw - 1, t0 + 7 + swing, pal.skin);
       rect(rx0, t0 + 1, rx0 + aw - 1, t0 + 5 - swing, (x) => (x === rx0 + aw - 1 ? pal.topS : pal.top));
       rect(rx0, t0 + 6 - swing, rx0 + aw - 1, t0 + 7 - swing, pal.skin);
-      if (view === 'down' && o.weapon === 'bow') {
+      if (view === 'down' && (o.weapon === 'fist')) {
+        // tay không: không cầm gì
+      } else if (view === 'down' && (o.weapon === 'club' || o.weapon === 'spear')) {
+        const L2 = o.weapon === 'spear' ? 14 : 8;
+        for (let k = 0; k < L2; k++) put(lx0 - 1, t0 + 7 + swing - k + (o.weapon === 'spear' ? 4 : 1), k === L2 - 1 && o.weapon === 'spear' ? '#d8d8e0' : '#8a5a32');
+      } else if (view === 'down' && o.weapon === 'bow') {
         for (let k = 0; k < 9; k++) put(lx0 - 2 + (k > 1 && k < 7 ? -1 : 0), t0 + 3 + swing + k, '#8a5a2a');
       } else if (view === 'down') {
         const gl = o.weapon === 'shotgun' ? 5 : o.weapon === 'smg' ? 4 : 3;
@@ -214,6 +219,17 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
       const w = o.weapon;
       const gl = w === 'shotgun' ? 9 : w === 'smg' ? 6 : 4;
       if (w === 'knife') { rect(cx + 6, sy, cx + 9, sy, pal.gunL); put(cx + 10, sy, pal.gunL); put(cx + 5, sy, pal.gun); put(cx + 5, sy + 1, pal.gun); }
+      else if (w === 'fist') { put(cx + 6, sy, pal.skinS); put(cx + 6, sy + 1, pal.skinS); }
+      else if (w === 'club') {
+        // gậy giơ chéo lên trước mặt
+        for (let k = 0; k < 8; k++) { put(cx + 5 + k * 0.6, sy - k, k > 4 ? '#6a4a2a' : '#8a5a32'); put(cx + 6 + k * 0.6, sy - k, k > 4 ? '#5a3e22' : '#7a5030'); }
+        put(cx + 9, sy - 6, '#9a9aa0'); put(cx + 10, sy - 7, '#9a9aa0');
+      } else if (w === 'spear') {
+        // giáo dựng đứng, mũi sắt phía trên
+        for (let k = -10; k <= 4; k++) put(cx + 6, sy + k, '#8a6a42');
+        rect(cx + 5, sy - 13, cx + 7, sy - 11, '#c8c8d0'); put(cx + 6, sy - 14, '#e8e8f0');
+        put(cx + 5, sy, pal.skin);
+      }
       else if (w === 'bow') {
         // cung gỗ dựng đứng trước người + dây cung
         for (let k = -6; k <= 6; k++) put(cx + 7 + (Math.abs(k) < 4 ? 1 : 0) - (Math.abs(k) > 5 ? 1 : 0), sy + k, k === 0 ? '#3a2414' : '#8a5a2a');
@@ -327,6 +343,9 @@ function survivorSet(pal) {
     shotgun: buildAtlas(SPEC.normal, pal, { weapon: 'shotgun' }),
     smg: buildAtlas(SPEC.normal, pal, { weapon: 'smg' }),
     bow: buildAtlas(SPEC.normal, pal, { weapon: 'bow' }),
+    fist: buildAtlas(SPEC.normal, pal, { weapon: 'fist' }),
+    club: buildAtlas(SPEC.normal, pal, { weapon: 'club' }),
+    spear: buildAtlas(SPEC.normal, pal, { weapon: 'spear' }),
   };
 }
 // bộ hình của từng nhân vật chơi được (bảng màu riêng)
@@ -337,7 +356,7 @@ export function charSprites(i, pal) {
 }
 // chân dung nhỏ cho màn chọn nhân vật (khung nhìn thẳng, đứng yên)
 export function charPortrait(i, pal, scale = 4) {
-  const a = charSprites(i, pal).knife;
+  const a = charSprites(i, pal).fist;
   const fw = Math.round(a.w * PPU), fh = Math.round(a.h * PPU);
   const c = document.createElement('canvas'); c.width = fw * scale; c.height = fh * scale;
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -371,7 +390,7 @@ export function makeCharacterSprites() {
 
 // ---------- biểu tượng vật phẩm 16x16 (HUD, túi đồ) ----------
 export function makeItemIcons() {
-  const N = 23, P = new Pix(16 * N, 16);
+  const N = 45, P = new Pix(16 * N, 16);
   const at = (i) => (x, y, w, h, c) => P.rect(i * 16 + x, y, w, h, c);
   // 0 đạn 9mm
   { const r = at(0); r(2, 7, 12, 7, '#4f5a2c'); r(2, 7, 12, 1, '#6c7a3c'); for (let i = 0; i < 4; i++) { r(3 + i * 3, 2, 2, 5, '#d8b050'); r(3 + i * 3, 2, 2, 1, '#fff0b0'); } r(5, 9, 6, 2, '#d8c070'); }
@@ -421,6 +440,45 @@ export function makeItemIcons() {
   { const r = at(21); r(2, 5, 11, 3, '#2a2a30'); r(2, 5, 11, 1, '#6a6a7c'); r(9, 8, 4, 6, '#3a2a22'); r(9, 8, 1, 6, '#5a4232'); r(7, 8, 2, 2, '#2a2a30'); }
   // 22 tên (mũi tên)
   { const r = at(22); for (let i = 0; i < 3; i++) { const o = i * 3; for (let k = 0; k < 10; k++) r(3 + k + (i === 1 ? 1 : 0), 14 - k - o, 1, 1, '#a8845a'); r(12 + (i === 1 ? 1 : 0), 5 - o, 2, 2, '#c8c8d0'); r(2 + (i === 1 ? 1 : 0), 13 - o, 2, 2, '#e84a3a'); } }
+  // 23 vải vụn
+  { const r = at(23); r(2, 4, 12, 9, '#c8b8a0'); r(2, 4, 12, 1, '#e0d4c0'); r(4, 6, 3, 2, '#a8483a'); r(9, 8, 3, 3, '#5a6a8a'); r(3, 11, 4, 1, '#9a8a74'); r(12, 3, 2, 3, '#c8b8a0'); }
+  // 24 đinh
+  { const r = at(24); for (let i = 0; i < 4; i++) { r(3 + i * 3, 3 + (i % 2), 3, 1, '#c8c8d0'); r(4 + i * 3, 4 + (i % 2), 1, 9, '#9a9aa4'); r(4 + i * 3, 13 + (i % 2) - 1, 1, 1, '#6a6a74'); } }
+  // 25 băng keo
+  { const r = at(25); r(3, 3, 10, 10, '#a8a8b0'); r(6, 6, 4, 4, '#3a3a40'); r(3, 3, 10, 1, '#c8c8d0'); r(12, 9, 3, 4, '#a8a8b0'); }
+  // 26 sắt vụn
+  { const r = at(26); r(2, 8, 7, 4, '#7a7a84'); r(2, 8, 7, 1, '#a8a8b4'); r(7, 4, 6, 3, '#8a6a4a'); r(9, 10, 5, 3, '#5a5a64'); r(4, 9, 1, 1, '#c8c8d0'); }
+  // 27 dây dù
+  { const r = at(27); for (let k = 0; k < 12; k++) { const x = 2 + k, y = 8 + Math.round(Math.sin(k * 0.9) * 3); r(x, y, 1, 2, k % 2 ? '#3a7a3a' : '#5a9a4a'); } r(2, 6, 3, 3, '#3a7a3a'); }
+  // 28 chai rỗng
+  { const r = at(28); r(6, 1, 4, 3, '#4a7a5a'); r(5, 4, 6, 10, '#6aa88a'); r(5, 4, 1, 10, '#a8e0c0'); r(5, 13, 6, 1, '#3a6a4a'); }
+  // 29 cồn y tế
+  { const r = at(29); r(6, 1, 4, 2, '#e8e8f0'); r(4, 3, 8, 11, '#d8e8f0'); r(4, 3, 1, 11, '#ffffff'); r(5, 6, 6, 5, '#2a6ac8'); r(7, 7, 2, 3, '#ffffff'); }
+  // 30-34 sách (bìa khác màu)
+  [['#8a5a2a', '#e8d8b0'], ['#e8e8e0', '#c8281e'], ['#3a5a2a', '#e8c040'], ['#2a6a3a', '#e8e0d0'], ['#c8701e', '#2a2a2e']].forEach(([cv, mk], k) => {
+    const r = at(30 + k); r(3, 2, 10, 12, cv); r(3, 2, 2, 12, '#1e1a16'); r(5, 13, 8, 1, '#e8e4d8'); r(13, 3, 1, 10, '#e8e4d8');
+    if (k === 1) { r(7, 5, 2, 6, mk); r(5, 7, 6, 2, mk); } else if (k === 3) { for (let i = 0; i < 6; i++) r(6 + i, 10 - i, 1, 1, mk); r(10, 4, 2, 2, mk); } else r(6, 5, 5, 4, mk);
+  });
+  // 35 dao bếp
+  { const r = at(35); for (let i = 0; i < 7; i++) r(3 + i, 11 - i, 2, 2, '#d8dce4'); r(10, 4, 2, 2, '#f0f4ff'); r(2, 12, 3, 3, '#4a2e1e'); }
+  // 36 dao tự chế
+  { const r = at(36); for (let i = 0; i < 6; i++) r(4 + i, 10 - i, 2, 2, '#9a9aa4'); r(2, 11, 4, 4, '#a8a8b0'); r(2, 12, 4, 1, '#3a3a40'); }
+  // 37 gậy gỗ
+  { const r = at(37); for (let i = 0; i < 11; i++) r(2 + i, 13 - i, i > 6 ? 3 : 2, i > 6 ? 3 : 2, i > 6 ? '#8a5a32' : '#a8743e'); }
+  // 38 gậy đóng đinh
+  { const r = at(38); for (let i = 0; i < 11; i++) r(2 + i, 13 - i, i > 6 ? 3 : 2, i > 6 ? 3 : 2, i > 6 ? '#8a5a32' : '#a8743e'); for (const [x, y] of [[10, 2], [13, 4], [12, 7], [9, 5]]) r(x, y, 1, 1, '#d8d8e0'); }
+  // 39 giáo
+  { const r = at(39); for (let i = 0; i < 12; i++) r(2 + i, 14 - i, 1, 1, '#8a6a42'); r(12, 1, 3, 3, '#c8c8d0'); r(11, 3, 2, 2, '#3a3a40'); }
+  // 40 ống thép
+  { const r = at(40); for (let i = 0; i < 11; i++) r(2 + i, 13 - i, 2, 2, '#7a7a88'); for (let i = 0; i < 11; i++) r(2 + i, 13 - i, 1, 1, '#b8b8c8'); }
+  // 41 áo giáp đệm
+  { const r = at(41); r(3, 3, 10, 11, '#6a6a5a'); r(3, 3, 3, 3, '#2a2a2e'); r(10, 3, 3, 3, '#2a2a2e'); r(5, 6, 6, 1, '#a8a8a8'); r(5, 9, 6, 1, '#a8a8a8'); r(7, 5, 2, 8, '#8a8a7a'); }
+  // 42 ba lô tự may
+  { const r = at(42); r(3, 4, 10, 10, '#7a6a3a'); r(5, 2, 6, 3, '#5a4a2a'); r(4, 8, 8, 4, '#8a7a4a'); r(7, 9, 2, 1, '#2a2a2e'); }
+  // 43 bom xăng
+  { const r = at(43); r(5, 5, 6, 9, '#4a7a5a'); r(5, 5, 1, 9, '#8ac0a0'); r(6, 2, 4, 3, '#c8b8a0'); r(7, 0, 2, 2, '#ff9a2a'); r(6, 8, 4, 3, '#c83a2a'); }
+  // 44 cung gỗ
+  { const r = at(44); for (let k = 0; k < 13; k++) r(4 + Math.round(Math.sin(k / 12 * Math.PI) * 4), 1 + k, 1, 1, '#8a5a2a'); r(4, 1, 1, 13, '#e8e0d0'); }
   for (let i = 0; i < N; i++) P.outline('#15130f', i * 16, 0, 16, 16);
   return P.canvas();
 }

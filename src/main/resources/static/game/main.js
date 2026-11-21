@@ -7,7 +7,7 @@ import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
 import { makeCharacterSprites, makePickupAtlas, DIR_ROW, playerSprites, PLAYER_COLORS, makeItemIcons, makeFlowerSprite, charSprites, charPortrait } from './sprites.js';
 import { CHARS, SKILLS, computeMod, xpNeed } from './chars.js';
-import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME } from './items.js';
+import { ITEMS, ITEM_ORDER, rollLoot, searchTime, RECIPES, TORCH_TIME, BATTERY_TIME, MELEE, MELEE_ORDER, BOOKS, ARMOR_PTS } from './items.js';
 import { openTransport, makeCode, roomName, cleanCode, cleanName } from './net.js';
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
@@ -167,7 +167,11 @@ const WEAPONS = [
 ];
 // nhân vật đang chơi (lưu lựa chọn)
 let myChar = clamp(+store.get('deadnight_char', '0') || 0, 0, CHARS.length - 1);
-const charSet = (ci) => { const s2 = charSprites(ci, CHARS[ci].pal); return [s2.knife, s2.pistol, s2.shotgun, s2.smg, s2.bow]; };
+const charSet = (ci) => { const s2 = charSprites(ci, CHARS[ci].pal); return [s2.knife, s2.pistol, s2.shotgun, s2.smg, s2.bow, s2.fist, s2.club, s2.spear]; };
+// hình đang cầm: ô 0 là vũ khí cận chiến (dao / tay không / gậy / giáo)
+const MELEE_SPR = { knife: 0, fist: 5, club: 6, spear: 7 };
+const sprIdx = () => (player.weapon === 0 ? MELEE_SPR[MELEE[player.melee].spr] : player.weapon);
+const setPlayerSprite = () => setSpriteMap(player.sprite, sprIdx());
 function loadProgress(ci) {
   try { const o = JSON.parse(store.get('deadnight_prog_' + CHARS[ci].id, '{}')); return { xp: +o.xp || 0, level: +o.level || 1, sp: +o.sp || 0, learned: new Set(Array.isArray(o.learned) ? o.learned : []) }; }
   catch (e) { return { xp: 0, level: 1, sp: 0, learned: new Set() }; }
@@ -248,7 +252,9 @@ addEventListener('keydown', (e) => {
   if (state.mode === 'view') { viewKey(e.code); return; }
   if (state.mode !== 'play') return;
   if (player.pinned && (e.code === 'KeyE' || e.code === 'Space') && !e.repeat) { player.struggle = (player.struggle || 0) + 1; return; }
-  if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); toggleBag(); return; }
+  if (e.code === 'KeyI' || e.code === 'Tab') { e.preventDefault(); if (craftUI.open) toggleCraft(false); toggleBag(); return; }
+  if (e.code === 'KeyB') { toggleCraft(); return; }
+  if (craftUI.open) { if (e.code === 'Escape') toggleCraft(false); return; }
   if (mapOpen) { if (e.code === 'KeyM' || e.code === 'Escape') toggleMap(false); return; }
   if (skillsOpen) { if (e.code === 'KeyK' || e.code === 'Escape') toggleSkills(false); return; }
   if (bagOpen) return;
@@ -266,6 +272,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') quickAntidote();
   if (e.code === 'KeyL') toggleFlashlight();
   if (e.code === 'KeyT') useItem('torch');
+  if (e.code === 'KeyX') throwMolotov();
   if (e.code === 'KeyM') toggleMap();
   if (e.code === 'KeyN') sound.muted = !sound.muted;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
@@ -443,7 +450,9 @@ function newPlayer() {
     x: (ZONE.start && ZONE.start.x) ?? 0, z: (ZONE.start && ZONE.start.z) ?? 1.0, r: 0.36, hp: 100, maxHp: 100, stamina: 1, speed: 4.3, food: 85, water: 85, starve: 0,
     aim: 0, dir: 'right', weapon: 0, cooldown: 0, reloading: 0, walk: 0, recoil: 0, inv: 0, moving: false, stepT: 0,
     guns: WEAPONS.map((w, i) => ({ owned: i === 0, ammo: 0 })),
-    bag: { ammo9: 0, shells: 0, bandage: 1, medkit: 0, food: 1, water: 1, fuel: 0, part: 0, key: 0, antibio: 0, syringe: 0, antidote: 0, flower: 0, powder: 0, casing: 0, wood: 1, torch: 0, flashlight: 0, battery: 0, arrow: 0 },
+    // vào game tay trắng: phải lục lọi để có đồ
+    bag: Object.fromEntries(Object.keys(ITEMS).map((k) => [k, 0])),
+    melee: 'fist', durs: {}, armor: 0, pack: false, recipes: new Set(), books: new Set(),
     flashOn: true, battery: 0, torchT: 0, exit: null,
     looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     infected: 0, zombie: false, picked: new Set(), groanT: 0, coughT: 12,
@@ -451,16 +460,45 @@ function newPlayer() {
   };
   p0.mod = computeMod(C.id, p0.learned);
   p0.maxHp = C.hp + p0.mod.maxHp; p0.hp = p0.maxHp; p0.speed = C.speed + p0.mod.speed;
-  // Tiến khởi đầu với cung và một bó tên
-  if (C.id === 'tien') { p0.guns[4].owned = true; p0.guns[4].ammo = 1; p0.bag.arrow = 12; p0.weapon = 4; }
+  // kiến thức có sẵn theo nghề: Naryne biết công thức y tế, Tiến biết làm cung tên
+  const innate = { naryne: 'med', tien: 'bow' }[C.id];
+  if (innate) { p0.books.add(innate); for (const R of RECIPES) if (R.book === innate) p0.recipes.add(R.id); }
   return p0;
 }
 const curGun = () => player.guns[player.weapon];
 function switchWeapon(i) {
+  if (i === 0 && player.weapon === 0) { cycleMelee(); return; }
   if (!player.guns[i].owned || i === player.weapon) return;
   player.weapon = i; player.reloading = 0; player.cooldown = 0.25;
-  setSpriteMap(player.sprite, i);
+  setPlayerSprite();
   sound.reload(); hud.dirty = true;
+}
+// vũ khí cận chiến: dùng loại đang có, gãy thì tự đổi sang loại tốt nhất còn lại
+const meleeOwned = () => MELEE_ORDER.filter((id) => id === 'fist' || (player.bag[id] || 0) > 0);
+function equipMelee(id, quiet) {
+  if (id !== 'fist' && !(player.bag[id] > 0)) return;
+  player.melee = id;
+  if (id !== 'fist' && !(player.durs[id] > 0)) player.durs[id] = MELEE[id].dur;
+  if (player.weapon === 0) setPlayerSprite();
+  if (!quiet) lootFeed(id === 'fist' ? null : id, 'Cầm ' + MELEE[id].name.toLowerCase());
+  hud.dirty = true;
+}
+function cycleMelee() {
+  const list = meleeOwned();
+  if (list.length < 2) return;
+  equipMelee(list[(list.indexOf(player.melee) + 1) % list.length]);
+}
+function bestMelee() { return meleeOwned()[0]; }
+function wearMelee() {
+  const id = player.melee;
+  if (id === 'fist') return;
+  player.durs[id] = (player.durs[id] || MELEE[id].dur) - 1;
+  if (player.durs[id] > 0) return;
+  player.bag[id] = Math.max(0, (player.bag[id] || 0) - 1);
+  player.durs[id] = player.bag[id] > 0 ? MELEE[id].dur : 0;
+  showMsg(MELEE[id].name + ' ĐÃ GÃY!', player.bag[id] > 0 ? 'Lấy cái khác ra dùng' : 'Chế vũ khí mới bằng sách hướng dẫn');
+  sound.hit(player.x, player.z);
+  if (!(player.bag[id] > 0)) equipMelee(bestMelee(), true);
 }
 function cycleWeapon() {
   for (let k = 1; k <= WEAPONS.length; k++) { const i = (player.weapon + k) % WEAPONS.length; if (player.guns[i].owned) { switchWeapon(i); return; } }
@@ -519,7 +557,7 @@ function shoot() {
 }
 // chém dao: trúng tối đa 3 zombie trong cung trước mặt
 function melee() {
-  const w = WEAPONS[0];
+  const w = MELEE[player.melee] || MELEE.fist;
   if (player.cooldown > 0 || player.action) return;
   const M = player.mod;
   player.cooldown = w.rate * M.meleeRate; player.swing = 0.2; player.stamina = Math.max(0, player.stamina - 0.05);
@@ -530,10 +568,11 @@ function melee() {
     if (d > w.reach + z.r || Math.abs(angDiff(Math.atan2(dz, dx), player.aim)) > w.arc) continue;
     // Ama: hạ gục im lặng zombie chưa phát hiện mình (trừ zombie to/đặc biệt nặng)
     const silent = M.takedown && !z.aggro && z.type !== 'brute' && z.type !== 'charger' && z.type !== 'weeper';
-    damageZombie(z, silent ? 9999 : Math.round(w.dmg * M.meleeDmg), Math.atan2(dz, dx), 0.55 * (M.meleeDmg > 1.5 ? 1.5 : 1));
+    damageZombie(z, silent ? 9999 : Math.round(w.dmg * M.meleeDmg), Math.atan2(dz, dx), w.kb * (M.meleeDmg > 1.5 ? 1.5 : 1));
     if (silent) floaters.push({ x: z.x, y: 2.4, z: z.z, text: 'HẠ GỤC!', t: 0.9, color: '#f2c14e' });
-    if (++hits >= 3) break;
+    if (++hits >= (player.melee === 'spear' ? 2 : 3)) break;
   }
+  if (hits) wearMelee();
   for (let i = 0; i < 10; i++) {
     const a = player.aim + (i / 9 - 0.5) * 2 * w.arc * 0.85, r = 0.95 + Math.random() * 0.2;
     fx.spark.spawn(player.x + Math.cos(a) * r, 1.0 + (i / 9 - 0.5) * 0.3, player.z + Math.sin(a) * r, Math.cos(a + 1.4) * 2.2, 0, Math.sin(a + 1.4) * 2.2, 0.12, 0.06, '#e8f0ff', { grav: 0, drag: 9, mode: 1 });
@@ -1027,7 +1066,7 @@ function netTick(dt) {
     const a = pz.p;
     if (Array.isArray(a) && a.length >= 6) {
       rp.tx = clamp(+a[0] / 100 || 0, BOUNDS.x0 - 2, BOUNDS.x1 + 2); rp.tz = clamp(+a[1] / 100 || 0, BOUNDS.z0 - 2, BOUNDS.z1 + 2);
-      rp.aim = +a[2] / 100 || 0; rp.weapon = clamp(a[3] | 0, 0, 4); rp.flags = a[4] | 0; rp.hp = a[5] | 0; rp.inf = a[6] | 0;
+      rp.aim = +a[2] / 100 || 0; rp.weapon = clamp(a[3] | 0, 0, 7); rp.flags = a[4] | 0; rp.hp = a[5] | 0; rp.inf = a[6] | 0;
       rp.exit = EXITS[a[7] | 0] || null; rp.zone = a[8] === undefined ? -1 : a[8] | 0; rp.light = a[9] | 0;
       if (!rp.inited) { rp.x = rp.tx; rp.z = rp.tz; rp.inited = true; }
     }
@@ -1049,7 +1088,7 @@ function netTick(dt) {
   net.out = net.out.filter((e) => now - e.t < 700 || (e.sent || 0) < 4).slice(-24);
   for (const e of net.out) e.sent = (e.sent || 0) + 1;
   const flags = (player.moving ? 1 : 0) | (player.firing ? 2 : 0) | (player.downed > 0 ? 4 : 0) | (player.dead ? 8 : 0) | (player.boarded ? 16 : 0) | (player.searching ? 32 : 0) | (player.infected > 0 ? 64 : 0) | (player.zombie ? 128 : 0) | (player.bile > 0 ? 256 : 0);
-  const patch = { v: 1, n: net.name, j: net.joinT, c: myChar, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), player.weapon, flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected), EXITS.indexOf(player.exit), zoneIdx(), lightState()], e: net.out.map((e) => e.ev) };
+  const patch = { v: 1, n: net.name, j: net.joinT, c: myChar, p: [Math.round(player.x * 100), Math.round(player.z * 100), Math.round(player.aim * 100), sprIdx(), flags, Math.max(0, Math.round(player.hp)), Math.ceil(player.infected), EXITS.indexOf(player.exit), zoneIdx(), lightState()], e: net.out.map((e) => e.ev) };
   if (net.host) {
     net.snapT -= 1 / 12;
     if (net.snapT <= 0) { net.snapT = 1 / 8; patch.w = makeSnapshot(JSON.stringify(patch).length); }
@@ -1072,6 +1111,8 @@ function handleEvents(rp, list) {
     else if (type === 'gr') { rp.pingT = 6; sound.groan(rp.x, rp.z, true); }
     else if (type === 'gv' && ev[2] === net.me) receiveGift(String(ev[3]), rp, clamp((+ev[4] || 100) / 100, 1, 3));
     else if (type === 'bx') bileBlast((+ev[2] || 0) / 10, (+ev[3] || 0) / 10);
+    else if (type === 'fp' && !net.host) firePool((+ev[2] || 0) / 10, (+ev[3] || 0) / 10, false);
+    else if (type === 'mol' && net.host) firePool((+ev[2] || 0) / 10, (+ev[3] || 0) / 10, true);
     else if (type === 'ac' && !net.host) spitAcid((+ev[2] || 0) / 10, (+ev[3] || 0) / 10, (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, false);
     else if (type === 'pin' && ev[2] === net.me) setPinned(ev[3] | 0);
     else if (type === 'unpin' && ev[2] === net.me && player.pinned === (ev[3] | 0)) player.pinned = 0;
@@ -1244,8 +1285,8 @@ function updateRemote(dt) {
     sp.group.position.set(rp.x, down ? 0.05 : 0, rp.z);
     rp.fireT -= dt;
     if (rp.flags & 2 && !down && rp.fireT <= 0) {
-      const w = WEAPONS[rp.weapon];
-      rp.fireT = w.melee ? w.rate : w.rate;
+      const w = WEAPONS[rp.weapon > 4 ? 0 : rp.weapon];
+      rp.fireT = w.melee ? 0.5 : w.rate;
       const a = rp.aim, mx = rp.x + Math.cos(a) * 0.75, mz = rp.z + Math.sin(a) * 0.75;
       if (w.melee) { for (let i = 0; i < 6; i++) { const aa = a + (i / 5 - 0.5) * 1.6; fx.spark.spawn(rp.x + Math.cos(aa), 1.0, rp.z + Math.sin(aa), 0, 0, 0, 0.1, 0.06, '#e8f0ff', { grav: 0, drag: 9, mode: 1 }); } }
       else {
@@ -1260,7 +1301,9 @@ function playerAlive() { return state.mode === 'play' && !(player.downed > 0) &&
 function hurtPlayer(z, d) {
   if (player.inv > 0) return;
   if (player.mod.dodge && Math.random() < player.mod.dodge) { player.inv = 0.3; floaters.push({ x: player.x, y: 2.3, z: player.z, text: 'NÉ!', t: 0.8, color: '#f2c14e' }); return; }
-  player.hp -= z.dmg; player.inv = 0.35; hurtFlash = 0.5;
+  let dmg = z.dmg;
+  if (player.armor > 0) { const ab = Math.min(player.armor, dmg * 0.5); player.armor -= ab; dmg -= ab; if (player.armor <= 0) { player.armor = 0; lootFeed('armor', 'Áo giáp đã rách nát', true); } }
+  player.hp -= dmg; player.inv = 0.35; hurtFlash = 0.5;
   player.action = null; interact.t = 0;
   shake = Math.max(shake, z.type === 'brute' ? 0.6 : 0.3);
   sound.hurt();
@@ -1434,6 +1477,7 @@ function questDone(it) {
   if (it === 'fuel') return power || player.bag.fuel > 0;
   if (it === 'part') return Q.parts + (player.bag.part || 0) >= 2;
   if (it === 'key') return Q.armory || player.bag.key > 0;
+  if (ITEMS[it] && ITEMS[it].book) return (player.bag[it] || 0) > 0;
   return false;
 }
 function questDescribe(key) {
@@ -1508,6 +1552,9 @@ function questText() {
   if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · ` + (toDT || 'bãi đáp cuối phố →')];
   if (Q.heli) return ['Trực thăng đang tới…', toDT || 'Chạy về bãi đáp cuối phố →'];
   if (Q.called) return ['Cầm cự tới bình minh', 'Trực thăng cứu hộ sẽ tới lúc 6:00' + (toDT ? ' · ' + toDT : '')];
+  const armed = player.melee !== 'fist' || player.guns.some((g, i) => i > 0 && g.owned);
+  if (!Q.found && ZONE.id === 'school' && !player.books.has('basic')) return ['Lục lọi các phòng học', 'Tìm SÁCH CHẾ ĐỒ trên bàn giáo viên · nhặt gỗ, vải, băng keo, phế liệu…'];
+  if (!Q.found && ZONE.id === 'school' && !armed) return ['Chế vũ khí đầu tiên', 'Mở ' + (isTouch ? 'nút CHẾ ĐỒ (góc trên phải)' : 'bàn chế đồ (phím B)') + ' · 2 thanh gỗ = gậy gỗ'];
   if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', toDT ? 'Ở Trung tâm thành phố · ' + toDT : 'Đồn cảnh sát ở cuối phố phía đông →'];
   if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', toDT || 'Bàn bộ đàm trong đồn cảnh sát'];
   const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (Trung tâm, Phố chợ)');
@@ -1517,7 +1564,10 @@ function questText() {
 function questListHtml() {
   const it = (done, cur, text) => `<div class="${done ? 'done' : cur ? 'cur' : ''}">${done ? '✓' : '•'} ${text}</div>`;
   const ready = power && Q.parts >= 2;
+  const book = player.books.has('basic'), armed = player.melee !== 'fist' || player.guns.some((g, i) => i > 0 && g.owned);
   return '<b style="color:var(--gold);font-weight:400">NHIỆM VỤ</b>'
+    + it(book, !book, 'Lục bàn giáo viên trong trường để tìm sách chế đồ')
+    + it(armed, book && !armed, 'Chế vũ khí đầu tiên ở bàn chế đồ')
     + it(Q.found, !Q.found, 'Tìm bộ đàm ở đồn cảnh sát (Trung tâm thành phố)')
     + it(power, Q.found && !power, 'Can xăng ở gara → đổ vào máy phát cạnh đồn')
     + it(Q.parts >= 2, Q.found && Q.parts < 2, `Linh kiện bộ đàm ${Q.parts}/2 · nhà ông Tư, xe quân sự ở chốt kiểm soát`)
@@ -1685,6 +1735,7 @@ function updateInteract(dt) {
   } else interact.t = Math.max(0, interact.t - dt * 3);
   $('t-use').classList.toggle('off', !(best && best.info.can));
   $('t-shove').classList.toggle('off', !player.mod.shove);
+  $('t-throw').classList.toggle('off', !(player.bag.molotov > 0));
 }
 function doInteract(tg) {
   if (tg.type === 'c') {
@@ -1712,18 +1763,32 @@ function giveItems(list, picked = false) {
   if (!picked) player.lootCount++;
   if (!list.length) { lootFeed(null, 'Không có gì…', true); sound.empty(); return; }
   for (const [it, n] of list) {
+    const def = ITEMS[it];
+    if (def.book && player.bag[it] > 0) continue;
     const got = addItem(it, n);
-    lootFeed(it, got > 0 ? `+${ITEMS[it].weapon !== undefined ? '' : got + ' '}${ITEMS[it].name}` : `${ITEMS[it].name}: túi đầy`, got <= 0);
+    lootFeed(it, got > 0 ? `+${def.weapon !== undefined || def.book ? '' : got + ' '}${def.name}` : `${def.name}: túi đầy`, got <= 0);
+    if (got > 0 && def.book) learnBook(def.book);
+    if (got > 0 && def.melee && MELEE_ORDER.indexOf(def.melee) < MELEE_ORDER.indexOf(player.melee)) equipMelee(def.melee, true);
   }
   sound.pickup();
 }
-const capOf = (it) => (ITEMS[it].quest ? ITEMS[it].max : Math.round(ITEMS[it].max * ((player && player.mod && player.mod.carry) || 1)));
+// đọc sách: học hết công thức trong sách
+function learnBook(book) {
+  if (player.books.has(book)) return;
+  player.books.add(book);
+  const list = RECIPES.filter((R) => R.book === book);
+  for (const R of list) player.recipes.add(R.id);
+  showMsg('ĐÃ ĐỌC: ' + BOOKS[book].name.toUpperCase(), `Học ${list.length} công thức · ` + (isTouch ? 'bấm CHẾ' : 'phím B') + ' để chế đồ');
+  gainXP(10, true); hud.dirty = true;
+}
+const capOf = (it) => (ITEMS[it].quest || ITEMS[it].book ? ITEMS[it].max : Math.round(ITEMS[it].max * ((player && player.mod && player.mod.carry) || 1) * (player && player.pack ? 1.35 : 1)));
 function addItem(it, n) {
   const def = ITEMS[it];
   if (def.weapon !== undefined) {
     const g = player.guns[def.weapon], w = WEAPONS[def.weapon];
     if (!g.owned) {
       g.owned = true; g.ammo = Math.ceil(w.mag / 2);
+      if (w.bow) addItem('arrow', 5);
       showMsg('VŨ KHÍ MỚI', `${w.name} — bấm ${def.weapon + 1}${isTouch ? ' hoặc ⇄' : ''}`);
       switchWeapon(def.weapon);
       return 1;
@@ -1734,7 +1799,7 @@ function addItem(it, n) {
   player.bag[it] = Math.min(capOf(it), before + n);
   return player.bag[it] - before;
 }
-const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…', craft: 'Đang chế…', antidote: 'Tiêm thuốc giải…', torch: 'Châm đuốc…' };
+const ACTION_TEXT = { bandage: 'Băng bó vết thương…', medkit: 'Sơ cứu…', food: 'Đang ăn…', water: 'Đang uống…', craft: 'Đang chế…', antidote: 'Tiêm thuốc giải…', torch: 'Châm đuốc…', armor: 'Mặc áo giáp…', pack: 'Đeo ba lô…' };
 function useItem(it) {
   const def = ITEMS[it];
   if (!def.use || player.action || !(player.bag[it] > 0) || state.mode !== 'play') return false;
@@ -1743,6 +1808,8 @@ function useItem(it) {
   if (def.use === 'drink' && player.water > 96) { lootFeed(it, 'Chưa khát', true); return false; }
   if (def.use === 'cure' && !(player.infected > 0)) { lootFeed(it, 'Chưa nhiễm virus', true); return false; }
   if (def.use === 'torch' && player.torchT > 20) { lootFeed(it, 'Đuốc vẫn đang cháy', true); return false; }
+  if (def.use === 'armor' && player.armor >= ARMOR_PTS * 0.8) { lootFeed(it, 'Áo giáp đang mặc vẫn còn tốt', true); return false; }
+  if (def.use === 'pack' && player.pack) { lootFeed(it, 'Đã đeo ba lô rồi', true); return false; }
   player.action = { item: it, t: 0, dur: def.time };
   player.reloading = 0;
   sound.use(def.use);
@@ -1762,6 +1829,8 @@ function finishAction() {
     sound.pickup(); hud.dirty = true; renderBagIfOpen();
     return;
   }
+  if (def.use === 'armor') { player.armor = ARMOR_PTS; lootFeed(it, 'Đã mặc áo giáp đệm · đỡ một nửa sát thương'); sound.use('heal'); hud.dirty = true; renderBagIfOpen(); return; }
+  if (def.use === 'pack') { player.pack = true; lootFeed(it, 'Đã đeo ba lô · mang được nhiều đồ hơn'); sound.use('heal'); hud.dirty = true; renderBagIfOpen(); return; }
   if (def.use === 'torch') { player.torchT = TORCH_TIME; lootFeed(it, 'Đã châm đuốc · cháy khoảng ' + Math.round(TORCH_TIME / 60 * 10) / 10 + ' phút'); sound.use('heal'); hud.dirty = true; renderBagIfOpen(); return; }
   if (def.use === 'cure') { cureInfection(); renderBagIfOpen(); return; }
   applyItemEffect(it, player.mod.healMul);
@@ -1793,7 +1862,35 @@ function buildIcons() {
     ICON[it] = c.toDataURL(); iconCanvas[it] = c;
   }
 }
-const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L']];
+const QUICK = [['bandage', 'F'], ['medkit', 'F'], ['food', 'C'], ['water', 'C'], ['antidote', 'V'], ['torch', 'T'], ['flashlight', 'L'], ['molotov', 'X']];
+// icon pixel 12×12 cho thanh công cụ
+const UI_PIX = {
+  bag: { pal: { '#': '#140e0a', 1: '#9a6a34', 2: '#5a3a1a', 3: '#74502a', 4: '#c8945a', 5: '#f2c14e' }, rows: [
+    '....####....', '...#2..2#...', '..########..', '.#11111111#.', '.#14444441#.', '.#22222222#.',
+    '.#11155111#.', '.#11155111#.', '.#11111111#.', '.#13333331#.', '.#11111111#.', '..########..'] },
+  craft: { pal: { '#': '#140e0a', 1: '#c08040', 2: '#805028', 4: '#e0e4ec', 5: '#a8aeb8', 6: '#788090' }, rows: [
+    '............', '.##########.', '.#44444444#.', '.#55555555#.', '.#66666666#.', '.####11####.',
+    '....#11#....', '....#11#....', '....#11#....', '....#11#....', '....#22#....', '....####....'] },
+  map: { pal: { '#': '#140e0a', 1: '#e8d8a8', 2: '#c8b480', r: '#d84a3a', x: '#ff3a2a' }, rows: [
+    '............', '############', '#1112222111#', '#1r12222111#', '#1r1r222111#', '#11r2r22x1x#',
+    '#1112r2r1x1#', '#11122r2x1x#', '#1112222111#', '#1112222111#', '############', '............'] },
+  skill: { pal: { '#': '#140e0a', 4: '#fff0a0', 5: '#f2c14e' }, rows: [
+    '.....##.....', '.....##.....', '....#55#....', '#####55#####', '#5555445555#', '.#55544555#.',
+    '..#555555#..', '..#55##55#..', '.#55#..#55#.', '.#5#....#5#.', '.##......##.', '............'] },
+  pause: { pal: { '#': '#140e0a', 1: '#f1e6cf' }, rows: [
+    '............', '..###..###..', '..#1#..#1#..', '..#1#..#1#..', '..#1#..#1#..', '..#1#..#1#..',
+    '..#1#..#1#..', '..#1#..#1#..', '..#1#..#1#..', '..#1#..#1#..', '..###..###..', '............'] },
+};
+function pixIcon({ pal, rows }) {
+  const c = document.createElement('canvas');
+  c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } }));
+  return c.toDataURL();
+}
+function buildToolbarIcons() {
+  for (const k of Object.keys(UI_PIX)) { const b = $('tb-' + k); if (b) b.querySelector('img').src = pixIcon(UI_PIX[k]); }
+}
 function buildQuickBar() {
   const q = $('quick');
   q.innerHTML = '';
@@ -1801,7 +1898,7 @@ function buildQuickBar() {
     const d = document.createElement('div');
     d.className = 'qi'; d.dataset.it = it; d.title = ITEMS[it].name;
     d.innerHTML = `<img alt="" src="${ICON[it]}"><b>0</b><i>${key}</i>`;
-    const act = () => (it === 'antidote' ? quickAntidote() : it === 'flashlight' ? toggleFlashlight() : useItem(it));
+    const act = () => (it === 'antidote' ? quickAntidote() : it === 'flashlight' ? toggleFlashlight() : it === 'molotov' ? throwMolotov() : useItem(it));
     d.addEventListener('click', act);
     d.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); act(); }, { passive: false });
     q.appendChild(d);
@@ -1812,47 +1909,64 @@ function toggleBag(force) {
   bagOpen = force !== undefined ? force : !bagOpen;
   $('bag').classList.toggle('hidden', !bagOpen);
   if (!net.active) state.paused = bagOpen;
-  if (bagOpen) renderBag();
+  if (bagOpen) { bagGiveFor = null; renderBag(); }
 }
-function renderBagIfOpen() { if (bagOpen) renderBag(); }
+function renderBagIfOpen() { if (bagOpen) renderBag(); else bagGiveFor = null; }
+let bagGiveFor = null; // món đang chọn người để đưa
 function renderBag() {
   const grid = $('bag-grid');
   grid.innerHTML = '';
   const mates = nearMates();
-  for (const R of RECIPES) {
-    const cr = document.createElement('div');
-    cr.className = 'bi craft';
-    const need = Object.entries(R.need).map(([k, v]) => `${ITEMS[k].name} ${player.bag[k] || 0}/${v}`).join(' + ');
-    cr.innerHTML = `<img alt="" src="${ICON[R.out]}"><span>${R.label}<br><span class="n">${need}</span></span>`;
-    const cb = document.createElement('button'); cb.textContent = 'Chế'; cb.disabled = !canCraft(R);
-    cb.addEventListener('click', () => { if (bagOpen && !net.active) toggleBag(false); craft(R.id); });
-    cr.appendChild(cb); grid.appendChild(cr);
-  }
+  const top = document.createElement('div');
+  top.className = 'bi craft';
+  top.innerHTML = `<img alt="" src="${ICON.book_basic}"><span>Chế đồ · ${player.recipes.size}/${RECIPES.length} công thức<br><span class="n">Đặt nguyên liệu vào lưới 3×3 · đọc sách để biết công thức</span></span>`;
+  const tb = document.createElement('button'); tb.textContent = 'MỞ BÀN CHẾ' + (isTouch ? '' : ' (B)');
+  tb.addEventListener('click', () => toggleCraft(true));
+  top.appendChild(tb); grid.appendChild(top);
+  let any = false;
   for (const it of ITEM_ORDER) {
     const n = player.bag[it] || 0;
-    if ((ITEMS[it].quest || ITEMS[it].hideZero) && !n) continue;
+    if (!n && (ITEMS[it].quest || ITEMS[it].hideZero || ITEMS[it].mat || ITEMS[it].melee || it === 'armor' || it === 'pack' || it === 'molotov' || it === 'arrow')) continue;
+    if (!n && !['bandage', 'food', 'water'].includes(it)) continue;
+    any = true;
     const d = document.createElement('div');
-    d.className = 'bi' + (n ? '' : ' zero');
-    const extra = it === 'flashlight' && n ? ` · pin ${Math.ceil(player.battery / (BATTERY_TIME * player.mod.battery) * 100)}%` : '';
-    d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${ITEMS[it].name}<br><span class="n">×${n}${extra}</span></span>`;
+    d.className = 'bi' + (n ? '' : ' zero') + (ITEMS[it].melee && player.melee === it ? ' on' : '');
+    const def = ITEMS[it];
+    let extra = it === 'flashlight' && n ? ` · pin ${Math.ceil(player.battery / (BATTERY_TIME * player.mod.battery) * 100)}%` : '';
+    if (def.melee) extra = ` · bền ${player.melee === it || player.durs[it] ? (player.durs[it] || MELEE[it].dur) : MELEE[it].dur}/${MELEE[it].dur}`;
+    d.innerHTML = `<img alt="" src="${ICON[it]}"><span>${def.name}<br><span class="n">×${n}${extra}</span></span>`;
     let acts = null;
     const btn = (label, fn, cls) => {
       if (!acts) { acts = document.createElement('div'); acts.className = 'acts'; d.appendChild(acts); }
       const b2 = document.createElement('button'); b2.textContent = label; if (cls) b2.className = cls; b2.addEventListener('click', fn); acts.appendChild(b2);
     };
-    if (n && ITEMS[it].use) btn('Dùng', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
+    if (n && def.book) btn('Đọc', () => openBook(def.book));
+    if (n && def.melee && player.melee !== it) btn('Cầm', () => { equipMelee(it); if (player.weapon !== 0) switchWeapon(0); renderBagIfOpen(); });
+    if (n && def.use) btn(def.use === 'armor' ? 'Mặc' : def.use === 'pack' ? 'Đeo' : 'Dùng', () => { if (bagOpen && !net.active) toggleBag(false); useItem(it); renderBagIfOpen(); });
+    if (n && def.throw) btn('Ném', () => { if (bagOpen) toggleBag(false); throwMolotov(); });
     if (n && it === 'flashlight') btn(player.flashOn ? 'Tắt' : 'Bật', () => { toggleFlashlight(); renderBagIfOpen(); });
-    if (n && ITEMS[it].give) for (const rp of mates) btn('Cho ' + rp.name, () => { if (bagOpen && !net.active) toggleBag(false); giveTo(it, rp); renderBagIfOpen(); }, 'give');
-    if (n) btn('Vứt', () => dropItem(it), 'drop');
+    const giveFn = (rp) => () => { bagGiveFor = null; if (bagOpen && !net.active) toggleBag(false); giveTo(it, rp); renderBagIfOpen(); };
+    if (n && def.give && mates.length === 1) btn('Cho ' + mates[0].name, giveFn(mates[0]), 'give');
+    else if (n && def.give && mates.length > 1) {
+      if (bagGiveFor === it) { for (const rp of mates) btn(rp.name, giveFn(rp), 'give'); btn('✕', () => { bagGiveFor = null; renderBagIfOpen(); }); }
+      else btn('Cho…', () => { bagGiveFor = it; renderBagIfOpen(); }, 'give');
+    }
+    if (n && !def.book) btn('Vứt', () => { dropItem(it); if (def.melee && !(player.bag[it] > 0) && player.melee === it) equipMelee(bestMelee(), true); }, 'drop');
     grid.appendChild(d);
   }
+  if (!any) { const e = document.createElement('div'); e.className = 'bi zero'; e.textContent = 'Túi trống · lục lọi các phòng học để tìm đồ'; grid.appendChild(e); }
   WEAPONS.forEach((w, i) => {
     if (!player.guns[i].owned || w.melee) return;
     const d = document.createElement('div'); d.className = 'bi';
-    const ic = i === 1 ? ICON.pistol : i === 2 ? ICON.shotgun : ICON.smg;
+    const ic = i === 1 ? ICON.pistol : i === 2 ? ICON.shotgun : i === 4 ? ICON.bow : ICON.smg;
     d.innerHTML = `<img alt="" src="${ic}"><span>${w.name}<br><span class="n">${player.guns[i].ammo}/${w.mag} · dự trữ ${player.bag[w.ammo] || 0}</span></span>`;
     grid.appendChild(d);
   });
+  if (player.armor > 0 || player.pack) {
+    const d = document.createElement('div'); d.className = 'bi';
+    d.innerHTML = `<img alt="" src="${ICON.armor}"><span>Đang mặc<br><span class="n">${player.armor > 0 ? 'Giáp ' + Math.ceil(player.armor) + '/' + ARMOR_PTS : 'Không giáp'}${player.pack ? ' · ba lô +35%' : ''}</span></span>`;
+    grid.appendChild(d);
+  }
   $('bag-quest').innerHTML = questListHtml();
 }
 function unlockArmory(feed = true) {
@@ -2402,6 +2516,13 @@ function updateAcid(dt) {
     g.t += dt;
     const k = Math.min(1, g.t / g.d);
     g.m.position.set(g.x0 + (g.x1 - g.x0) * k, 1.4 + Math.sin(Math.PI * k) * 1.6 - k * 1.3, g.z0 + (g.z1 - g.z0) * k);
+    if (g.fire && Math.random() < dt * 30) fx.ember.spawn(g.m.position.x, g.m.position.y, g.m.position.z, 0, 0.3, 0, 0.3, 0.06, '#ffb040', { grav: -0.2, drag: 1, mode: 1 });
+    if (k >= 1 && g.fire) {
+      scene.remove(g.m); g.m.material.dispose(); globs.splice(i, 1);
+      if (!net.active || net.host) firePool(g.x1, g.z1, true);
+      else netEvent('mol', Math.round(g.x1 * 10), Math.round(g.z1 * 10));
+      continue;
+    }
     if (k >= 1) {
       scene.remove(g.m); g.m.material.dispose(); globs.splice(i, 1);
       const mesh = new THREE.Mesh(new THREE.CircleGeometry(1.25, 22), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 1.5, 0.22), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -2508,7 +2629,7 @@ function buildZoneWorld() {
   if (fx.decals) { fx.decals.clear(); for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9); }
 }
 function loadZone(id, entry) {
-  clearFlowers(); clearDrops(); clearAcid(); player.pinned = 0;
+  clearFlowers(); clearDrops(); clearAcid(); clearFire(); player.pinned = 0;
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = []; net.zmap.clear();
   for (const p of pickups) scene.remove(p.mesh);
@@ -2754,30 +2875,182 @@ function applyItemEffect(it, mul = 1) {
   sound.pickup(); hud.dirty = true; renderBagIfOpen();
 }
 
-// ---------- chế tạo ----------
+// ---------- chế đồ kiểu Minecraft: lưới 3×3, sách công thức ----------
 const canCraft = (R) => Object.entries(R.need).every(([k, v]) => (player.bag[k] || 0) >= v);
+const craftUI = { open: false, grid: Array(9).fill(null), sel: -1, tab: 'inv', focus: null, msg: '' };
+// phím V / nút thuốc giải: chế nhanh nếu đã biết công thức
 function craft(id) {
   const R = RECIPES.find((r) => r.id === id);
-  if (!R || player.action || player.zombie || state.mode !== 'play') return;
-  if ((player.bag[R.out] || 0) >= ITEMS[R.out].max) { lootFeed(R.out, `Đã mang đủ ${ITEMS[R.out].name.toLowerCase()}`, true); return; }
-  if (!canCraft(R)) {
-    const miss = Object.keys(R.need).filter((k) => (player.bag[k] || 0) < R.need[k]).map((k) => ITEMS[k].name).join(' + ');
-    lootFeed(R.out, 'Thiếu ' + miss, true);
-    return;
-  }
-  player.action = { item: 'craft', recipe: R.id, t: 0, dur: R.time * player.mod.craftTime, label: R.label + '…' };
-  player.reloading = 0;
-  sound.use('heal');
+  if (!R || player.zombie || state.mode !== 'play') return;
+  if (!player.recipes.has(R.id)) { lootFeed(R.out, 'Chưa biết cách chế · tìm ' + BOOKS[R.book].name, true); return; }
+  if (!canCraft(R)) { lootFeed(R.out, 'Thiếu ' + Object.keys(R.need).filter((k) => (player.bag[k] || 0) < R.need[k]).map((k) => ITEMS[k].name).join(' + '), true); return; }
+  for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
+  finishCraft(R);
+}
+function craftOutN(R) {
+  const M = player.mod;
+  return R.out === 'antidote' ? M.antidoteOut : R.out === 'arrow' ? M.arrows : R.out === 'ammo9' ? R.n + M.ammoCraft : R.out === 'shells' ? R.n + Math.ceil(M.ammoCraft / 2) : R.n;
 }
 function finishCraft(R) {
-  if (!canCraft(R)) return;
-  for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
-  const M = player.mod;
-  const n = R.out === 'antidote' ? M.antidoteOut : R.out === 'arrow' ? M.arrows : R.out === 'ammo9' ? R.n + M.ammoCraft : R.out === 'shells' ? R.n + Math.ceil(M.ammoCraft / 2) : R.n;
-  const got = addItem(R.out, n);
-  gainXP(4, true);
-  lootFeed(R.out, `+${got} ${ITEMS[R.out].name}`); sound.unlock(); hud.dirty = true; renderBagIfOpen();
+  const got = addItem(R.out, craftOutN(R));
+  if (ITEMS[R.out].melee && MELEE_ORDER.indexOf(R.out) < MELEE_ORDER.indexOf(player.melee)) equipMelee(R.out, true);
+  if (!player.recipes.has(R.id)) { player.recipes.add(R.id); showMsg('KHÁM PHÁ CÔNG THỨC MỚI', ITEMS[R.out].name); }
+  lootFeed(R.out, `+${got || ''} ${ITEMS[R.out].name}`.replace('+ ', '+')); sound.unlock(); gainXP(4, true); hud.dirty = true;
   if (R.out === 'antidote' && player.infected > 0) useItem('antidote');
+}
+function matchRecipe() {
+  const cnt = {};
+  for (const it of craftUI.grid) if (it) cnt[it] = (cnt[it] || 0) + 1;
+  const keys = Object.keys(cnt);
+  if (!keys.length) return null;
+  return RECIPES.find((R) => { const nk = Object.keys(R.need); return nk.length === keys.length && nk.every((k) => cnt[k] === R.need[k]); }) || null;
+}
+function gridReturn(i) { const it = craftUI.grid[i]; if (!it) return; player.bag[it] = (player.bag[it] || 0) + 1; craftUI.grid[i] = null; }
+function gridClear() { for (let i = 0; i < 9; i++) gridReturn(i); craftUI.sel = -1; }
+function gridPut(it) {
+  if (!(player.bag[it] > 0)) return false;
+  let i = craftUI.sel >= 0 && !craftUI.grid[craftUI.sel] ? craftUI.sel : craftUI.grid.indexOf(null);
+  if (i < 0) { craftUI.msg = 'Lưới chế đã đầy'; return false; }
+  player.bag[it]--; craftUI.grid[i] = it; craftUI.sel = -1;
+  return true;
+}
+// chọn công thức trong sách: tự xếp nguyên liệu đang có vào lưới
+function gridAuto(R) {
+  gridClear();
+  const miss = [];
+  for (const [k, v] of Object.entries(R.need)) for (let n = 0; n < v; n++) if (!gridPut(k)) miss.push(ITEMS[k].name);
+  craftUI.msg = miss.length ? 'Thiếu: ' + [...new Set(miss)].map((m) => m + ' ×' + miss.filter((x) => x === m).length).join(', ') : '';
+}
+function gridCraft() {
+  const R = matchRecipe();
+  if (!R) return;
+  if ((player.bag[R.out] || 0) >= capOf(R.out) && !ITEMS[R.out].weapon) { craftUI.msg = 'Túi đã đầy ' + ITEMS[R.out].name.toLowerCase(); renderCraft(); return; }
+  craftUI.grid.fill(null);
+  finishCraft(R);
+  craftUI.msg = '';
+  renderCraft();
+}
+function toggleCraft(force) {
+  if (state.mode !== 'play' || player.zombie) return;
+  const open = force !== undefined ? force : !craftUI.open;
+  if (!open) gridClear();
+  craftUI.open = open;
+  $('craft').classList.toggle('hidden', !open);
+  if (!net.active) state.paused = open || bagOpen || mapOpen || skillsOpen;
+  if (open) { if (bagOpen) toggleBag(false); craftUI.msg = ''; renderCraft(); }
+}
+function openBook(book) { toggleCraft(true); craftUI.tab = 'book'; craftUI.focus = book; renderCraft(); }
+function slotEl(it, n, cls = '') {
+  const d = document.createElement('button');
+  d.className = 'cslot ' + cls;
+  if (it) d.innerHTML = `<img alt="" src="${ICON[it]}">` + (n > 1 ? `<b>${n}</b>` : '');
+  if (it) d.title = ITEMS[it].name;
+  return d;
+}
+function renderCraft() {
+  if (!craftUI.open) return;
+  const grid = $('cr-grid');
+  grid.innerHTML = '';
+  craftUI.grid.forEach((it, i) => {
+    const d = slotEl(it, 1, craftUI.sel === i ? 'sel' : '');
+    d.addEventListener('click', () => { if (craftUI.grid[i]) gridReturn(i); else craftUI.sel = craftUI.sel === i ? -1 : i; craftUI.msg = ''; renderCraft(); });
+    grid.appendChild(d);
+  });
+  const R = matchRecipe();
+  const out = $('cr-out');
+  out.innerHTML = '';
+  const od = slotEl(R ? R.out : null, R ? craftOutN(R) : 0, R ? 'out ready' : 'out');
+  od.addEventListener('click', gridCraft);
+  out.appendChild(od);
+  $('cr-go').disabled = !R;
+  $('cr-name').textContent = R ? (player.recipes.has(R.id) ? ITEMS[R.out].name : ITEMS[R.out].name + ' · công thức mới!') : craftUI.grid.some(Boolean) ? 'Chưa ra món nào…' : 'Đặt nguyên liệu vào lưới';
+  $('cr-msg').textContent = craftUI.msg;
+  document.querySelectorAll('#craft .crtab').forEach((b) => b.classList.toggle('on', b.dataset.tab === craftUI.tab));
+  const inv = $('cr-inv'), book = $('cr-book');
+  inv.classList.toggle('hidden', craftUI.tab !== 'inv'); book.classList.toggle('hidden', craftUI.tab !== 'book');
+  if (craftUI.tab === 'inv') {
+    inv.innerHTML = '';
+    const list = ITEM_ORDER.filter((it) => (player.bag[it] || 0) > 0 && !ITEMS[it].book && !ITEMS[it].quest);
+    if (!list.length) inv.innerHTML = '<div class="cr-empty">Túi trống · đi lục lọi các phòng để tìm nguyên liệu</div>';
+    for (const it of list) {
+      const d = slotEl(it, player.bag[it]);
+      d.addEventListener('click', () => { craftUI.msg = ''; gridPut(it); renderCraft(); });
+      inv.appendChild(d);
+    }
+  } else {
+    book.innerHTML = '';
+    for (const key of Object.keys(BOOKS)) {
+      const B = BOOKS[key], known = player.books.has(key);
+      const sec = document.createElement('div');
+      sec.className = 'crb' + (craftUI.focus === key ? ' focus' : '');
+      sec.innerHTML = `<h4><img alt="" src="${ICON[B.item]}"> ${B.name}</h4>`;
+      for (const R of RECIPES.filter((r) => r.book === key)) {
+        const learned = player.recipes.has(R.id);
+        const row = document.createElement('button');
+        row.className = 'crr' + (learned && canCraft(R) ? ' can' : '') + (learned ? '' : ' unk');
+        if (learned) row.innerHTML = `<img alt="" src="${ICON[R.out]}"><span><b>${ITEMS[R.out].name}${R.n > 1 ? ' ×' + craftOutN(R) : ''}</b><br>` + Object.entries(R.need).map(([k, v]) => `<i class="${(player.bag[k] || 0) >= v ? 'ok' : 'no'}"><img alt="" src="${ICON[k]}">${ITEMS[k].name} ${player.bag[k] || 0}/${v}</i>`).join(' ') + '</span>';
+        else row.innerHTML = `<span class="q">?</span><span><b>???</b><br><small>${known ? 'Chưa học' : 'Tìm sách ở ' + B.where}</small></span>`;
+        if (learned) row.addEventListener('click', () => { gridAuto(R); craftUI.tab = 'inv'; renderCraft(); });
+        sec.appendChild(row);
+      }
+      book.appendChild(sec);
+    }
+    if (craftUI.focus) { const f = book.querySelector('.crb.focus'); if (f) f.scrollIntoView({ block: 'nearest' }); craftUI.focus = null; }
+  }
+}
+
+// ---------- bom xăng: ném ra một vùng lửa ----------
+let firePools = [];
+function throwMolotov() {
+  if (!(player.bag.molotov > 0) || state.mode !== 'play' || player.zombie || player.pinned || player.action) return;
+  player.bag.molotov--;
+  let dist = 7;
+  if (!isTouch && mouse.has) { const p2 = aimPoint(mouse.x, mouse.y); if (p2) dist = clamp(Math.hypot(p2.x - player.x, p2.z - player.z), 2.5, 9); }
+  const tx = clamp(player.x + Math.cos(player.aim) * dist, BOUNDS.x0, BOUNDS.x1), tz = clamp(player.z + Math.sin(player.aim) * dist * 0.85, BOUNDS.z0, BOUNDS.z1);
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(2.2, 1.2, 0.4), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  m.scale.set(0.45, 0.45, 1); scene.add(m);
+  globs.push({ x0: player.x, z0: player.z, x1: tx, z1: tz, t: 0, d: 0.7, m, fire: true });
+  sound.swing(false); hud.dirty = true; renderBagIfOpen();
+}
+// vùng lửa: chủ phòng/solo gây sát thương zombie; mọi máy tự trừ máu người chơi của mình
+function firePool(x, z, host) {
+  if (host && net.active && net.host) netEvent('fp', Math.round(x * 10), Math.round(z * 10));
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 0.7, 0.15), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, 0.04, z); scene.add(mesh); hideRefl(mesh);
+  const e = { pos: new THREE.Vector3(x, 1.0, z + 0.2), color: new THREE.Color('#ff8a36'), base: 14, dist: 9, kind: 'fire', flicker: 'fire', phase: Math.random() * 100, cur: 0, w: 0 };
+  world.emitters.push(e);
+  firePools.push({ x, z, r: 1.7, t: 7, mesh, e, host: !net.active || net.host });
+  if (!net.active || net.host) makeNoise(x, z, 12);
+  sound.hit(x, z); shake = Math.max(shake, Math.abs(x - camTarget.x) < 15 ? 0.25 : 0);
+}
+function updateFire(dt) {
+  for (let i = firePools.length - 1; i >= 0; i--) {
+    const f = firePools[i];
+    f.t -= dt;
+    f.mesh.material.opacity = Math.min(0.55, f.t * 0.3) * (0.8 + 0.2 * Math.sin(gtime * 13 + f.x));
+    for (let k = 0; k < 3; k++) if (Math.random() < dt * 40) fx.ember.spawn(f.x + rand(-1.4, 1.4), 0.1, f.z + rand(-1.1, 1.1), rand(-0.3, 0.3), rand(1.2, 2.6), rand(-0.2, 0.2), rand(0.4, 0.9), rand(0.06, 0.12), Math.random() < 0.5 ? '#ffb040' : '#ff5a1a', { grav: -0.8, drag: 1.2, mode: 1 });
+    if (Math.random() < dt * 6) fx.smoke.spawn(f.x + rand(-1, 1), 0.6, f.z + rand(-0.8, 0.8), rand(-0.2, 0.2), rand(0.6, 1.0), 0, rand(2, 3), rand(0.3, 0.5), new THREE.Color(0.2, 0.18, 0.16), { grav: -0.05, drag: 0.4, mode: 2 });
+    if (f.host) for (const z of zombies) {
+      if (z.state === 'dead' || z.y > 0.3) continue;
+      if (Math.hypot(z.x - f.x, z.z - f.z) < f.r + z.r * 0.5) { z.burnT = 3; }
+    }
+    if (playerAlive() && Math.hypot(player.x - f.x, player.z - f.z) < f.r) {
+      player.fireT = (player.fireT || 0) - dt;
+      if (player.fireT <= 0) { player.fireT = 0.4; player.hp -= 4; hurtFlash = Math.max(hurtFlash, 0.3); hud.dirty = true; floaters.push({ x: player.x, y: 2.2, z: player.z, text: 'BỎNG!', t: 0.6, color: '#ff8a4a' }); if (player.hp <= 0) playerDied(); }
+    }
+    if (f.t <= 0) { scene.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); f.e.base = 0; const j = world.emitters.indexOf(f.e); if (j >= 0) world.emitters.splice(j, 1); firePools.splice(i, 1); }
+  }
+  // zombie đang cháy: mất máu liên tục, chạy loạn
+  if (!net.active || net.host) for (const z of zombies) {
+    if (!(z.burnT > 0) || z.state === 'dead') continue;
+    z.burnT -= dt; z.burnDmg = (z.burnDmg || 0) + dt * 32;
+    if (Math.random() < dt * 25) fx.ember.spawn(z.x + rand(-0.2, 0.2), rand(0.4, 1.6), z.z, rand(-0.3, 0.3), rand(0.8, 1.6), 0, 0.5, 0.08, '#ff7a2a', { grav: -0.6, drag: 1, mode: 1 });
+    if (z.burnDmg >= 8) { const d = Math.floor(z.burnDmg); z.burnDmg -= d; damageZombie(z, d, rand(0, TAU), 0, z.x, z.z, true); }
+  }
+}
+function clearFire() {
+  for (const f of firePools) { scene.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); }
+  firePools = [];
 }
 
 
@@ -2798,7 +3071,7 @@ function charCard(ci, taken, compact) {
   const t = document.createElement('div');
   t.className = 'ct';
   const prog = loadProgress(ci);
-  t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span>(${c.nat})</span><br><i>${c.role}</i> · ♥${c.hp} · cấp ${prog.level}` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
+  t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span class="nat">(${c.nat})</span><br><span class="stat"><i class="role">${c.role} · </i>♥${c.hp} · cấp ${prog.level}</span>` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
   d.appendChild(t);
   d.addEventListener('click', () => pickChar(ci));
   return d;
@@ -2813,6 +3086,8 @@ function renderCharSel() {
   if (!el || $('charsel').classList.contains('hidden')) return;
   el.innerHTML = '';
   CHARS.forEach((c, i) => el.appendChild(charCard(i, null, false)));
+  const c = CHARS[myChar];
+  $('cs-desc').innerHTML = `<b style="color:${c.color}">${c.name}</b> (${c.nat}) · ${c.role} · ♥${c.hp}<br>${c.desc}`;
 }
 function openCharSel() { $('title').classList.add('hidden'); $('charsel').classList.remove('hidden'); renderCharSel(); }
 function closeCharSel() { $('charsel').classList.add('hidden'); if (state.mode === 'title') $('title').classList.remove('hidden'); }
@@ -2887,6 +3162,8 @@ function updateHud() {
   $('wt-fill').style.width = player.water.toFixed(1) + '%';
   $('fd-bar').classList.toggle('low', player.food < 20);
   $('wt-bar').classList.toggle('low', player.water < 20);
+  $('ar-row').classList.toggle('hidden', !(player.armor > 0));
+  if (player.armor > 0) $('ar-fill').style.width = (player.armor / ARMOR_PTS * 100).toFixed(1) + '%';
   $('hp-box').classList.toggle('low', player.hp < 30);
   const inf = player.infected > 0 ? Math.ceil(player.infected) : 0;
   $('inf-row').classList.toggle('hidden', !inf);
@@ -2908,9 +3185,10 @@ function updateHud() {
   setText('q-text', qt);
   const qsub = $('q-sub');
   if (hud.last.qsub !== qs) { hud.last.qsub = qs; qsub.innerHTML = ''; qs.split('\n').forEach((l, i) => { if (i) qsub.appendChild(document.createElement('br')); qsub.appendChild(document.createTextNode(l)); }); }
-  setText('wname', w.name);
-  setText('ammo', w.melee ? '∞' : String(g.ammo));
-  setText('reserve', w.melee ? 'cận chiến' : String(reserveOf(player.weapon)));
+  const MW = MELEE[player.melee];
+  setText('wname', w.melee ? MW.name : w.name);
+  setText('ammo', w.melee ? (player.melee === 'fist' ? '✊' : String(player.durs[player.melee] || MW.dur)) : String(g.ammo));
+  setText('reserve', w.melee ? (player.melee === 'fist' ? '' : (isTouch ? '/' : 'độ bền /') + MW.dur) : String(reserveOf(player.weapon)));
   $('ammo').classList.toggle('empty', !w.melee && g.ammo === 0);
   document.querySelectorAll('#slots .slot').forEach((el, i) => {
     el.classList.toggle('on', i === player.weapon);
@@ -2928,11 +3206,17 @@ function updateHud() {
     const html = allBots().map((b) => `<div style="color:${CHARS[b.ci].color}">${botName(b.ci)} · ${b.state === 'out' ? 'đã ngất' : b.state === 'down' ? '<b style="color:#ff6a5a;font-weight:400">GỤC NGÃ</b>' : '♥ ' + Math.round(b.hp)}</div>`).join('');
     if (hud.last.team !== html) { hud.last.team = html; team.innerHTML = html; }
   }
+  let anyQuick = false;
   document.querySelectorAll('#quick .qi').forEach((el) => {
     const it = el.dataset.it, n = player.bag[it] || 0;
+    const has = n > 0 || (it === 'torch' && player.torchT > 0);
+    el.classList.toggle('none', !has); if (has) anyQuick = true;
     el.querySelector('b').textContent = it === 'flashlight' ? (n ? Math.ceil(player.battery / (BATTERY_TIME * player.mod.battery) * 100) + '%' : '0') : it === 'torch' && player.torchT > 0 ? Math.ceil(player.torchT) + 's' : n;
     el.classList.toggle('zero', it === 'flashlight' ? !n || !player.flashOn : it === 'torch' ? !n && !(player.torchT > 0) : !n);
   });
+  $('quick').classList.toggle('empty', !anyQuick);
+  $('tb-skill').querySelector('.dot').classList.toggle('hidden', !(player.sp > 0));
+  $('tb-craft').querySelector('.dot').classList.toggle('hidden', !RECIPES.some((R) => player.recipes.has(R.id) && canCraft(R)));
   setText('zone-tag', ZONE.name);
   setText('char-tag', `${CHARS[player.char].name} · cấp ${player.level}` + (player.sp ? ` · ${player.sp} điểm KN` : ''));
   $('xp-fill').style.width = Math.min(100, player.xp / xpNeed(player.level) * 100).toFixed(1) + '%';
@@ -3049,7 +3333,7 @@ function startView() {
   for (const p of pickups) scene.remove(p.mesh);
   pickups = []; floaters = [];
   fx.decals.clear();
-  player = newPlayer(); setSpriteMap(player.sprite, 0);
+  player = newPlayer(); setPlayerSprite();
   state.mode = 'view'; state.paused = false; phase = 'view';
   Object.assign(view, { zoom: 1, pan: 0, auto: false, target: null, dof: true, bloom: true, ui: true });
   atmos.hour = 17; atmos.setWeather('clear', true); atmos.rate = 0.35;
@@ -3660,7 +3944,8 @@ function startGame() {
   for (const k in dropStore) delete dropStore[k];
   net.zoneSeq = 0; net.zoneSeqSeen = -1; net.zoneEntry = 'start'; net.grants = []; net.pickedDrops.clear();
   if (ZONE.id !== START_ZONE && !QS.has('zone')) { disposeWorld(world); setZone(START_ZONE); buildZoneWorld(); }
-  camReveal = 0; zt.wait = ''; clearAcid(); seenSpecial.clear();
+  camReveal = 0; zt.wait = ''; clearAcid(); clearFire(); seenSpecial.clear();
+  if (craftUI.open) { craftUI.grid.fill(null); craftUI.open = false; $('craft').classList.add('hidden'); }
   for (const p of pickups) scene.remove(p.mesh);
   pickups = []; floaters = [];
   fx.decals.clear();
@@ -3668,12 +3953,13 @@ function startGame() {
   player = newPlayer();
   player.pinned = 0; player.bile = 0; player.stunT = 0; player.kx = player.kz = 0;
   player.sprite.group.visible = true;
-  setSpriteMap(player.sprite, player.weapon);
+  setPlayerSprite();
   wave = 0; kills = 0; score = 0; shake = 0; hurtFlash = 0;
   state.mode = 'play'; state.paused = false; playStart = gtime;
   for (const id of ['title', 'over', 'pause', 'win', 'bag', 'charsel', 'skills', 'citymap']) $(id).classList.add('hidden');
   bagOpen = false; skillsOpen = false; mapOpen = false;
   document.body.classList.add('playing');
+  setTimeout(checkRotate, 60);
   hud.dirty = true;
   resetWorldState(); questReset();
   if (!net.active || net.host) { DAY_LEN = DURATIONS[durKey].day; NIGHT_LEN = DURATIONS[durKey].night; }
@@ -3756,7 +4042,7 @@ function init() {
   SPR = makeCharacterSprites();
   buildZoneWorld();
   pickupAtlas = makePickupAtlas();
-  buildIcons(); buildQuickBar();
+  buildIcons(); buildQuickBar(); buildToolbarIcons();
   glowTex = softDisc(64, 0, 2.2);
   fx.sky = new Sky(scene);
   fx.lit = new Particles(scene, 500, { camQuat });
@@ -3832,6 +4118,11 @@ function init() {
   if (QS.has('debug')) window.__dbgHurt = (n) => { player.hp = Math.max(1, player.hp - n); };
   if (QS.has('debug')) window.__bots = () => ({ bots: bots.map((b) => [CHARS[b.ci].id, b.state, +b.x.toFixed(1), +b.z.toFixed(1), Math.round(b.hp), b.task ? b.task.poi : null]), views: [...botViews.values()].map((v) => [CHARS[v.ci].id, +v.x.toFixed(1), v.flags]), gate: world.pois.gate ? world.pois.gate.state : null, gs: gateStates[ZONE.id] || null, cam: +camReveal.toFixed(1), me: CHARS[player.char].id, lv: player.level, sp: player.sp, xp: player.xp, hp: [Math.round(player.hp), player.maxHp], zone: ZONE.id, pos: [+player.x.toFixed(1), +player.z.toFixed(1)] });
   if (QS.has('debug')) window.__sp = (n) => { player.sp += n; hud.dirty = true; };
+  if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
+  if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
+  if (QS.has('debug')) window.__post = () => ({ flash: post.params.flash, gain: post.params.gain, lift: post.params.lift, hour: +atmos.hour.toFixed(2), kind: atmos.kind, hurt: hurtFlash, mode: state.mode });
+  if (QS.has('debug')) window.__conts = (kind) => world.containers.filter((c) => !kind || c.kind === kind).map((c) => [c.id, c.kind, +c.x.toFixed(2), +c.z.toFixed(2), player.looted.has(c.id)]);
+  if (QS.has('debug')) window.__craft = () => ({ open: craftUI.open, grid: [...craftUI.grid], recipes: [...player.recipes], books: [...player.books], melee: player.melee, durs: { ...player.durs } });
   if (QS.has('debug')) window.__hostZone = (id, entry) => { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = entry; net.zoneSeqSeen = net.zoneSeq; requestZone(id, entry); };
   if (QS.has('debug')) window.__net = () => { const hp = net.room && net.room.peers().find((q) => q.peer === net.hostPeer); return { host: net.host, hostPeer: net.hostPeer, me: net.me, seen: net.zoneSeqSeen, seq: net.zoneSeq, zn: hp && hp.presence && hp.presence.w ? hp.presence.w.zn : null, busy: zt.busy, zone: ZONE.id }; };
   if (QS.has('debug')) window.__dbgDown = () => { player.maxHp = 100; player.hp = 0; playerDied(); };
@@ -3868,7 +4159,8 @@ function updateSmoke(dt, A) {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  let dt = Math.min(0.05, (now - last) / 1000);
+  // khung đầu tiên có thể mang mốc thời gian sớm hơn lúc khởi tạo: không cho dt âm
+  let dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   if (state.paused) dt = 0;
   gtime += dt;
@@ -3912,7 +4204,7 @@ function frame(now) {
   for (const fn of world.animated) fn(dt, gtime, A.wind);
   updatePlayerLights(dt, A);
   lastFlash = A.flash;
-  if (state.mode === 'play') { updateAcid(dt); noticeSpecials(); }
+  if (state.mode === 'play') { updateAcid(dt); updateFire(dt); noticeSpecials(); }
   const fOn = state.mode === 'play' ? flashActive() && !player.zombie : state.mode === 'title' || state.mode === 'view';
   flashlight.intensity = state.mode === 'loading' || !fOn ? 0 : 40 * A.flash;
   if (camReveal > 0 && state.mode === 'play') {
@@ -3971,9 +4263,6 @@ $('start-btn').addEventListener('click', openCharSel);
 $('cs-go').addEventListener('click', () => { $('charsel').classList.add('hidden'); startGame(); });
 $('cs-back').addEventListener('click', closeCharSel);
 $('sk-close').addEventListener('click', () => toggleSkills(false));
-$('t-skill').addEventListener('touchstart', (e) => { e.preventDefault(); toggleSkills(); }, { passive: false });
-$('t-skill').addEventListener('click', () => toggleSkills());
-$('t-shove').addEventListener('touchstart', (e) => { e.preventDefault(); shove(); }, { passive: false });
 $('view-btn').addEventListener('click', startView);
 $('px-btn').addEventListener('click', cyclePixel);
 $('dur-btn').addEventListener('click', () => {
@@ -4000,10 +4289,35 @@ $('leave-btn').addEventListener('click', () => { leaveRoom(); setCoopNote('Đã 
 $('lobby-close').addEventListener('click', closeLobby);
 $('bag-close').addEventListener('click', () => toggleBag(false));
 $('map-close').addEventListener('click', () => toggleMap(false));
-$('t-map').addEventListener('touchstart', (e) => { e.preventDefault(); toggleMap(); }, { passive: false });
-$('t-map').addEventListener('click', () => toggleMap());
-$('t-bag').addEventListener('touchstart', (e) => { e.preventDefault(); toggleBag(); }, { passive: false });
-$('t-bag').addEventListener('click', () => toggleBag());
+// thanh công cụ (chuột lẫn cảm ứng)
+const tapBind = (id, fn) => {
+  const b = $(id);
+  b.addEventListener('click', () => fn());
+  b.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fn(); }, { passive: false });
+};
+tapBind('tb-bag', () => { if (craftUI.open) toggleCraft(false); toggleBag(); });
+tapBind('tb-craft', () => toggleCraft());
+tapBind('tb-map', () => toggleMap());
+tapBind('tb-skill', () => toggleSkills());
+tapBind('tb-pause', () => togglePause());
+// cụm nút hành động trên điện thoại
+tapBind('t-reload', reload);
+tapBind('t-swap', cycleWeapon);
+tapBind('t-shove', shove);
+tapBind('t-throw', throwMolotov);
+// bàn chế đồ
+$('cr-go').addEventListener('click', gridCraft);
+$('cr-clear').addEventListener('click', () => { gridClear(); craftUI.msg = ''; renderCraft(); });
+$('cr-close').addEventListener('click', () => toggleCraft(false));
+document.querySelectorAll('#craft .crtab').forEach((b) => b.addEventListener('click', () => { craftUI.tab = b.dataset.tab; craftUI.msg = ''; renderCraft(); }));
+// điện thoại dọc: nhắc xoay ngang (chơi một mình thì tạm dừng)
+const portraitQ = matchMedia('(orientation: portrait)');
+function checkRotate() {
+  if (!isTouch || document.body.classList.contains('portrait-ok')) return;
+  if (portraitQ.matches && state.mode === 'play' && !state.paused && !net.active) togglePause();
+}
+if (portraitQ.addEventListener) portraitQ.addEventListener('change', checkRotate);
+$('rot-ok').addEventListener('click', () => document.body.classList.add('portrait-ok'));
 $('t-use').addEventListener('touchstart', (e) => { e.preventDefault(); if (player && player.pinned) { player.struggle = (player.struggle || 0) + 1; return; } interact.touchHold = true; }, { passive: false });
 $('t-use').addEventListener('touchend', (e) => { e.preventDefault(); interact.touchHold = false; }, { passive: false });
 $('t-use').addEventListener('touchcancel', () => { interact.touchHold = false; });
@@ -4014,15 +4328,12 @@ $('q-btn').addEventListener('click', () => {
   setQualityLabel();
   location.reload();
 });
-$('t-reload').addEventListener('touchstart', (e) => { e.preventDefault(); reload(); }, { passive: false });
-$('t-swap').addEventListener('touchstart', (e) => { e.preventDefault(); cycleWeapon(); }, { passive: false });
-$('t-pause').addEventListener('touchstart', (e) => { e.preventDefault(); togglePause(); }, { passive: false });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state.mode === 'play' && !state.paused) togglePause(); });
 addEventListener('resize', resize);
 if (isTouch) document.body.classList.add('touch');
 $('help').innerHTML = isTouch
-  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn · Giữ LỤC: lục soát/nhặt<br>R: nạp đạn · ⇄: đổi vũ khí · TÚI: túi đồ, chế tạo, vứt/cho đồ · MAP: bản đồ · Nên xoay ngang màn hình'
-  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/chém · Giữ E: lục soát/nhặt<br>R: nạp đạn · 1-5/Q: đổi vũ khí · F: băng bó · C: ăn/uống · V: thuốc giải · T: đuốc · L: đèn pin · I: túi đồ · M: bản đồ · K: kỹ năng · G: húc (Hamble)';
+  ? 'Ngón trái: di chuyển · Ngón phải: ngắm &amp; bắn/đánh · Giữ LỤC: lục soát, nhặt đồ<br>NẠP đạn · ĐỔI vũ khí · NÉM bom xăng · góc trên phải: Túi đồ, Chế đồ, Bản đồ, Kỹ năng · Nên xoay ngang màn hình'
+  : 'WASD: đi · Shift: chạy · Chuột: ngắm &amp; bắn/đánh · Giữ E: lục soát, nhặt đồ · R: nạp đạn · 1-5/Q: đổi vũ khí<br>I: túi đồ · B: bàn chế đồ · M: bản đồ · K: kỹ năng · F: băng bó · C: ăn uống · V: thuốc giải · T: đuốc · L: đèn pin · X: ném bom xăng · G: húc';
 
 requestAnimationFrame(() => setTimeout(() => {
   try { init(); } catch (e) {

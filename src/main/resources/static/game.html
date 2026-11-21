@@ -41,7 +41,16 @@
 
   #hud { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .6s; }
   body.playing #hud { opacity: 1; }
-  #hp-box { position: absolute; left: calc(14px + var(--sl)); top: calc(12px + var(--st)); padding: 8px 12px 9px; width: min(300px, 46vw); }
+  body:not(.playing) #hud * { pointer-events: none !important; }
+  #hud-top { position: absolute; left: calc(12px + var(--sl)); right: calc(12px + var(--sr)); top: calc(10px + var(--st));
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  #hud-l, #hud-r { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  #hud-l { align-items: flex-start; }
+  #hud-r { align-items: flex-end; }
+  #hp-box { padding: 7px 12px 8px; width: min(300px, 32vw); display: flex; flex-direction: column; gap: 4px; }
+  .pair { display: flex; flex-direction: column; gap: 4px; }
+  .bar.ar { height: 8px; background: #10141a; }
+  .bar.ar > i { background: repeating-linear-gradient(90deg, #9ab8d8 0 6px, #6a88a8 6px 8px); }
   .row { display: flex; align-items: center; gap: 8px; }
   .lbl { font-size: 18px; letter-spacing: 1px; color: var(--ink-dim); width: 54px; }
   .bar { flex: 1; height: 12px; background: #1a0c0c; border: 2px solid #000; position: relative; overflow: hidden; }
@@ -54,17 +63,18 @@
   .bar.fd > i { background: repeating-linear-gradient(90deg, #d88a3a 0 6px, #a0602a 6px 8px); }
   .bar.wt > i { background: repeating-linear-gradient(90deg, #4aa8e8 0 6px, #2a78b0 6px 8px); }
   .bar.low > i { animation: pulse .5s infinite alternate; }
-  #quest-box { position: absolute; right: calc(14px + var(--sr)); top: calc(12px + var(--st)); padding: 6px 12px 7px; width: min(300px, 34vw); }
+  #quest-box { padding: 6px 12px 7px; width: min(320px, 30vw); }
   #q-title { font-size: 16px; letter-spacing: 2px; color: var(--gold); line-height: 1; }
   #q-text { font-size: 19px; line-height: 1.1; color: var(--ink); margin-top: 3px; }
   #q-sub { font-size: 15px; line-height: 1.1; color: var(--ink-dim); margin-top: 2px; }
-  #quick { position: absolute; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); padding: 6px 8px; display: flex; gap: 6px; pointer-events: auto; }
+  #quick { position: fixed; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); padding: 6px 8px; display: flex; gap: 6px; pointer-events: auto; }
+  #quick.empty, .qi.none { display: none; }
   .qi { position: relative; width: 44px; height: 46px; display: grid; place-items: center; background: #1a1620; border: 2px solid #000; cursor: pointer; }
   .qi img { width: 32px; height: 32px; image-rendering: pixelated; }
   .qi b { position: absolute; right: 2px; bottom: -1px; font-weight: 400; font-size: 17px; color: #fff; text-shadow: 0 1px 0 #000, 1px 0 0 #000; }
   .qi i { position: absolute; left: 2px; top: -1px; font-style: normal; font-size: 14px; color: var(--gold); text-shadow: 0 1px 0 #000; }
   .qi.zero { opacity: .35; }
-  #loot-feed { position: absolute; left: calc(14px + var(--sl)); top: 34%; display: flex; flex-direction: column; gap: 4px; }
+  #loot-feed { position: absolute; left: calc(14px + var(--sl)); bottom: calc(84px + var(--sb)); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
   .lf { display: flex; align-items: center; gap: 6px; font-size: 20px; color: #fff; background: rgba(10,8,14,.72); border-left: 3px solid var(--gold); padding: 1px 10px 2px 4px; text-shadow: 0 1px 0 #000; animation: lfIn 3.2s ease forwards; }
   .lf img { width: 24px; height: 24px; image-rendering: pixelated; }
   .lf.bad { border-left-color: var(--blood); color: #f0c0b0; }
@@ -82,7 +92,7 @@
   #room-players { font-size: 22px; line-height: 1.3; margin: 10px 0; }
   #lobby-note { font-size: 18px; line-height: 1.3; color: var(--ink-dim); margin: 10px 0 6px; }
   .btn.dim { opacity: .55; }
-  #team { position: absolute; right: calc(14px + var(--sr)); top: calc(110px + var(--st)); text-align: right; font-size: 18px; line-height: 1.15; text-shadow: 0 1px 0 #000, 0 0 6px #000; }
+  #team { padding-left: 4px; font-size: 18px; line-height: 1.15; text-shadow: 0 1px 0 #000, 0 0 6px #000; }
   #bag .card, #lobby .card { max-height: calc(100dvh - 24px); overflow-y: auto; }
   #bag .card { max-width: 620px; text-align: left; }
   @media (max-height: 480px) {
@@ -92,6 +102,79 @@
     #room-code { font-size: 48px; }
   }
   #bag h2 { margin: 0 0 8px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); }
+  /* bàn chế đồ 3×3 */
+  #craft { background: rgba(4,4,8,.6); z-index: 7; }
+  #craft .card { max-width: 900px; max-height: calc(100dvh - 20px); display: flex; flex-direction: column; text-align: left; padding: 14px 18px 12px; }
+  #craft h2 { margin: 0 0 10px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); text-align: center; }
+  .cr-main { display: flex; gap: 18px; min-height: 0; flex: 1; }
+  .cr-left { flex: none; width: 290px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .cr-bench { display: flex; align-items: center; gap: 10px; }
+  #cr-grid { display: grid; grid-template-columns: repeat(3, auto); gap: 4px; padding: 6px; background: #0c0a10; border: 2px solid #000; box-shadow: inset 0 0 0 2px #2a2430; }
+  .cr-arrow { font-size: 34px; color: var(--ink-dim); }
+  #cr-out { padding: 6px; background: #0c0a10; border: 2px solid #000; }
+  .cslot { position: relative; width: 54px; height: 54px; padding: 0; display: grid; place-items: center; font-family: inherit; cursor: pointer;
+    background: #2a2430; border: 2px solid #000; box-shadow: inset 2px 2px 0 #16121c, inset -2px -2px 0 #463e50; }
+  .cslot:hover { background: #352e3e; }
+  .cslot img { width: 38px; height: 38px; image-rendering: pixelated; pointer-events: none; }
+  .cslot b { position: absolute; right: 3px; bottom: -1px; font-weight: 400; font-size: 19px; color: #fff; text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000; pointer-events: none; }
+  .cslot.sel { box-shadow: inset 0 0 0 2px var(--gold); }
+  .cslot.out { width: 66px; height: 66px; cursor: default; }
+  .cslot.out img { width: 46px; height: 46px; }
+  .cslot.out.ready { cursor: pointer; border-color: var(--gold); background: #3a3020; animation: glow .7s infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 4px rgba(242,193,78,.3); } to { box-shadow: 0 0 16px rgba(242,193,78,.75); } }
+  #cr-name { font-size: 21px; color: var(--ink); text-align: center; line-height: 1.05; min-height: 22px; }
+  #cr-msg { font-size: 17px; color: #ff9a7a; text-align: center; line-height: 1.05; min-height: 18px; }
+  #cr-go:disabled { opacity: .4; cursor: default; filter: grayscale(.6); }
+  .cr-tip { font-size: 16px; line-height: 1.2; color: var(--ink-dim); text-align: center; margin-top: 4px; }
+  .cr-tip b { color: var(--gold); font-weight: 400; }
+  .cr-right { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .crtabs { display: flex; gap: 6px; margin-bottom: 6px; flex: none; }
+  .crtab { flex: 1; font-family: inherit; font-size: 20px; color: var(--ink-dim); background: #1a1620; border: 2px solid #3a3440; padding: 3px 8px 4px; cursor: pointer; }
+  .crtab.on { color: #fff; background: #3a2e18; border-color: var(--gold); }
+  #cr-inv, #cr-book { flex: 1; min-height: 120px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding-right: 2px; }
+  #cr-inv { display: grid; grid-template-columns: repeat(auto-fill, 54px); gap: 5px; align-content: start; }
+  .cr-empty { grid-column: 1 / -1; font-size: 18px; color: var(--ink-dim); padding: 10px 4px; line-height: 1.2; }
+  .crb { margin-bottom: 10px; }
+  .crb h4 { margin: 0 0 5px; font-weight: 400; font-size: 20px; color: var(--gold); display: flex; align-items: center; gap: 6px; }
+  .crb h4 img { width: 26px; height: 26px; image-rendering: pixelated; }
+  .crb h4 small { font-size: 15px; color: var(--ink-dim); }
+  .crb.focus h4 { color: #fff; text-shadow: 0 0 8px rgba(242,193,78,.8); }
+  .crr { display: flex; width: 100%; align-items: center; gap: 8px; margin-bottom: 4px; text-align: left; font-family: inherit; font-size: 16px; line-height: 1.2;
+    color: var(--ink-dim); background: #1a1620; border: 2px solid #2a2430; padding: 4px 7px; cursor: pointer; }
+  .crr:hover { border-color: #5a5060; }
+  .crr > img { width: 34px; height: 34px; image-rendering: pixelated; flex: none; }
+  .crr b { font-weight: 400; font-size: 19px; color: var(--ink); }
+  .crr i { font-style: normal; display: inline-flex; align-items: center; gap: 2px; margin-right: 8px; white-space: nowrap; }
+  .crr i img { width: 20px; height: 20px; image-rendering: pixelated; }
+  .crr i.ok { color: #9ae08a; }
+  .crr i.no { color: #e8907a; }
+  .crr.can { border-color: #3a8a4a; background: #14201a; }
+  .crr.unk { cursor: default; opacity: .62; }
+  .crr .q { width: 34px; height: 34px; display: grid; place-items: center; font-size: 26px; color: #6a6070; background: #0e0c12; flex: none; }
+  .cr-foot { margin-top: 10px; flex: none; }
+  @media (max-height: 520px) {
+    .screen { padding: 8px; }
+    #craft .card { padding: 8px 12px 8px; max-height: calc(100dvh - 12px); }
+    #craft h2 { font-size: 24px; margin-bottom: 4px; }
+    .cr-left { width: 228px; gap: 4px; }
+    .cslot { width: 42px; height: 42px; } .cslot img { width: 30px; height: 30px; } .cslot b { font-size: 17px; }
+    .cslot.out { width: 52px; height: 52px; } .cslot.out img { width: 38px; height: 38px; }
+    #cr-grid, #cr-out { padding: 4px; } #cr-grid { gap: 3px; }
+    .cr-arrow { font-size: 26px; }
+    #cr-name { font-size: 18px; min-height: 19px; } #cr-msg { font-size: 15px; min-height: 15px; }
+    #craft .btn { font-size: 22px; padding: 3px 18px 5px; } #craft .btn.ghost { font-size: 18px; padding: 2px 12px 4px; }
+    .cr-tip { display: none; }
+    #cr-inv { grid-template-columns: repeat(auto-fill, 42px); gap: 4px; }
+    .crtab { font-size: 17px; padding: 2px 6px 3px; }
+    .crr { padding: 2px 6px; } .crr b { font-size: 17px; } .crr > img { width: 28px; height: 28px; }
+    .cr-foot { margin-top: 6px; }
+    #craft .card { position: relative; }
+    #craft .cr-foot { position: absolute; right: 12px; top: 6px; margin: 0; }
+  }
+  @media (max-width: 600px) {
+    .cr-main { flex-direction: column; overflow-y: auto; }
+    .cr-left { width: 100%; }
+  }
   #bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
   .bi .acts { width: 100%; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
   .bi .acts button { margin-left: 0; }
@@ -111,10 +194,6 @@
   #citymap .card { max-width: 720px; max-height: calc(100dvh - 24px); overflow-y: auto; }
   #map-svg svg { display: block; margin: 6px auto 0; }
   #map-note { font-size: 17px; color: var(--ink-dim); margin-top: 6px; line-height: 1.2; }
-  #t-map { right: calc(120px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 14px; }
-  #t-skill { right: calc(174px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 15px; }
-  #t-shove { right: calc(96px + var(--sr)); bottom: calc(204px + var(--sb)); width: 54px; height: 54px; font-size: 15px; background: rgba(160,90,20,.7); }
-  body.touch.playing #t-shove.off { display: none; }
   #char-tag { font-size: 16px; color: var(--gold); line-height: 1; }
   .bar.xp { height: 5px; margin-top: 3px; width: 100%; }
   .bar.xp i { background: #9a8aff; }
@@ -130,6 +209,58 @@
   .cc .ct small { color: var(--ink-dim); font-size: 15px; display: block; margin-top: 3px; }
   .cc .ct em { font-style: normal; color: #ff8a6a; }
   .cc.compact { font-size: 15px; }
+  #charsel h2, #skills h2, #citymap h2 { margin: 0 0 6px; font-weight: 400; font-size: 34px; letter-spacing: 3px; color: var(--gold); }
+  #cs-desc { display: none; }
+  @media (max-height: 560px), (max-width: 600px) {
+    #charsel .card, #skills .card, #citymap .card { padding: 8px 12px 10px; max-height: calc(100dvh - 12px); }
+    #charsel h2, #skills h2, #citymap h2 { font-size: 24px; margin-bottom: 2px; }
+    #charsel .lsub { font-size: 14px; margin-top: 0; letter-spacing: 1px; }
+    #cs-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+    #cs-grid .cc { flex-direction: column; align-items: center; text-align: center; padding: 5px 3px 4px; gap: 2px; }
+    #cs-grid .cc .cp { width: auto; height: min(84px, 20vh); }
+    #cs-grid .cc .ct { font-size: 14px; line-height: 1.05; }
+    #cs-grid .cc .ct b { font-size: 18px; }
+    #cs-grid .cc .ct small { display: none; }
+    #cs-desc { display: block; font-size: 16px; line-height: 1.2; color: var(--ink); margin: 6px 2px 0; min-height: 40px; text-align: left; }
+    #cs-desc b { font-weight: 400; }
+    #charsel .btns { margin-top: 8px !important; }
+    #charsel .btn { font-size: 22px; padding: 3px 22px 5px; }
+  }
+  @media (max-width: 600px) { #cs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  /* màn tiêu đề, tạm dừng, kết thúc trên màn thấp (điện thoại ngang) */
+  #title .card { max-height: 100%; overflow-y: auto; }
+  @media (max-height: 560px) {
+    #title .card { padding: 6px 12px; }
+    h1 { font-size: min(13vw, 17vh); letter-spacing: 4px; }
+    .tag { font-size: 18px; margin: 2px 0 8px; letter-spacing: 2px; }
+    #title .btns { gap: 8px; }
+    #title .btn { font-size: 22px; padding: 3px 18px 5px; }
+    #title .btn.ghost { font-size: 16px; padding: 2px 10px 4px; }
+    .help { font-size: 15px; margin-top: 8px; line-height: 1.25; }
+    #pause h1 { font-size: 46px !important; }
+    .stats { font-size: 20px; margin: 6px 0 10px; }
+    #over .card, #win .card { padding: 10px 16px; }
+  }
+  #cs-grid .cc .ct .nat { display: inline; }
+  @media (max-height: 560px) {
+    #cs-grid .cc .ct .nat { display: none; }
+    #lobby .card { padding: 8px 12px 8px; max-height: calc(100dvh - 12px); }
+    #lobby h2 { font-size: 24px; margin-bottom: 2px; }
+    #lobby .lsub { font-size: 14px; margin-top: 4px; letter-spacing: 1px; }
+    #lobby .lrow { margin: 6px 0; font-size: 18px; }
+    #room-code { font-size: 40px; letter-spacing: 8px; }
+    #room-players { font-size: 17px; margin: 4px 0; line-height: 1.2; }
+    #char-pick { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 4px; }
+    #char-pick .cc { flex-direction: column; align-items: center; text-align: center; padding: 3px 2px; gap: 1px; }
+    #char-pick .cc .cp { height: min(56px, 15vh); width: auto; }
+    #char-pick .cc .ct { font-size: 13px; line-height: 1.05; }
+    #char-pick .cc .ct b { font-size: 17px; }
+    #char-pick .cc .ct .nat, #char-pick .cc .ct .role { display: none; }
+    #lobby-note { font-size: 15px; margin: 4px 0; }
+    #lobby .btn { font-size: 22px; padding: 3px 20px 5px; }
+    #lobby .btn.ghost { font-size: 18px; padding: 2px 12px 4px; }
+    #lobby .btns { gap: 8px; margin-top: 6px; }
+  }
   #skills .card { max-width: 900px; max-height: calc(100dvh - 24px); overflow-y: auto; }
   #sk-xp { font-size: 17px; color: var(--ink-dim); margin: 4px 0 8px; line-height: 1.2; }
   #sk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; text-align: left; }
@@ -150,7 +281,7 @@
   #bag-quest .done { color: #7fe07f; text-decoration: line-through; }
   #bag-quest .cur { color: var(--gold); }
   @keyframes pulse { to { filter: brightness(1.8); } }
-  #night-box { position: absolute; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); text-align: center; padding: 4px 18px 6px; }
+  #night-box { flex: none; text-align: center; padding: 4px 18px 6px; }
   #night { font-size: 30px; color: var(--blood); letter-spacing: 3px; line-height: 1; text-shadow: 0 0 10px rgba(210,58,42,.5); }
   #atmo { font-size: 18px; color: var(--ink-dim); line-height: 1; }
   #left { font-size: 17px; color: var(--ink); line-height: 1.1; }
@@ -197,20 +328,72 @@
   #loading::after { content: ''; display: block; width: 120px; height: 6px; margin: 14px auto 0; background: linear-gradient(90deg, #d23a2a 30%, #2a1010 30%); background-size: 200% 100%; animation: load 1s linear infinite; }
   @keyframes load { to { background-position: -200% 0; } }
 
-  .tbtn { position: fixed; z-index: 5; width: 58px; height: 58px; border-radius: 50%; display: none; place-items: center;
-    font-family: inherit; font-size: 26px; color: var(--ink); background: rgba(10,8,14,.55); border: 2px solid rgba(217,192,138,.6); }
-  body.touch.playing .tbtn { display: grid; }
-  #t-reload { right: calc(18px + var(--sr)); bottom: calc(132px + var(--sb)); }
-  #t-swap { right: calc(86px + var(--sr)); bottom: calc(170px + var(--sb)); }
-  #t-pause { right: calc(16px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 18px; }
-  #t-use { right: calc(12px + var(--sr)); bottom: calc(204px + var(--sb)); width: 70px; height: 70px; font-size: 22px; background: rgba(140,100,20,.75); border-color: var(--gold); }
-  #t-use.off { display: none !important; }
-  #t-bag { right: calc(66px + var(--sr)); top: calc(118px + var(--st)); width: 42px; height: 42px; font-size: 15px; }
-  body.touch #quick { bottom: auto; top: calc(108px + var(--st)); left: calc(14px + var(--sl)); padding: 4px; gap: 4px; }
-  body.touch .qi { width: 40px; height: 42px; }
-  body.touch #weapon-box { right: auto; left: calc(14px + var(--sl)); bottom: calc(14px + var(--sb)); min-width: 0; }
+  /* thanh công cụ: góc trên phải, dùng chung cho máy tính (có phím tắt) và điện thoại */
+  #toolbar { display: flex; gap: 4px; padding: 4px; pointer-events: auto;
+    background: var(--panel); border: 2px solid var(--edge); outline: 2px solid var(--edge-dark); }
+  .tb { position: relative; min-width: 60px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-family: inherit; font-size: 15px; line-height: 1; color: var(--ink); background: #1e1a24; border: 2px solid #4a4050; padding: 3px 5px 2px; cursor: pointer; white-space: nowrap; }
+  .tb:hover { border-color: var(--edge); background: #2a2430; }
+  .tb:active { transform: translateY(1px); background: #3a3040; }
+  .tb img { width: 24px; height: 24px; image-rendering: pixelated; }
+  .tb kbd { position: absolute; left: 2px; top: 1px; font-family: inherit; font-size: 13px; line-height: 1; color: var(--gold); }
+  .tb .dot { position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: #ff5a3a; border: 2px solid #000; border-radius: 50%; animation: pulse .6s infinite alternate; }
+
+  /* cụm nút hành động cho điện thoại: vòng cung quanh chỗ đặt ngón cái phải (vùng ngắm/bắn) */
+  #tpad { position: fixed; right: var(--sr); bottom: var(--sb); width: 0; height: 0; z-index: 5; display: none; --u: 1; }
+  body.touch.playing #tpad { display: block; }
+  .tbtn { position: absolute; width: calc(54px * var(--u)); height: calc(54px * var(--u)); border-radius: 50%; display: grid; place-items: center; padding: 0;
+    font-family: inherit; font-size: calc(19px * var(--u)); letter-spacing: 1px; color: var(--ink); background: rgba(14,12,20,.62); border: 2px solid rgba(217,192,138,.75);
+    box-shadow: 0 3px 0 rgba(0,0,0,.5); touch-action: none; }
+  .tbtn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.5); }
+  #t-swap { right: calc(175px * var(--u)); bottom: calc(16px * var(--u)); }
+  #t-reload { right: calc(172px * var(--u)); bottom: calc(80px * var(--u)); }
+  #t-use { right: calc(125px * var(--u)); bottom: calc(123px * var(--u)); width: calc(64px * var(--u)); height: calc(64px * var(--u)); font-size: calc(22px * var(--u));
+    background: rgba(150,104,20,.82); border-color: var(--gold); }
+  #t-use.off { opacity: .4; background: rgba(14,12,20,.55); border-color: rgba(217,192,138,.5); }
+  #t-shove { right: calc(67px * var(--u)); bottom: calc(140px * var(--u)); background: rgba(160,90,20,.72); }
+  #t-throw { right: calc(11px * var(--u)); bottom: calc(111px * var(--u)); background: rgba(170,50,20,.72); }
+  #t-shove.off, #t-throw.off { display: none; }
+
+  /* bố cục cảm ứng */
+  body.touch #hud-top { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(6px + var(--st)); gap: 8px; }
+  body.touch #hud-l, body.touch #hud-r { gap: 5px; }
+  body.touch #hp-box { width: min(230px, 30vw); padding: 5px 8px 6px; gap: 3px; }
+  body.touch .pair { flex-direction: row; gap: 8px; }
+  body.touch .pair .row { flex: 1; min-width: 0; gap: 5px; }
+  body.touch .lbl { width: 36px; font-size: 15px; }
+  body.touch .pair .lbl { width: auto; }
+  body.touch #quick { position: static; padding: 4px; gap: 4px; flex-wrap: wrap; max-width: min(230px, 30vw); }
+  body.touch .qi { width: 42px; height: 42px; }
+  body.touch #team { font-size: 16px; }
+  body.touch #toolbar { padding: 3px; gap: 3px; }
+  body.touch .tb { min-width: 52px; height: 44px; font-size: 14px; padding: 2px 3px; }
+  body.touch .tb img { width: 22px; height: 22px; }
+  body.touch .tb kbd { display: none; }
+  body.touch #quest-box { width: min(290px, 34vw); padding: 4px 9px 5px; }
+  body.touch #weapon-box { right: auto; left: 50%; transform: translateX(-50%); bottom: calc(6px + var(--sb)); min-width: 0; padding: 3px 12px 4px;
+    display: flex; align-items: center; gap: 10px; }
   body.touch #weapon-box #slots { display: none; }
+  body.touch #ammo-line { font-size: 28px; white-space: nowrap; }
+  body.touch #reserve { font-size: 18px; }
+  body.touch #w-head { flex-direction: column; align-items: flex-start; gap: 0; }
+  body.touch #wname { font-size: 17px; white-space: nowrap; }
+  body.touch #reload-tag { font-size: 14px; }
+  body.touch #loot-feed { left: 50%; transform: translateX(-50%); bottom: calc(60px + var(--sb)); align-items: center; }
+  body.touch .lf { font-size: 18px; }
+  body.touch #zbanner { top: auto; bottom: calc(62px + var(--sb)); white-space: normal; max-width: 46vw; font-size: 17px; }
   body:not(.touch) .qi i { display: block; }
+  body.touch .bi button, body.touch .crr, body.touch .crtab { min-height: 34px; }
+  body.touch .bi button { font-size: 17px; padding: 2px 9px; }
+
+  /* xoay ngang */
+  #rotate { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(4,4,8,.94); }
+  #rotate .card { max-width: 340px; }
+  .rot-phone { width: 46px; height: 78px; margin: 6px auto 16px; border: 3px solid var(--edge); border-radius: 8px; position: relative; animation: rot 2.2s ease-in-out infinite; }
+  .rot-phone i { position: absolute; left: 50%; bottom: 5px; width: 8px; height: 3px; margin-left: -4px; background: var(--edge); }
+  @keyframes rot { 0%, 20% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+  .rot-t { font-size: 28px; letter-spacing: 2px; color: var(--gold); }
+  .rot-s { font-size: 19px; color: var(--ink-dim); line-height: 1.2; margin-top: 6px; }
 
   .btn.alt { background: #2c5a6a; border-color: #9ad8e8; outline-color: #0c2028; box-shadow: 0 4px 0 #0c2028, 0 0 22px rgba(90,180,210,.35); }
   .btn.alt:hover { background: #3a7488; }
@@ -234,24 +417,73 @@
     background: rgba(10,8,14,.7); padding: 4px 16px; border: 2px solid var(--edge); opacity: 0; transition: opacity .3s; pointer-events: none; }
   #toast.show { opacity: 1; }
   body.viewing #game { cursor: grab; }
-  @media (max-width: 960px), (max-height: 480px) {
-    #hp-box { width: min(240px, 30vw); padding: 5px 8px 6px; }
-    .lbl { width: 36px; font-size: 16px; }
+  @media (max-width: 1100px), (max-height: 560px) {
+    body:not(.touch) #hp-box { width: min(260px, 30vw); padding: 5px 9px 6px; }
+    body:not(.touch) .lbl { width: 40px; font-size: 16px; }
     #night-box { padding: 2px 12px 4px; }
     #night { font-size: 24px; } #atmo, #left { font-size: 15px; }
     #q-text { font-size: 16px; } #q-sub { font-size: 13px; }
-    #quest-box { width: min(250px, 30vw); padding: 4px 8px; }
+    body:not(.touch) #quest-box { padding: 4px 8px; }
     #weapon-box { padding: 5px 10px; }
     #ammo-line { font-size: 30px; }
     #wname { font-size: 17px; }
   }
-  @media (max-width: 640px) {
-    #hp-box { width: 40vw; padding: 6px 8px; }
-    .lbl { width: 34px; font-size: 15px; }
-    #night { font-size: 24px; } #atmo, #left { font-size: 15px; }
-    #night-box { top: calc(8px + var(--st)); padding: 3px 10px; }
-    #quest-box { width: 34vw; }
-    #ammo-line { font-size: 32px; }
+  /* điện thoại ngang thấp (iPhone SE, mini…) */
+  @media (max-height: 420px) {
+    body.touch .tb { height: 40px; font-size: 13px; gap: 1px; }
+    body.touch .tb img { width: 20px; height: 20px; }
+    body.touch #q-title { display: none; }
+    body.touch #q-text { margin-top: 0; }
+    body.touch #q-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  }
+  @media (max-height: 400px) {
+    body.touch #hp-box { padding: 4px 7px 5px; gap: 2px; }
+    body.touch .bar { height: 9px; } body.touch .bar.st, body.touch .bar.ar { height: 6px; } body.touch .bar.fd, body.touch .bar.wt { height: 5px; }
+    body.touch #char-tag { font-size: 14px; }
+    #night { font-size: 21px; } #atmo, #left, #zone-tag { font-size: 14px; }
+    body.touch #quest-box #q-text { font-size: 15px; } body.touch #q-sub { font-size: 13px; }
+    body.touch #team { font-size: 15px; }
+    #tpad { --u: .9; }
+  }
+  /* điện thoại ngang hẹp: thu gọn thanh công cụ */
+  @media (max-width: 760px) {
+    body.touch .tb { min-width: 44px; font-size: 13px; }
+    body.touch #hp-box, body.touch #quick { width: auto; max-width: 31vw; }
+    body.touch #hp-box { width: 31vw; }
+  }
+  @media (max-width: 660px) and (orientation: landscape) {
+    body.touch .tb { min-width: 0; width: 36px; height: 36px; padding: 0; }
+    body.touch .tb span { display: none; }
+    body.touch #hp-box { width: 29vw; }
+    body.touch #night-box { max-width: 27vw; padding: 2px 8px 3px; }
+    body.touch #quest-box { width: 36vw; }
+    body.touch #weapon-box { left: 43%; }
+    body.touch #loot-feed { left: 43%; }
+  }
+  /* máy tính bảng: nút to hơn */
+  @media (min-height: 620px) and (min-width: 900px) {
+    #tpad { --u: 1.2; }
+    body.touch .tb { min-width: 58px; height: 52px; font-size: 15px; }
+    body.touch .tb img { width: 26px; height: 26px; }
+    body.touch .qi { width: 48px; height: 48px; }
+  }
+  /* điện thoại dọc: khuyên xoay ngang, vẫn cho chơi nếu muốn */
+  @media (orientation: portrait) {
+    body.touch.playing:not(.portrait-ok) #rotate { display: flex; }
+    body.touch #hud-top { flex-wrap: wrap; row-gap: 5px; }
+    body.touch #hud-l { width: calc(50% - 4px); }
+    body.touch #hud-r { width: calc(50% - 4px); }
+    body.touch #hp-box, body.touch #quick { width: 100%; max-width: none; }
+    body.touch #quest-box { width: 100%; }
+    body.touch #night-box { order: 3; margin: 0 auto; padding: 2px 10px 3px; }
+    body.touch #left { display: none; }
+    body.touch #weapon-box, body.touch #loot-feed { left: calc(8px + var(--sl)); transform: none; }
+    body.touch #weapon-box { bottom: calc(96px + var(--sb)); }
+    body.touch #loot-feed { align-items: flex-start; bottom: calc(146px + var(--sb)); }
+    body.touch #toolbar { gap: 2px; padding: 2px; }
+    body.touch .tb { min-width: 0; width: 34px; height: 36px; padding: 0; }
+    body.touch .tb span { display: none; }
+    body.touch .tb img { width: 22px; height: 22px; }
   }
 </style>
 </head>
@@ -260,37 +492,58 @@
 <canvas id="fx2d"></canvas>
 
 <div id="hud">
-  <div id="hp-box" class="win">
-    <div class="row"><span class="lbl">MÁU</span><div class="bar"><i id="hp-fill"></i></div></div>
-    <div class="row" style="margin-top:5px"><span class="lbl">SỨC</span><div class="bar st"><i id="st-fill"></i></div></div>
-    <div class="row" style="margin-top:5px"><span class="lbl">ĐÓI</span><div class="bar fd" id="fd-bar"><i id="fd-fill"></i></div></div>
-    <div class="row" style="margin-top:4px"><span class="lbl">KHÁT</span><div class="bar wt" id="wt-bar"><i id="wt-fill"></i></div></div>
-    <div class="row hidden" id="inf-row" style="margin-top:4px"><span class="lbl" style="color:#9aff7a">VIRUS</span><span id="inf-time"></span></div>
-    <div class="row" style="margin-top:4px"><span id="char-tag"></span></div>
-    <div class="bar xp"><i id="xp-fill"></i></div>
+  <div id="hud-top">
+    <div id="hud-l">
+      <div id="hp-box" class="win">
+        <div class="row"><span class="lbl">MÁU</span><div class="bar"><i id="hp-fill"></i></div></div>
+        <div class="row hidden" id="ar-row"><span class="lbl">GIÁP</span><div class="bar ar"><i id="ar-fill"></i></div></div>
+        <div class="row"><span class="lbl">SỨC</span><div class="bar st"><i id="st-fill"></i></div></div>
+        <div class="pair">
+          <div class="row"><span class="lbl">ĐÓI</span><div class="bar fd" id="fd-bar"><i id="fd-fill"></i></div></div>
+          <div class="row"><span class="lbl">KHÁT</span><div class="bar wt" id="wt-bar"><i id="wt-fill"></i></div></div>
+        </div>
+        <div class="row hidden" id="inf-row"><span class="lbl" style="color:#9aff7a">VIRUS</span><span id="inf-time"></span></div>
+        <div class="row"><span id="char-tag"></span></div>
+        <div class="bar xp"><i id="xp-fill"></i></div>
+      </div>
+      <div id="quick" class="win empty"></div>
+      <div id="team"></div>
+    </div>
+    <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div><div id="zone-tag"></div></div>
+    <div id="hud-r">
+      <div id="toolbar">
+        <button class="tb" id="tb-bag" title="Túi đồ (I)"><img alt=""><span>Túi đồ</span><kbd>I</kbd></button>
+        <button class="tb" id="tb-craft" title="Chế đồ (B)"><img alt=""><span>Chế đồ</span><kbd>B</kbd><em class="dot hidden"></em></button>
+        <button class="tb" id="tb-map" title="Bản đồ (M)"><img alt=""><span>Bản đồ</span><kbd>M</kbd></button>
+        <button class="tb" id="tb-skill" title="Kỹ năng (K)"><img alt=""><span>Kỹ năng</span><kbd>K</kbd><em class="dot hidden"></em></button>
+        <button class="tb" id="tb-pause" title="Tạm dừng (P)"><img alt=""><span>Dừng</span><kbd>P</kbd></button>
+      </div>
+      <div id="quest-box" class="win"><div id="q-title">NHIỆM VỤ</div><div id="q-text"></div><div id="q-sub"></div></div>
+    </div>
   </div>
   <div id="zbanner" class="hidden">BẠN ĐANG LÀ ZOMBIE · chờ đồng đội cho ăn <b>hoa bỉ ngạn</b> · gầm để gọi họ</div>
-  <div id="night-box" class="win"><div id="night">ĐÊM 1</div><div id="atmo"></div><div id="left"></div><div id="zone-tag"></div></div>
-  <div id="quest-box" class="win"><div id="q-title">NHIỆM VỤ</div><div id="q-text"></div><div id="q-sub"></div></div>
-  <div id="quick" class="win"></div>
-  <div id="team"></div>
   <div id="loot-feed"></div>
   <div id="weapon-box" class="win">
-    <div class="row" style="justify-content:space-between"><span id="wname">SÚNG LỤC</span><span id="reload-tag">NẠP ĐẠN…</span></div>
+    <div class="row" id="w-head"><span id="wname">SÚNG LỤC</span><span id="reload-tag">NẠP ĐẠN…</span></div>
     <div id="ammo-line"><span id="ammo">12</span> <span id="reserve">∞</span></div>
     <div id="slots"><div class="slot">1</div><div class="slot">2</div><div class="slot">3</div><div class="slot">4</div><div class="slot">5</div></div>
   </div>
 </div>
 <div id="msg"><div id="msg-title"></div><div id="msg-sub"></div></div>
 
-<button class="tbtn" id="t-reload" aria-label="Nạp đạn">R</button>
-<button class="tbtn" id="t-swap" aria-label="Đổi súng">⇄</button>
-<button class="tbtn" id="t-pause" aria-label="Tạm dừng">❚❚</button>
-<button class="tbtn off" id="t-use" aria-label="Lục soát">LỤC</button>
-<button class="tbtn" id="t-bag" aria-label="Túi đồ">TÚI</button>
-<button class="tbtn" id="t-map" aria-label="Bản đồ">MAP</button>
-<button class="tbtn" id="t-skill" aria-label="Kỹ năng">KN</button>
-<button class="tbtn" id="t-shove" aria-label="Húc">HÚC</button>
+<div id="tpad">
+  <button class="tbtn" id="t-swap" aria-label="Đổi vũ khí">ĐỔI</button>
+  <button class="tbtn" id="t-reload" aria-label="Nạp đạn">NẠP</button>
+  <button class="tbtn off" id="t-use" aria-label="Lục soát (giữ)">LỤC</button>
+  <button class="tbtn off" id="t-shove" aria-label="Húc">HÚC</button>
+  <button class="tbtn off" id="t-throw" aria-label="Ném bom xăng">NÉM</button>
+</div>
+<div id="rotate"><div class="card win">
+  <div class="rot-phone"><i></i></div>
+  <div class="rot-t">XOAY NGANG ĐIỆN THOẠI</div>
+  <div class="rot-s">Màn hình ngang nhìn được rộng hơn và các nút bấm vừa tầm tay</div>
+  <div class="btns" style="margin-top:12px"><button class="btn ghost" id="rot-ok">Vẫn chơi màn dọc</button></div>
+</div></div>
 <div id="zfade"></div>
 <div id="lobby" class="screen hidden"><div class="card win">
   <h2>CHƠI CÙNG BẠN BÈ</h2>
@@ -325,10 +578,29 @@
   <div class="btns" style="margin-top:12px"><button class="btn ghost" id="bag-close">ĐÓNG (I)</button></div>
 </div></div>
 
+<div id="craft" class="screen hidden"><div class="card win">
+  <h2>BÀN CHẾ ĐỒ</h2>
+  <div class="cr-main">
+    <div class="cr-left">
+      <div class="cr-bench"><div id="cr-grid"></div><div class="cr-arrow">➜</div><div id="cr-out"></div></div>
+      <div id="cr-name"></div>
+      <div id="cr-msg"></div>
+      <div class="btns"><button class="btn" id="cr-go">CHẾ</button><button class="btn ghost" id="cr-clear">Trả đồ</button></div>
+      <div class="cr-tip">Bấm đồ trong túi để đặt vào lưới · bấm ô trong lưới để lấy ra · mở <b>Sách công thức</b> và bấm một món đã học để tự xếp nguyên liệu</div>
+    </div>
+    <div class="cr-right">
+      <div class="crtabs"><button class="crtab on" data-tab="inv">Túi đồ</button><button class="crtab" data-tab="book">Sách công thức</button></div>
+      <div id="cr-inv"></div>
+      <div id="cr-book" class="hidden"></div>
+    </div>
+  </div>
+  <div class="btns cr-foot"><button class="btn ghost" id="cr-close">ĐÓNG</button></div>
+</div></div>
 <div id="charsel" class="screen hidden"><div class="card win">
   <h2>CHỌN NHÂN VẬT</h2>
   <div class="lsub">Luyện tập: bạn chơi một nhân vật, 4 người còn lại là bot đi cùng</div>
   <div id="cs-grid"></div>
+  <div id="cs-desc"></div>
   <div class="btns" style="margin-top:12px"><button class="btn" id="cs-go">BẮT ĐẦU</button><button class="btn ghost" id="cs-back">Quay lại</button></div>
 </div></div>
 <div id="skills" class="screen hidden"><div class="card win">

@@ -183,6 +183,21 @@ const WEAPONS = [
 ];
 // nhân vật đang chơi (lưu lựa chọn)
 let myChar = clamp(+store.get('deadnight_char', '0') || 0, 0, CHARS.length - 1);
+// đội 4 người: nhân vật của bạn + 3 bạn đồng hành; 1 người ở lại (không đi cùng)
+const TEAM_N = 4;
+const BENCH_PREF = ['lycas', 'ama', 'tien', 'hamble', 'naryne'].map((id) => CHARS.findIndex((c) => c.id === id));
+let bench = clamp(+store.get('deadnight_bench', '-1'), -1, CHARS.length - 1);
+function fixBench() { if (bench < 0 || bench === myChar) bench = BENCH_PREF.find((i) => i !== myChar); return bench; }
+fixBench();
+const teamIdx = () => { fixBench(); return CHARS.map((c, i) => i).filter((i) => i !== bench); };
+const inTeam = (id) => teamIdx().some((i) => CHARS[i].id === id);
+// ai đang thực sự đi cùng: bạn, người chơi khác trong phòng, bot
+function partyIds() {
+  const s2 = new Set([player ? player.char : myChar]);
+  if (net.active) for (const rp of net.players.values()) if (rp.inited) s2.add(rp.char);
+  for (const b of allBots()) s2.add(b.ci);
+  return [...s2].map((i) => CHARS[i].id);
+}
 const charSet = (ci) => { const s2 = charSprites(ci, CHARS[ci].pal); return [s2.knife, s2.pistol, s2.shotgun, s2.smg, s2.bow, s2.fist, s2.club, s2.spear]; };
 // hình đang cầm: ô 0 là vũ khí cận chiến (dao / tay không / gậy / giáo)
 const MELEE_SPR = { knife: 0, fist: 5, club: 6, spear: 7 };
@@ -1051,8 +1066,9 @@ function renderRoom() {
     d.textContent = `${i === 0 ? '★ ' : '• '}${x.n}${x.me ? ' (bạn)' : ''} · ${CHARS[ci].name}${i === 0 ? ' — chủ phòng' : ''}`;
     el.appendChild(d);
   });
-  const bots = CHARS.filter((c, i) => i !== myChar && !taken.has(i)).map((c) => c.name);
-  if (bots.length) { const d = document.createElement('div'); d.style.color = 'var(--ink-dim)'; d.textContent = 'Bot: ' + bots.join(', '); el.appendChild(d); }
+  const humans = new Set([myChar, ...taken.keys()]);
+  const bots = teamIdx().filter((i) => !humans.has(i)).slice(0, Math.max(0, TEAM_N - humans.size)).map((i) => CHARS[i].name);
+  { const d = document.createElement('div'); d.style.color = 'var(--ink-dim)'; d.textContent = `Đội tối đa ${TEAM_N} người` + (bots.length ? ' · bot: ' + bots.join(', ') : ''); el.appendChild(d); }
   renderCharPick($('char-pick'), taken);
   $('go-btn').classList.toggle('hidden', !net.host || net.started);
   // khách vào phòng: tự vào game khi chủ phòng đã bắt đầu
@@ -2066,7 +2082,7 @@ function botChars() {
   const taken = new Set([player.char]);
   if (net.active) for (const rp of net.players.values()) if (rp.inited || rp.j) taken.add(rp.char);
   if (net.active) for (const m of roomMembers()) taken.add(m.me ? myChar : m.c);
-  return CHARS.map((c, i) => i).filter((i) => !taken.has(i));
+  return teamIdx().filter((i) => !taken.has(i)).slice(0, Math.max(0, TEAM_N - taken.size));
 }
 function clearBots() {
   for (const b of bots) scene.remove(b.sp.group);
@@ -2333,13 +2349,21 @@ function describeGate() {
   if (botAvail('hamble')) return { label: 'Gọi Hamble (bot) nâng cổng', can: true, time: 0.3 };
   const rh = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'hamble');
   if (rh) return { label: `Cổng quá nặng · gọi ${rh.name} (Hamble)`, can: false };
+  // Hamble không đi cùng đội: bẩy cổng bằng ống thép rồi chèn gỗ
+  if (!partyIds().includes('hamble')) {
+    if (player.bag.pipe > 0 && player.bag.wood > 0) return { label: 'Bẩy cổng bằng ống thép và chèn gỗ', can: true, time: 4.0 };
+    return { label: 'Cổng sắt quá nặng · cần ỐNG THÉP để bẩy + 1 thanh gỗ', can: false };
+  }
   return { label: 'Cổng sắt quá nặng · chỉ Hamble nâng nổi', can: false };
 }
 function doGate() {
   const st = world.pois.gate.state || 'closed';
   if (st === 'held' && !player.mod.lift && player.bag.wood > 0) { player.bag.wood--; gateAct('prop'); gainXP(5, true); return; }
   if (st === 'closed' && player.mod.lift) { gateAct('lift', CHARS[player.char].name); gainXP(8, true); return; }
-  if (st === 'closed' && botAvail('hamble')) botTask('hamble', 'gate');
+  if (st === 'closed' && botAvail('hamble')) { botTask('hamble', 'gate'); return; }
+  if (st === 'closed' && !partyIds().includes('hamble') && player.bag.pipe > 0 && player.bag.wood > 0) {
+    player.bag.wood--; gateAct('lift', CHARS[player.char].name); gateAct('prop'); gainXP(8, true); hud.dirty = true;
+  }
 }
 function describeCam() {
   if (camReveal > 0) return { label: 'Đang xem camera…', can: false };
@@ -2348,7 +2372,7 @@ function describeCam() {
   if (botAvail('lycas')) return { label: 'Gọi Lycas (bot) hack camera', can: true, time: 0.3 };
   const rl = [...net.players.values()].find((rp) => rp.here && CHARS[rp.char].id === 'lycas');
   if (rl) return { label: `Màn hình khoá mật khẩu · gọi ${rl.name} (Lycas)`, can: false };
-  return { label: 'Màn hình khoá mật khẩu · cần Lycas', can: false };
+  return { label: partyIds().includes('lycas') ? 'Màn hình khoá mật khẩu · cần Lycas' : 'Màn hình khoá mật khẩu · Lycas không đi cùng đội', can: false };
 }
 function doCam() {
   if (player.mod.hack) { camHack(player.mod.camTime, player.mod.camLoot, CHARS[player.char].name); gainXP(8, true); }
@@ -3231,6 +3255,7 @@ function clearFire() {
 function pickChar(ci) {
   myChar = clamp(ci | 0, 0, CHARS.length - 1);
   store.set('deadnight_char', String(myChar));
+  if (bench === myChar) { bench = -1; fixBench(); store.set('deadnight_bench', String(bench)); }
   if (net.room) net.room.presence({ c: myChar }).catch(() => {});
   renderRoom(); renderCharSel();
 }
@@ -3246,6 +3271,16 @@ function charCard(ci, taken, compact) {
   const prog = loadProgress(ci);
   t.innerHTML = `<b style="color:${c.color}">${c.name}</b> <span class="nat">(${c.nat})</span><br><span class="stat"><i class="role">${c.role} · </i>♥${c.hp} · cấp ${prog.level}</span>` + (compact ? '' : `<br><small>${c.desc}</small>`) + (taken ? `<br><em>${taken} đã chọn</em>` : '');
   d.appendChild(t);
+  if (!compact) {
+    fixBench();
+    d.classList.toggle('benched', ci === bench);
+    const chip = document.createElement('span');
+    chip.className = 'tchip ' + (ci === myChar ? 'me' : ci === bench ? 'out' : 'in');
+    chip.textContent = ci === myChar ? 'BẠN' : ci === bench ? 'Ở LẠI' : 'ĐI CÙNG';
+    chip.title = ci === myChar ? 'Nhân vật của bạn' : ci === bench ? 'Không đi cùng đội' : 'Bấm để cho người này ở lại';
+    chip.addEventListener('click', (e) => { e.stopPropagation(); if (ci === myChar || ci === bench) return; bench = ci; store.set('deadnight_bench', String(bench)); renderCharSel(); });
+    d.appendChild(chip);
+  }
   d.addEventListener('click', () => pickChar(ci));
   return d;
 }
@@ -3260,7 +3295,9 @@ function renderCharSel() {
   el.innerHTML = '';
   CHARS.forEach((c, i) => el.appendChild(charCard(i, null, false)));
   const c = CHARS[myChar];
+  const mates = teamIdx().filter((i) => i !== myChar).map((i) => `<b style="color:${CHARS[i].color}">${CHARS[i].name}</b>`).join(', ');
   $('cs-desc').innerHTML = `<b style="color:${c.color}">${c.name}</b> (${c.nat}) · ${c.role} · ♥${c.hp}<br>${c.desc}`;
+  $('cs-team').innerHTML = `ĐỘI 4/5 · đi cùng: ${mates} · ở lại: <b style="color:${CHARS[bench].color}">${CHARS[bench].name}</b> <span>· bấm nhãn ĐI CÙNG trên thẻ để đổi người ở lại</span>`;
 }
 function openCharSel() { $('title').classList.add('hidden'); $('charsel').classList.remove('hidden'); renderCharSel(); }
 function closeCharSel() { $('charsel').classList.add('hidden'); if (state.mode === 'title') $('title').classList.remove('hidden'); }
@@ -4978,7 +5015,7 @@ function renderSettings() {
       const box = document.createElement('div'); box.className = 'seg';
       for (const [id, label] of [['prologue', 'Mở đầu'], ['ch1', 'Chương 1'], ['lord', 'Zombie Chúa'], ['call', 'Gọi cứu hộ'], ['ending', 'Kết']]) {
         if (id !== 'prologue' && !seen.has(id)) continue;
-        box.appendChild(sButton(label, () => { closeSettings(); $('title').classList.add('hidden'); sound.init(); cinema.play(id).then(() => { if (state.mode === 'title') $('title').classList.remove('hidden'); }); }));
+        box.appendChild(sButton(label, () => { closeSettings(); $('title').classList.add('hidden'); sound.init(); cinema.setTeam(teamIdx().map((i) => CHARS[i].id)); cinema.play(id).then(() => { if (state.mode === 'title') $('title').classList.remove('hidden'); }); }));
       }
       pane.appendChild(sRow('Xem lại phim', 'Các đoạn đã mở khoá', box));
     }
@@ -5029,7 +5066,7 @@ function saveGame(flash) {
   if (!canSave()) return false;
   const P = player;
   const S = {
-    v: 1, at: Date.now(), char: P.char, zone: ZONE.id, x: +P.x.toFixed(2), z: +P.z.toFixed(2),
+    v: 1, at: Date.now(), char: P.char, bench, zone: ZONE.id, x: +P.x.toFixed(2), z: +P.z.toFixed(2),
     hp: P.hp, food: P.food, water: P.water, bag: { ...P.bag }, melee: P.melee, durs: { ...P.durs }, armor: P.armor, pack: !!P.pack,
     recipes: [...P.recipes], books: [...P.books], guns: P.guns.map((g) => ({ owned: g.owned, ammo: g.ammo })), weapon: P.weapon,
     battery: P.battery, flashOn: P.flashOn, torchT: P.torchT, infected: P.infected, infMax: P.infMax || 0,
@@ -5077,6 +5114,7 @@ function continueGame() {
   const S = loadSave();
   if (!S) return;
   myChar = clamp(S.char | 0, 0, CHARS.length - 1);
+  if (S.bench !== undefined) { bench = clamp(S.bench | 0, -1, CHARS.length - 1); fixBench(); }
   startGame({ load: S });
 }
 
@@ -5089,6 +5127,7 @@ function playStory(id) {
   if (mapOpen) toggleMap(false);
   if (skillsOpen) toggleSkills(false);
   sound.init();
+  cinema.setTeam(partyIds());
   return cinema.play(id);
 }
 const isSchoolZone = (id) => /^sf\d/.test(id);
@@ -5252,6 +5291,7 @@ function startOutbreak() {
   story.seen.add('outbreak3d'); markSeen('outbreak');
   sound.init();
   defineOutbreak();
+  cinema.setTeam(null);
   cinema.play('outbreak', { onEnd: afterOutbreak });
 }
 // sau khi Tuấn biến đổi: học sinh hoá zombie, cả nhóm thoát ra hành lang
@@ -5274,6 +5314,7 @@ function afterOutbreak() {
   phaseT = 0;
   hud.dirty = true; saveT = 2;
   showMsg('CHƯƠNG 0 · TIẾT HỌC CUỐI', 'Tìm kềm cắt ở kho tầng 3 · cắt khoá cổng chính tầng 1');
+  if (!partyIds().includes(CHARS[bench].id)) setTimeout(() => toast(`${CHARS[bench].name} chạy lạc khỏi nhóm trong lúc hỗn loạn`), 2600);
   sound.wave();
 }
 // ---------- cổng chính tầng 1: cắt ổ khoá bằng kềm ----------
@@ -5469,7 +5510,11 @@ function defineOutbreak() {
         ['lycas', 'ama', 'naryne', 'hamble', 'tien'].forEach((id, i) => walkTo(A[id], L + 8.6 - i * 0.3, -1.4 + (i % 2) * 0.3, 3.6 + i * 0.2));
         walkTo(A.hang, L + 8.0, -1.6, 2.4);
       }
-      if (t > 5.0 && !A.out) { A.out = 1; ['lycas', 'ama', 'naryne', 'hamble', 'tien'].forEach((id, i) => walkTo(A[id], L + 7.6 + i * 0.6, 0.9, 3.8)); }
+      if (t > 5.0 && !A.out) {
+        // người không đi cùng đội chạy lạc về phía cầu thang bên kia
+        const lost = partyIds().includes(CHARS[bench].id) ? null : CHARS[bench].id;
+        A.out = 1; ['lycas', 'ama', 'naryne', 'hamble', 'tien'].forEach((id, i) => walkTo(A[id], id === lost ? L - 4 : L + 7.6 + i * 0.6, id === lost ? 1.2 : 0.9, id === lost ? 4.6 : 3.8));
+      }
     },
     exit() { c3End(); },
   });
@@ -5485,7 +5530,9 @@ function defineCh1() {
   // co-op: game vẫn chạy ngầm nên dùng bản phim 2D
   if (net.active || !b) { cinema.define('ch1', [cinema.shot('citySmoke'), cinema.shot('lockdown'), CH1_TITLE()]); return; }
   const D = b.door, A = {};
-  const ids = ['lycas', 'ama', 'naryne', 'hamble', 'tien'];
+  cinema.setTeam(partyIds());
+  const party = partyIds(), ids = ['lycas', 'ama', 'naryne', 'hamble', 'tien'].filter((id) => party.includes(id));
+  const W2 = cinema.who, HB = () => A[W2('hamble')], AM = () => A[W2('ama')];
   const hero = (id) => charSprites(CHARS.findIndex((c) => c.id === id), CHARS.find((c) => c.id === id).pal).fist;
   const SPOT = [[-2.2, 1.1], [-0.9, 1.6], [0.3, 1.0], [1.5, 1.5], [2.6, 1.15]];
   // cột khói đen phía sau dãy nhà: thành phố đang cháy
@@ -5519,7 +5566,7 @@ function defineCh1() {
       const k = ease01(t / 8.4);
       c3Cam(lerp3(D + 4.6, D + 2.4, k), lerp3(1.3, 1.15, k), lerp3(6.6, 5.9, k), lerp3(D - 0.2, D - 0.4, k), 1.5, lerp3(0, 0.3, k), 42);
       ids.forEach((id, i) => { if (t > 0.4 + i * 0.55 && !A[id].go) { A[id].go = 1; walkTo(A[id], D + SPOT[i][0], SPOT[i][1], 2.2); } });
-      if (t > 5.4) { if (!A.lycas.path) A.lycas.dir = 'right'; if (!A.naryne.path) A.naryne.dir = 'left'; }
+      if (t > 5.4) { const a1 = A[W2('lycas')], a2 = A[W2('naryne')]; if (!a1.path) a1.dir = 'right'; if (a2 !== a1 && !a2.path) a2.dir = 'left'; }
     },
   });
   shots.push({
@@ -5531,13 +5578,13 @@ function defineCh1() {
       flyHeli(clamp((t - 0.2) / 6.6, 0, 1));
       C3.shake = Math.max(C3.shake, t > 1.5 && t < 4.5 ? 0.35 : 0);
       c3Cam(D + 0.8, 0.45, 6.2, D - 0.6, lerp3(4.2, 5.2, ease01(t / 7.6)), -2, 58);
-      const h = A.hamble;
+      const h = HB();
       if (t > 1.0 && !h.go2) { h.go2 = 1; walkTo(h, h.x + 0.3, h.z + 0.8, 2.6); }
       h.y = t > 1.5 && t < 4.3 ? Math.abs(Math.sin(t * 9)) * 0.2 : 0;
       if (t > 1.5 && t < 4.3 && !h.path) h.dir = Math.floor(t * 6) % 2 ? 'right' : 'left';
       if (t > 4.3 && !h.path) h.dir = 'down';
     },
-    exit() { if (cineHeli) cineHeli.group.visible = false; A.hamble.y = 0; },
+    exit() { if (cineHeli) cineHeli.group.visible = false; HB().y = 0; },
   });
   shots.push({
     three: true, dur: 8.2, amb: { wind: 0.4, drone: 0.8 },
@@ -5555,17 +5602,17 @@ function defineCh1() {
       else if (t < 5.0) c3Cam(D - 5.5, 1.3, 4.7, D - 6.3, 1.0, 1.4, 40);
       else c3Cam(lerp3(D - 3.6, D - 1.6, ease01((t - 5) / 3.2)), 1.5, 6.4, D - 2.6, 1.1, 1.2, 44);
       A.z.jit = t < 3.1 ? 0.03 : 0;
-      if (t > 2.0 && !A.amaGo) { A.amaGo = 1; walkTo(A.ama, D - 5.15, 1.45, 5.4); }
+      if (t > 2.0 && !A.amaGo) { A.amaGo = 1; walkTo(AM(), D - 5.15, 1.45, 5.4); }
       if (t > 3.1 && !A.punch) {
-        A.punch = 1; A.ama.path = null; A.ama.dir = 'left'; A.ama.x -= 0.22; A.z.path = null;
+        A.punch = 1; AM().path = null; AM().dir = 'left'; AM().x -= 0.22; A.z.path = null;
         hitSpark(A.z.x + 0.3, 1.25, A.z.z + 0.1); bloodBurst(A.z.x, 1.2, A.z.z, 14, 0.9); C3.shake = 2;
         walkTo(A.z, D - 7.2, 1.3, 7);
       }
       if (t > 3.25) { A.z.rot = Math.min(Math.PI / 2, (t - 3.25) * 4.5); A.z.y = 0.05; }
-      if (t > 3.5 && !A.step) { A.step = 1; walkTo(A.ama, D - 6.2, 1.4, 2.6); }
-      if (t > 4.3 && !A.stomp) { A.stomp = 1; A.ama.dir = 'left'; bloodBurst(A.z.x - 0.8, 0.25, A.z.z, 12, 0.7); C3.shake = 1; }
-      if (t > 5.0 && !A.go3) { A.go3 = 1; ids.forEach((id, i) => { if (id !== 'ama') walkTo(A[id], D + 4 + i * 0.6, 1.8 + (i % 2) * 0.5, 2.6); }); }
-      if (t > 6.2 && !A.amaOut) { A.amaOut = 1; walkTo(A.ama, D + 2, 1.5, 3); }
+      if (t > 3.5 && !A.step) { A.step = 1; walkTo(AM(), D - 6.2, 1.4, 2.6); }
+      if (t > 4.3 && !A.stomp) { A.stomp = 1; AM().dir = 'left'; bloodBurst(A.z.x - 0.8, 0.25, A.z.z, 12, 0.7); C3.shake = 1; }
+      if (t > 5.0 && !A.go3) { A.go3 = 1; ids.forEach((id, i) => { if (A[id] !== AM()) walkTo(A[id], D + 4 + i * 0.6, 1.8 + (i % 2) * 0.5, 2.6); }); }
+      if (t > 6.2 && !A.amaOut) { A.amaOut = 1; walkTo(AM(), D + 2, 1.5, 3); }
     },
     exit() { c3End(); },
   });

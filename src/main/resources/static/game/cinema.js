@@ -34,6 +34,16 @@ function A(key) {
   return atl[key];
 }
 const HERO = (id) => A('hero' + CHARS.findIndex((c) => c.id === id));
+// đội 4/5: người ở lại không xuất hiện; thoại của họ chuyển cho bạn khác trong đội
+const HEROES = CHARS.map((c) => c.id);
+let TEAM = null;
+const SUB_PREF = { lycas: ['naryne', 'tien', 'ama', 'hamble'], ama: ['hamble', 'tien', 'lycas', 'naryne'], naryne: ['lycas', 'tien', 'ama', 'hamble'], hamble: ['ama', 'tien', 'lycas', 'naryne'], tien: ['ama', 'lycas', 'hamble', 'naryne'] };
+function who(id) {
+  if (!TEAM || !HEROES.includes(id) || TEAM.includes(id)) return id;
+  return (SUB_PREF[id] || []).find((x) => TEAM.includes(x)) || TEAM[0] || id;
+}
+const crew = () => HEROES.filter((id) => !TEAM || TEAM.includes(id));
+function setTeam(ids) { TEAM = ids && ids.length ? ids.filter((x) => HEROES.includes(x)) : null; if (TEAM && !TEAM.length) TEAM = null; }
 
 const SPK = {
   narr: { name: '' },
@@ -576,8 +586,8 @@ SH.citySmoke = {
     heliShape(h2, 62, 0.8, t + 1);
     R(0, 136, W, 44, '#151214');
     for (let x = 0; x < W; x += 7) R(x, 128, 2, 52, '#0a0a0c'); R(0, 130, W, 3, '#141416'); R(0, 168, W, 3, '#141416');
-    const ids = ['lycas', 'ama', 'naryne', 'hamble', 'tien'];
-    ids.forEach((id, i) => spr(HERO(id), 3, 0, 104 + i * 28, 182, 1.7));
+    const ids = crew(), x0 = 160 - (ids.length - 1) * 14;
+    ids.forEach((id, i) => spr(HERO(id), 3, 0, x0 + i * 28, 182, 1.7));
   },
 };
 SH.lockdown = {
@@ -634,7 +644,7 @@ SH.lordRoof = {
 SH.radioRoom = {
   cap: ['ĐỒN CẢNH SÁT TRUNG TÂM', 'Bộ đàm đã có điện'],
   dur: 11.5, amb: { drone: 0.35 },
-  lines: [[0.9, 'radio', '...Đây là đội cứu hộ độc lập Cánh Sen. Chúng tôi nghe rõ.'], [4.2, 'lycas', 'Bọn em có năm người, đang ở đồn cảnh sát trung tâm!'], [7.4, 'radio', 'Trực thăng sẽ đáp ở bãi đáp tầng thượng lúc bình minh. Cầm cự tới 6 giờ sáng!']],
+  lines: [[0.9, 'radio', '...Đây là đội cứu hộ độc lập Cánh Sen. Chúng tôi nghe rõ.'], [4.2, 'lycas', 'Cả nhóm bọn em đang ở đồn cảnh sát trung tâm!'], [7.4, 'radio', 'Trực thăng sẽ đáp ở bãi đáp tầng thượng lúc bình minh. Cầm cự tới 6 giờ sáng!']],
   cues: [[0.3, (s) => s.radio()], [3.8, (s) => s.tvStatic(0.3, 0.06)], [7.1, (s) => s.radio()]],
   draw(t) {
     vg(0, 0, W, H, '#14161c', '#0a0b0e');
@@ -647,7 +657,7 @@ SH.radioRoom = {
     glow(160, 100, 90, 'rgba(70,255,150,0.18)');
     R(150, 40, 2, 22, '#2a2e34'); R(140, 40, 22, 2, '#2a2e34');
     const pos = [['lycas', 160, 176, 3], ['ama', 104, 170, 2], ['naryne', 214, 170, 1], ['hamble', 66, 178, 2], ['tien', 254, 178, 1]];
-    for (const [id, x, f, row] of pos) spr(HERO(id), row, 0, x, f, 1.8);
+    for (const [id, x, f, row] of pos) if (crew().includes(id)) spr(HERO(id), row, 0, x, f, 1.8);
   },
 };
 SH.bombOrder = {
@@ -702,7 +712,7 @@ SH.cityBomb = {
   },
 };
 SH.pendant = {
-  dur: 8.4, amb: { heli: 0.45, drone: 0.4 },
+  needs: 'naryne', dur: 8.4, amb: { heli: 0.45, drone: 0.4 },
   lines: [[1.6, 'naryne', '(nắm chặt mặt dây chuyền) Bố... con sẽ tìm ra sự thật.']],
   draw(t) {
     vg(0, 0, W, H, '#1a1a24', '#0c0c12');
@@ -856,11 +866,12 @@ function frame(dt) {
   if (li !== cur.li) {
     cur.li = li; cur.typedAll = false;
     if (li >= 0) {
-      const sp = SPK[L[li][1]] || { name: L[li][1] };
-      const narr = L[li][1] === 'narr';
+      const sk = who(L[li][1]);
+      const sp = SPK[sk] || { name: sk };
+      const narr = sk === 'narr';
       boxEl.className = narr ? 'narr' : '';
       whoEl.textContent = sp.name; whoEl.style.color = sp.color || '#f1e6cf';
-      const hasP = !narr && portrait(L[li][1]);
+      const hasP = !narr && portrait(sk);
       ptEl.style.display = hasP ? '' : 'none';
     } else boxEl.className = 'off';
   }
@@ -875,8 +886,8 @@ function frame(dt) {
 function play(id, opts = {}) {
   ensureDom();
   if (cur) finish();
-  const list = SEQ[id];
-  if (!list) return Promise.resolve();
+  const list = (SEQ[id] || []).filter((sh) => !sh.needs || !TEAM || TEAM.includes(sh.needs));
+  if (!list.length) return Promise.resolve();
   return new Promise((resolve) => {
     cur = { list, i: -1, resolve, typed: 0, onEnd: opts.onEnd };
     cinema.active = true; cinema.id = id;
@@ -895,4 +906,4 @@ function init(o) { sound = o.sound; ZA = o.zombies; }
 // gỡ lỗi: nhảy tới cảnh i, thời điểm t
 function jump(i, t = 0) { if (!cur) return; cur.i = i - 1; nextShot(); cur.t = t; cur.fired = new Set((cur.shot.cues || []).filter((c) => c[0] < t)); }
 function state() { return cur ? { id: cinema.id, i: cur.i, n: cur.list.length, t: +cur.t.toFixed(2) } : null; }
-export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot, shot: (id) => SH[id] };
+export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot, shot: (id) => SH[id], setTeam, who };

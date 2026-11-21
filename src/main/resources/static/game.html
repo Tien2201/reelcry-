@@ -90,6 +90,9 @@
   #open-games { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 18px; color: var(--ink-dim); min-height: 24px; }
   #room-code { font-size: 64px; letter-spacing: 12px; color: var(--gold); line-height: 1; text-shadow: 0 4px 0 #000; }
   #room-players { font-size: 22px; line-height: 1.3; margin: 10px 0; }
+  #room-players .rdy { color: #8ae07a; } #room-players .wait { color: #e0a85a; }
+  #go-btn:disabled { opacity: .5; cursor: default; }
+  #ready-btn.on { background: #2e5a2a; border-color: #8ae07a; }
   #lobby-note { font-size: 18px; line-height: 1.3; color: var(--ink-dim); margin: 10px 0 6px; }
   .btn.dim { opacity: .55; }
   #team { padding-left: 4px; font-size: 18px; line-height: 1.15; text-shadow: 0 1px 0 #000, 0 0 6px #000; }
@@ -781,7 +784,7 @@
     <div id="room-players"></div>
     <div class="lsub">CHỌN NHÂN VẬT (mỗi người một nhân vật · thiếu người thì bot đi cùng)</div>
     <div id="char-pick"></div>
-    <div class="btns"><button class="btn" id="go-btn">BẮT ĐẦU</button><button class="btn ghost" id="leave-btn">Rời phòng</button></div>
+    <div class="btns"><button class="btn" id="go-btn">BẮT ĐẦU</button><button class="btn" id="ready-btn">SẴN SÀNG</button><button class="btn ghost" id="leave-btn">Rời phòng</button></div>
   </div>
   <div id="lobby-note"></div>
   <div class="btns"><button class="btn ghost" id="lobby-close">Đóng</button></div>

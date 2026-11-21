@@ -1033,11 +1033,12 @@ async function joinRoom(code, creating = false) {
     if (net.room) await leaveRoom();
     const room = await net.transport.join(roomName(code));
     Object.assign(net, { room, code, joinT: Date.now(), seq: 0, out: [], players: new Map(), zmap: new Map(), lastW: 0, started: false, hostPeer: null });
-    await room.presence({ v: 1, n: net.name, j: net.joinT, c: myChar, p: null, e: [], w: null });
+    net.ready = false;
+    await room.presence({ v: 1, n: net.name, j: net.joinT, c: myChar, r: 0, p: null, e: [], w: null });
     net.unsub = room.onPeers(() => { refreshHost(); renderRoom(); });
     $('room-code').textContent = code;
     showLobbyPane('room');
-    setCoopNote(creating ? 'Gửi mã phòng cho bạn bè. Khi đủ người, chủ phòng bấm BẮT ĐẦU.' : 'Đã vào phòng. Chờ chủ phòng bắt đầu…');
+    setCoopNote(creating ? 'Gửi mã phòng cho bạn bè. Khi mọi người đã SẴN SÀNG, bấm BẮT ĐẦU.' : 'Chọn nhân vật rồi bấm SẴN SÀNG.');
     refreshHost(); renderRoom();
   } catch (e) {
     setCoopNote('Không vào được phòng (' + ((e && e.code) || 'lỗi kết nối') + ').');
@@ -1059,9 +1060,9 @@ function roomMembers() {
   const list = [];
   for (const p of net.room.peers()) {
     const pz = p.presence || {};
-    if (p.sameTab) { if (net.me !== p.peer) net.me = p.peer; list.push({ peer: p.peer, me: true, n: net.name, j: net.joinT, c: myChar }); continue; }
+    if (p.sameTab) { if (net.me !== p.peer) net.me = p.peer; list.push({ peer: p.peer, me: true, n: net.name, j: net.joinT, c: myChar, r: !!net.ready }); continue; }
     if (pz.v !== 1 || typeof pz.j !== 'number') continue;
-    list.push({ peer: p.peer, me: false, n: cleanName(String(pz.n || '')), j: pz.j, c: clamp(pz.c | 0, 0, CHARS.length - 1), pz });
+    list.push({ peer: p.peer, me: false, n: cleanName(String(pz.n || '')), j: pz.j, c: clamp(pz.c | 0, 0, CHARS.length - 1), r: !!pz.r, pz });
   }
   list.sort((a, b) => a.j - b.j || (a.peer < b.peer ? -1 : 1));
   return list.slice(0, 5);
@@ -1089,7 +1090,6 @@ function renderRoom() {
   if (!net.room) return;
   const m = roomMembers();
   const el = $('room-players');
-  el.innerHTML = '';
   // mỗi người một nhân vật: người vào sau phải chọn nhân vật khác
   const taken = new Map();
   for (const x of m) if (!x.me && !taken.has(x.c)) taken.set(x.c, x.n);
@@ -1097,20 +1097,35 @@ function renderRoom() {
     const free = CHARS.findIndex((c, i) => !taken.has(i));
     if (free >= 0) { pickChar(free); return; }
   }
-  m.forEach((x, i) => {
+  // chỉ vẽ lại khi danh sách thay đổi (vẽ lại liên tục làm khó bấm chọn nhân vật)
+  const sig = JSON.stringify([myChar, bench, net.ready, net.host, m.map((x) => [x.peer, x.n, x.c, x.r])]);
+  const same = sig === net.roomSig;
+  net.roomSig = sig;
+  if (!same) el.innerHTML = '';
+  if (!same) m.forEach((x, i) => {
     const d = document.createElement('div');
     const ci = x.me ? myChar : x.c;
     d.style.color = CHARS[ci].color;
     d.textContent = `${i === 0 ? '★ ' : '• '}${x.n}${x.me ? ' (bạn)' : ''} · ${CHARS[ci].name}${i === 0 ? ' — chủ phòng' : ''}`;
+    if (i > 0) { const st = document.createElement('span'); st.className = x.r ? 'rdy' : 'wait'; st.textContent = x.r ? '  ✓ sẵn sàng' : '  … đang chọn'; d.appendChild(st); }
     el.appendChild(d);
   });
   const humans = new Set([myChar, ...taken.keys()]);
   const bots = teamIdx().filter((i) => !humans.has(i)).slice(0, Math.max(0, TEAM_N - humans.size)).map((i) => CHARS[i].name);
-  { const d = document.createElement('div'); d.style.color = 'var(--ink-dim)'; d.textContent = `Đội tối đa ${TEAM_N} người` + (bots.length ? ' · bot: ' + bots.join(', ') : ''); el.appendChild(d); }
-  renderCharPick($('char-pick'), taken);
-  $('go-btn').classList.toggle('hidden', !net.host || net.started);
-  // khách vào phòng: tự vào game khi chủ phòng đã bắt đầu
-  if (!net.host && !net.started) {
+  if (!same) { const d = document.createElement('div'); d.style.color = 'var(--ink-dim)'; d.textContent = `Đội tối đa ${TEAM_N} người` + (bots.length ? ' · bot: ' + bots.join(', ') : ''); el.appendChild(d); }
+  if (!same) renderCharPick($('char-pick'), taken);
+  // chủ phòng chỉ bắt đầu được khi mọi người đã chọn nhân vật và bấm SẴN SÀNG
+  const waiting = m.filter((x, i) => i > 0 && !x.r).length;
+  const go = $('go-btn');
+  go.classList.toggle('hidden', !net.host || net.started);
+  go.disabled = waiting > 0;
+  go.textContent = waiting > 0 ? `CHỜ ${waiting} NGƯỜI SẴN SÀNG` : 'BẮT ĐẦU';
+  const rb = $('ready-btn');
+  rb.classList.toggle('hidden', net.host || net.started);
+  rb.classList.toggle('on', !!net.ready);
+  rb.textContent = net.ready ? '✓ ĐÃ SẴN SÀNG' : 'SẴN SÀNG';
+  // khách vào phòng khi trận đã chạy: chọn nhân vật, bấm SẴN SÀNG rồi vào luôn
+  if (!net.host && !net.started && net.ready) {
     const h = m.find((x) => x.peer === net.hostPeer);
     if (h && h.pz && h.pz.w && h.pz.w.st === 'play') startCoop(false);
   }
@@ -3404,7 +3419,7 @@ function pickChar(ci) {
   myChar = clamp(ci | 0, 0, CHARS.length - 1);
   store.set('deadnight_char', String(myChar));
   if (bench === myChar) { bench = -1; fixBench(); store.set('deadnight_bench', String(bench)); }
-  if (net.room) net.room.presence({ c: myChar }).catch(() => {});
+  if (net.room) { if (!net.host) net.ready = false; net.room.presence({ c: myChar, r: net.ready ? 1 : 0 }).catch(() => {}); }
   renderRoom(); renderCharSel();
 }
 function charCard(ci, taken, compact) {
@@ -5818,7 +5833,19 @@ $('create-btn').addEventListener('click', () => joinRoom(makeCode(), true));
 $('join-btn').addEventListener('click', () => joinRoom($('code-in').value));
 $('code-in').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') joinRoom($('code-in').value); });
 $('nick').addEventListener('keydown', (e) => e.stopPropagation());
-$('go-btn').addEventListener('click', () => { if (net.host) startCoop(true); });
+$('go-btn').addEventListener('click', () => {
+  if (!net.host) return;
+  const waiting = roomMembers().filter((x, i) => i > 0 && !x.r).length;
+  if (waiting) { setCoopNote(`Còn ${waiting} người chưa bấm SẴN SÀNG.`); return; }
+  startCoop(true);
+});
+$('ready-btn').addEventListener('click', () => {
+  if (!net.room || net.host) return;
+  net.ready = !net.ready;
+  net.room.presence({ r: net.ready ? 1 : 0, c: myChar }).catch(() => {});
+  setCoopNote(net.ready ? 'Đã sẵn sàng · chờ chủ phòng bắt đầu…' : 'Chọn nhân vật rồi bấm SẴN SÀNG.');
+  renderRoom();
+});
 $('leave-btn').addEventListener('click', () => { leaveRoom(); setCoopNote('Đã rời phòng.'); });
 $('lobby-close').addEventListener('click', closeLobby);
 $('lobby-x').addEventListener('click', closeLobby);

@@ -25,6 +25,19 @@ export const FLOOR_H = 3.6;
 // cờ dựng cảnh: calm = trường trước khi dịch bùng phát (không máu, đèn sáng đủ)
 export const WORLD_FLAGS = { calm: false };
 export const STAIR_DEPTH = 1.9;
+// cầu thang thật giữa các tầng trường: dãy bậc dọc tường hành lang ở đầu hồi, dài FLIGHT_RUN, cao đúng một tầng
+export const FLIGHT_RUN = 6, FLIGHT_Z1 = WALL_Z + 1.45;
+export function floorFlights(Z) {
+  if (!Z || !Z.interior || !Z.floorLinks) return [];
+  const xb = Z.xb || 44, out = [];
+  const mk = (side, up) => {
+    const sd = side === 'w' ? -1 : 1, xTop = sd * (xb - 0.3), xBottom = xTop - sd * FLIGHT_RUN;
+    out.push({ side, up, sd, xTop, xBottom, x0: Math.min(xTop, xBottom), x1: Math.max(xTop, xBottom), to: Z.floorLinks[side] });
+  };
+  if (Z.stairsUp && Z.floorLinks[Z.stairsUp]) mk(Z.stairsUp, true);
+  if (Z.stairsDown && Z.floorLinks[Z.stairsDown]) mk(Z.stairsDown, false);
+  return out;
+}
 const XMIN = -72, XMAX = 72;
 
 // ======================= CÁC KHU (mỗi khu là một con phố, đi hết đường thì sang khu kế) =======================
@@ -255,7 +268,7 @@ ZONES.sf2 = inside('sf2', 2, 'Trường Vân Lâm · Tầng 2', [
   IR('teachers', 26, { id: 'office2', name: 'Phòng tổ Sinh' }),
 ], { floorLinks: { e: 'sf1', w: 'sf3' }, stairsUp: 'w', stairsDown: 'e', start: { x: 36, z: 0.6 } });
 ZONES.sf3 = inside('sf3', 3, 'Trường Vân Lâm · Tầng 3', [
-  IR('library', -40),
+  IR('library', -40, { doorDx: 7.5 }),
   IR('club', -24, { h: FLOOR_H }),
   IR('classroom', -12, { id: 'class12a', name: 'Lớp 12A', board: 'HOÁ HỌC' }),
   IR('storage', 4, { id: 'storage3' }),
@@ -498,7 +511,8 @@ class Voxels {
 }
 
 // ======================================================================
-export function buildWorld(scene, quality) {
+export function buildWorld(scene, quality, opts = {}) {
+  const STACK = !!opts.stacked;     // trường học: 3 tầng dựng chồng lên nhau, tầng dưới/trên là thật (bỏ cảnh giả)
   const Z = ZONE;
   const IN = Z.interior || 0;           // tầng trong trường (0 = ngoài phố)
   const yardY = -FLOOR_H * Math.max(0, IN - 1);
@@ -508,6 +522,9 @@ export function buildWorld(scene, quality) {
   scene.add(root);
   // chỉ hiện ở góc nhìn thứ nhất: trần nhà, mặt trong tường trước, dãy nhà bên kia đường
   const fpOnly = new THREE.Group(); fpOnly.visible = false; root.add(fpOnly);
+  // cảnh giả các tầng phía trên (mặt tiền vẽ sẵn): chỉ hiện ở góc nhìn thứ ba khi đứng ở tầng này
+  const fakeUp = new THREE.Group(); root.add(fakeUp);
+  const fakeAdd = (geo, mat, m4) => { const o = new THREE.Mesh(geo, mat); o.applyMatrix4(m4); o.receiveShadow = true; fakeUp.add(o); return o; };
   const mCeil = new THREE.MeshLambertMaterial({ color: '#8c867c' });
   const fpPlane = (w, h, m, x, y, z, ry = 0, rx = 0) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.receiveShadow = true; fpOnly.add(o); return o; };
   const batch = new Batch();
@@ -516,7 +533,7 @@ export function buildWorld(scene, quality) {
   const windowMats = [], glowSprites = [], hideInReflection = [], animated = [];
   const containers = [], pois = {}, sirens = [];
   const addCircle = (x, z, r, low = false) => { const c = { x, z, r, low }; colliders.circles.push(c); return c; };
-  const addBox = (x0, z0, x1, z1, low = false) => { const b = { x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), low }; colliders.boxes.push(b); return b; };
+  const addBox = (x0, z0, x1, z1, low = false, npc = false) => { const b = { x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1), low, npc }; colliders.boxes.push(b); return b; };
   let cid = 0;
   const container = (kind, x, z, label, b = null, extra = {}) => { const c = { id: Z.id + ':c' + (cid++), kind, x, z, label, b: b ? b.id : null, ...extra }; containers.push(c); return c; };
   const emit = (x, y, z, color, intensity, distance, kind, flicker = 'none') => {
@@ -683,12 +700,18 @@ export function buildWorld(scene, quality) {
       hole.closePath();
       shape.holes.push(hole);
     }
+    // lỗ sàn chỗ cầu thang đi xuống tầng dưới
+    for (const f of floorFlights(Z)) if (!f.up) {
+      const h = new THREE.Path();
+      h.moveTo(f.x0, -(WALL_Z + 0.03)); h.lineTo(f.x0, -FLIGHT_Z1); h.lineTo(f.x1, -FLIGHT_Z1); h.lineTo(f.x1, -(WALL_Z + 0.03)); h.closePath();
+      shape.holes.push(h);
+    }
     const g = new THREE.ShapeGeometry(shape, 4);
     g.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(worldUV(g, L_ST), groundMat(gST));
     mesh.receiveShadow = true;
     root.add(mesh);
-    if (IN > 1) {
+    if (IN > 1 && !STACK) {
       // sân trường ở dưới (nhìn qua lan can)
       const yard = new THREE.Mesh(worldUV(flatRect(XMIN, XMAX, RAIL_Z + 0.3, WALL_Z + 26, yardY), L_ST), groundMat(gST));
       yard.receiveShadow = true; root.add(yard);
@@ -1728,7 +1751,7 @@ export function buildWorld(scene, quality) {
     tree(x, -20 - rng.range(0, 6), 1.15 + rng() * 0.4, rng.chance(0.3) ? 'pine' : rng.chance(0.2) ? 'dead' : rng.chance(0.25) ? 'autumn' : rng.chance(0.5) ? 'oak' : 'oak2', BY, VSfar);
   }
   for (let i = 0; !IN && i < 16; i++) tree(XMIN + 6 + i * 9 + rng.range(-2, 2), -31 - rng.range(0, 8), 1.4 + rng() * 0.4, rng.chance(0.4) ? 'pine' : 'oak2', BY, 0.8);
-  if (IN > 1) for (let x = XMIN + 6; x < XMAX - 6; x += 13 + rng() * 6) tree(x, RAIL_Z + 3.6 + rng() * 2, 1.25 + rng() * 0.3, rng.chance(0.3) ? 'autumn' : 'oak', yardY, 0.62);
+  if (IN > 1 && !STACK) for (let x = XMIN + 6; x < XMAX - 6; x += 13 + rng() * 6) tree(x, RAIL_Z + 3.6 + rng() * 2, 1.25 + rng() * 0.3, rng.chance(0.3) ? 'autumn' : 'oak', yardY, 0.62);
   for (let x = XMIN + 3; !IN && x < XMAX - 3; x += rng.range(2.6, 5.5)) {
     if (STAIRS.some((s) => Math.abs(s.x - x) < 2.2)) continue;
     if (cemetery && x > cemetery.x0 - 1 && x < cemetery.x1) continue;
@@ -2146,10 +2169,17 @@ export function buildWorld(scene, quality) {
     }
     addBox(XMIN, RAIL_Z - 0.02, XMAX, RAIL_Z + 0.6);
     // góc nhìn thứ nhất: trần hành lang (đáy sàn tầng trên)
-    fpPlane(XMAX - XMIN, RAIL_Z + 0.4 - WALL_Z, mSlab, 0, FLOOR_H - 0.02, (RAIL_Z + 0.4 + WALL_Z) / 2, 0, Math.PI / 2);
+    {
+      // trần chừa lỗ phía trên cầu thang đi lên
+      const holes = floorFlights(Z).filter((f) => f.up).map((f) => [f.x0, f.x1]);
+      fpPlane(XMAX - XMIN, RAIL_Z + 0.4 - FLIGHT_Z1, mSlab, 0, FLOOR_H - 0.02, (RAIL_Z + 0.4 + FLIGHT_Z1) / 2, 0, Math.PI / 2);
+      let xa = XMIN;
+      for (const [a, b] of [...holes].sort((p, q) => p[0] - q[0])) { if (a > xa) fpPlane(a - xa, FLIGHT_Z1 - WALL_Z, mSlab, (xa + a) / 2, FLOOR_H - 0.02, (FLIGHT_Z1 + WALL_Z) / 2, 0, Math.PI / 2); xa = b; }
+      if (XMAX > xa) fpPlane(XMAX - xa, FLIGHT_Z1 - WALL_Z, mSlab, (xa + XMAX) / 2, FLOOR_H - 0.02, (FLIGHT_Z1 + WALL_Z) / 2, 0, Math.PI / 2);
+    }
     // mép sàn và mặt tiền các tầng dưới (nhìn từ sân lên)
     batch.add(boxGeo(XMAX - XMIN, 0.42, 0.52, 4, 1), mSlab, mat4(0, -0.21, RAIL_Z + 0.2));
-    if (IN > 1) {
+    if (IN > 1 && !STACK) {
       const lower = T.townFacadeTex({ w: 100, h: -yardY - 0.42, floors: IN - 1, kind: 'classroom', wall: 'plaster', plaster: SCHOOL_WALL, stripe: ['#3a8a5a', '#2a6a44'], seed: 700 + IN, litChance: calm ? 0.5 : 0.25, clean: true });
       const mL = lamb({ map: lower.map, normalMap: lower.normalMap }); mL.shadowSide = THREE.DoubleSide;
       batch.add(new THREE.PlaneGeometry(100, -yardY - 0.42), mL, mat4(0, (yardY - 0.42) / 2, RAIL_Z + 0.47));
@@ -2166,8 +2196,14 @@ export function buildWorld(scene, quality) {
     const upH = IN < 3 ? FLOOR_H * (3 - IN) + 1.0 : 1.1;
     const up = T.townFacadeTex({ w: 100, h: upH, floors: Math.max(1, 3 - IN), kind: 'classroom', wall: 'plaster', plaster: SCHOOL_WALL, stripe: ['#3a8a5a', '#2a6a44'], seed: 760 + IN, litChance: calm ? 0.45 : 0.2, clean: true });
     const mU = lamb({ map: up.map, normalMap: up.normalMap }); mU.shadowSide = THREE.DoubleSide;
-    batch.add(new THREE.PlaneGeometry(100, upH), mU, mat4(0, FLOOR_H + upH / 2, WALL_Z - 0.04));
-    batch.add(boxGeo(100, 0.3, 1.2, 4, 1), mSlab, mat4(0, FLOOR_H + upH + 0.15, WALL_Z - 0.6));
+    if (STACK && IN < 3) {
+      // các tầng trên là thật: mặt tiền vẽ sẵn chỉ dùng cho góc nhìn thứ ba (bật/tắt theo tầng đang đứng)
+      fakeAdd(new THREE.PlaneGeometry(100, upH), mU, mat4(0, FLOOR_H + upH / 2, WALL_Z - 0.04));
+      fakeAdd(boxGeo(100, 0.3, 1.2, 4, 1), mSlab, mat4(0, FLOOR_H + upH + 0.15, WALL_Z - 0.6));
+    } else {
+      batch.add(new THREE.PlaneGeometry(100, upH), mU, mat4(0, FLOOR_H + upH / 2, WALL_Z - 0.04));
+      batch.add(boxGeo(100, 0.3, 1.2, 4, 1), mSlab, mat4(0, FLOOR_H + upH + 0.15, WALL_Z - 0.6));
+    }
     // hai đầu: khối cầu thang (che phần ngoài toà nhà)
     for (const sd of [-1, 1]) {
       const xin = sd < 0 ? X0 : X1, xout = sd < 0 ? XMIN - 4 : XMAX + 4;
@@ -2175,34 +2211,43 @@ export function buildWorld(scene, quality) {
       const ft = T.townFacadeTex({ w, h: FLOOR_H * 3 + 1.4, floors: 3, kind: 'classroom', wall: 'plaster', plaster: ['#b8a878', '#c8b888', '#d8c898'], seed: 790 + sd, litChance: 0.2, clean: true });
       const mT = lamb({ map: ft.map, normalMap: ft.normalMap }); mT.shadowSide = THREE.DoubleSide;
       const H = FLOOR_H * 3 + 1.4;
-      batch.add(new THREE.PlaneGeometry(w, H), mT, mat4(cxp, yardY + H / 2 - FLOOR_H * 0 - (IN - 1) * 0, RAIL_Z + 0.62));
+      if (!STACK || IN === 1) batch.add(new THREE.PlaneGeometry(w, H), mT, mat4(cxp, yardY + H / 2, RAIL_Z + 0.62));
       batch.add(boxGeo(0.4, FLOOR_H + 0.4, RAIL_Z - ZB + 1.2, 1, 2), mCream, mat4(xin + sd * 0.2, (FLOOR_H + 0.4) / 2, (RAIL_Z + ZB) / 2));
       addBox(sd < 0 ? XMIN - 8 : xin + sd * 0.05, ZB - 1, sd < 0 ? xin + sd * 0.05 : XMAX + 8, RAIL_Z + 1);
     }
-    // cầu thang lên / xuống ở hai đầu hành lang
-    const ups = Z.stairsUp, downs = Z.stairsDown;
-    const stairAt = (side, upDir) => {
-      const sd = side === 'w' ? -1 : 1, xe = sd < 0 ? X0 + 0.25 : X1 - 0.25;
-      const n = 9;
-      for (let i = 0; i < n; i++) {
-        const xx = xe - sd * (n - 1 - i) * 0.34;
-        if (upDir) fb(misc, xx - 0.17, xx + 0.17, WALL_Z + 0.05, WALL_Z + 1.45, 0, 0.18 * (i + 1), i % 2 ? '#b8b0a4' : '#c8c0b4');
-        else {
-          // lối xuống: lòng cầu thang tối dần, mép bậc sáng
-          const dk = Math.round(70 - (i / n) * 50).toString(16).padStart(2, '0');
-          fb(misc, xx - 0.17, xx + 0.17, WALL_Z + 0.05, WALL_Z + 1.45, 0.004, 0.014, '#' + dk + dk + dk);
-          fb(misc, xx - 0.17, xx - 0.12, WALL_Z + 0.05, WALL_Z + 1.45, 0.014, 0.02, '#9a948a');
+    // cầu thang thật lên / xuống ở đầu hồi: 12 bậc dọc tường hành lang, lan can phía hành lang
+    const mStep = lamb({ color: '#c0b8ac' }), mStepD = lamb({ color: '#a8a094' });
+    for (const f of floorFlights(Z)) {
+      const n = 12, run = FLIGHT_RUN / n, rise = FLOOR_H / n, zA = WALL_Z + 0.02, zB = FLIGHT_Z1;
+      const lbl = (f.up ? '↑ ' : '↓ ') + ZONES[f.to].short.toUpperCase();
+      if (f.up) {
+        for (let i = 0; i < n; i++) {
+          const xa = f.xBottom + f.sd * i * run, h = rise * (i + 1);
+          batch.add(boxGeo(run, h, zB - zA, 1, 1), i % 2 ? mStepD : mStep, mat4(xa + f.sd * run / 2, h / 2, (zA + zB) / 2));
+          fb(misc, Math.min(xa, xa + f.sd * run), Math.max(xa, xa + f.sd * run), zA, zB, h - 0.03, h + 0.005, '#d8d0c4');
         }
+        // tay vịn bậc thang (chừa 2 bậc đầu để bước lên từ hành lang)
+        for (let i = 2; i <= n; i++) { const x = f.xBottom + f.sd * i * run, h = rise * i; fb(metals, x - 0.025, x + 0.025, zB - 0.03, zB + 0.03, h - rise, h + 0.95, '#3a5a48'); }
+        for (let i = 2; i < n; i++) { const xa = f.xBottom + f.sd * i * run; fb(misc, Math.min(xa, xa + f.sd * run), Math.max(xa, xa + f.sd * run), zB - 0.045, zB + 0.045, rise * (i + 1) + 0.9, rise * (i + 1) + 0.97, '#2e6a48'); }
+        const r0 = f.xBottom + f.sd * 2 * run;
+        addBox(Math.min(r0, f.xTop), zB - 0.06, Math.max(r0, f.xTop), zB + 0.1);
+      } else {
+        // lỗ cầu thang xuống: lan can quanh mép lỗ, chừa đầu cầu thang
+        const xl = f.xTop - f.sd * 1.3;
+        for (let x = Math.min(f.xBottom, xl); x <= Math.max(f.xBottom, xl) + 0.01; x += 0.5) fb(metals, x - 0.025, x + 0.025, zB - 0.03, zB + 0.03, 0, 0.95, '#3a5a48');
+        fb(misc, Math.min(f.xBottom, xl), Math.max(f.xBottom, xl), zB - 0.045, zB + 0.045, 0.92, 0.99, '#2e6a48');
+        for (let z = zA; z <= zB + 0.01; z += 0.45) fb(metals, f.xBottom - 0.025, f.xBottom + 0.025, z - 0.025, z + 0.025, 0, 0.95, '#3a5a48');
+        fb(misc, f.xBottom - 0.045, f.xBottom + 0.045, zA, zB, 0.92, 0.99, '#2e6a48');
+        addBox(Math.min(f.xBottom, xl), zB - 0.06, Math.max(f.xBottom, xl), zB + 0.1);
+        addBox(f.xBottom - f.sd * 0.12, zA - 0.1, f.xBottom + f.sd * 0.02, zB + 0.1);
+        // zombie / bot không đi xuống quá nửa lỗ cầu thang (người chơi thì chuyển tầng ở đầu cầu thang)
+        const xm = f.xBottom + f.sd * FLIGHT_RUN * 0.55;
+        addBox(Math.min(f.xBottom, xm), zA, Math.max(f.xBottom, xm), zB, false, true);
       }
-      fb(metals, sd < 0 ? xe : xe - n * 0.34 * sd, sd < 0 ? xe + n * 0.34 : xe, WALL_Z + 1.48, WALL_Z + 1.54, 0.02, upDir ? 1.0 : 0.95, '#3a5a48');
-      const lbl = (upDir ? '↑ ' : '↓ ') + ZONES[Z.floorLinks[side]].short.toUpperCase();
       const sg = T.signTex(lbl, { bg: '#1e5a2e', edge: '#e8f0e0', lit: true });
       const sm = new THREE.Mesh(new THREE.PlaneGeometry(sg.w * 0.9, sg.h * 0.9), lamb({ map: sg.map, emissiveMap: sg.emissiveMap, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.8, transparent: true, alphaTest: 0.5 }));
-      sm.position.set(xe - sd * 1.6, 2.7, WALL_Z + 0.05); root.add(sm);
-      pois['stair_' + side] = { x: xe - sd * 1.2, z: 0, side, up: upDir, label: lbl };
-    };
-    if (ups && Z.floorLinks[ups]) stairAt(ups, true);
-    if (downs && Z.floorLinks[downs]) stairAt(downs, false);
+      sm.position.set(f.up ? f.xBottom + f.sd * 0.4 : f.xTop - f.sd * 2.2, 2.75, WALL_Z + 0.05); root.add(sm);
+    }
     // cổng chính (tầng 1): cửa sắt kéo + xích + ổ khoá
     if (Z.gateLock) {
       const sd = Z.gateLock === 'w' ? -1 : 1, gx = (sd < 0 ? X0 : X1) - sd * 1.5;
@@ -2221,7 +2266,7 @@ export function buildWorld(scene, quality) {
       pois.mainGate = { x: gx - sd * 0.9, z: 0.4, gx, gate, box, lock, chain, side: Z.gateLock, state: 'locked', label: 'Cổng chính' };
     }
     // đồ dọc hành lang: tủ đồ, bảng tin, bình nước, thùng rác, chậu cây, bình cứu hoả, ghế đá
-    const walls = freeIntervals(bIv).filter(([a, b]) => b > X0 + 1 && a < X1 - 1).map(([a, b]) => [Math.max(a, X0 + 2.6), Math.min(b, X1 - 2.6)]).filter(([a, b]) => b - a > 1.2);
+    const walls = freeIntervals(bIv).filter(([a, b]) => b > X0 + 1 && a < X1 - 1).map(([a, b]) => [Math.max(a, X0 + 7.2), Math.min(b, X1 - 7.2)]).filter(([a, b]) => b - a > 1.2);
     let k = 0;
     for (const [a, b] of walls) {
       for (let x = a + 0.3; x < b - 1.0; x += 2.6, k++) {
@@ -2376,7 +2421,7 @@ export function buildWorld(scene, quality) {
   batch.build(root);
 
   return {
-    root, fpOnly, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
+    root, fpOnly, fakeUp, colliders, emitters, fires, smokeSources, graves, perches, lampHeads, canopies, windowMats, glowSprites,
     hideInReflection, grassMeshes, water, leafMeshes, animated,
     campfire, cemetery, pond: POND, holePts, inPoly, bulbMat: bulbs.mat, waterMats, waterfalls,
     buildings: BUILDINGS, containers, pois, sirens, powerMats, zone: Z,

@@ -1,7 +1,7 @@
 // DEAD NIGHT — game sinh tồn zombie phong cách HD-2D: sprite pixel trong diorama 3D,
 // camera thấp nhìn ngang, cuộn theo nhân vật dọc con phố của ngôi làng.
 import * as THREE from 'three';
-import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND, ZB, BUILDINGS, buildingAt, HELIPAD, setZone, ZONE, ZONES, GRID, zoneCell, zoneLinks, WORLD_FLAGS, RAIL_Z, FLOOR_H } from './world.js';
+import { buildWorld, U, BOUNDS, TY, WALL_Z, STAIRS, STAIR_DEPTH, STREET_FRONT, POND, ZB, BUILDINGS, buildingAt, HELIPAD, setZone, ZONE, ZONES, GRID, zoneCell, zoneLinks, WORLD_FLAGS, RAIL_Z, FLOOR_H, floorFlights, FLIGHT_Z1 } from './world.js';
 import { Post } from './post.js';
 import { Atmos } from './atmos.js';
 import { Particles, Decals, Rain, Motes, Mist, Shafts, Crows, Moths, Leaves, Sky, Butterflies, Flock, LampCones } from './fx.js';
@@ -13,6 +13,7 @@ import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
 import { cinema } from './cinema.js';
 import { makeModel, makeCatModel, animateModel, modelSwing } from './models.js';
+import { makeViewModel, poseViewModel } from './viewmodel.js';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -108,13 +109,40 @@ const FP = { on: false, yaw: -Math.PI / 2, pitch: 0, bobT: 0, bob: 0, run: 0, st
 const SPRITES = new Set();
 // độ cao mặt đất: phố = 0, bậc thềm sau tường kè = TY, trên cầu thang thì dốc dần (lên thềm bằng cầu thang)
 function groundY(x, z) {
-  if (ZONE.interior || z >= WALL_Z) return 0;
+  if (ZONE.interior) {
+    // trong trường: dãy bậc thang dọc tường hành lang (lên: 0 → +1 tầng; lỗ xuống: 0 → −1 tầng)
+    if (z > FLIGHT_Z1 + 0.05 || z < WALL_Z - 0.05) return 0;
+    for (const f of FLIGHTS) if (x >= f.x0 - 0.05 && x <= f.x1 + 0.05) {
+      const t = clamp((x - f.xBottom) / (f.xTop - f.xBottom), 0, 1);
+      return f.up ? t * FLOOR_H : (t - 1) * FLOOR_H;
+    }
+    return 0;
+  }
+  if (z >= WALL_Z) return 0;
   for (const st of STAIRS) if (Math.abs(x - st.x) <= st.w / 2 + 0.05 && z > WALL_Z - STAIR_DEPTH) return TY * clamp((WALL_Z - z) / STAIR_DEPTH, 0, 1);
   for (const b of BUILDINGS) if (x >= b.x0 && x <= b.x1) return 0;
   return TY;
 }
 // zombie đang đi theo kịch bản trên thềm / trồi lên / lội nước: game tự đặt độ cao
 const NOGROUND = { terrace: 1, edge: 1, drop: 1, stairtop: 1, stairs: 1, rise: 1, wade: 1 };
+let FLIGHTS = [];            // cầu thang của tầng trường đang đứng
+// ---------- trường học: 3 tầng dựng chồng lên nhau trong cùng một cảnh, đi cầu thang là sang tầng khác (không chuyển cảnh) ----------
+const FLOOR_IDS = ['sf1', 'sf2', 'sf3'];
+let floorWorlds = null;      // { sf1, sf2, sf3 } khi đang ở trong trường
+let camLiftY = 0;            // camera nâng theo độ cao chỗ đứng (bậc thềm, cầu thang)
+function arrangeFloors() {
+  if (!floorWorlds) return;
+  const ai = FLOOR_IDS.indexOf(ZONE.id);
+  FLOOR_IDS.forEach((f, i) => {
+    const w = floorWorlds[f];
+    if (!w) return;
+    w.root.position.y = (i - ai) * FLOOR_H;             // tầng đang đứng luôn ở độ cao 0: mọi logic giữ nguyên
+    w.root.visible = FP.on || i <= ai;                  // góc nhìn thứ ba: bỏ các tầng phía trên như nhà búp bê
+    if (w.fakeUp) w.fakeUp.visible = !FP.on && i === ai;
+    if (w.fpOnly) w.fpOnly.visible = FP.on;
+    w.root.updateMatrixWorld(true);
+  });
+}
 const DIR_ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0), qYaw = new THREE.Quaternion();
 // hướng khung hình theo vị trí camera: zombie đi về phía mình thì thấy mặt, đi ra xa thì thấy lưng
@@ -129,8 +157,8 @@ function fpDir(s, dir) {
 function placeCamera(shake = 0) {
   const r = () => (Math.random() - 0.5) * shake;
   const cs = camScale * (state.mode === 'view' ? view.zoom : 1) * (1 - 0.1 * camInside);
-  camera.position.set(camTarget.x + r(), CAM.lookY + (CAM.y - CAM.lookY) * cs + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * cs);
-  camera.lookAt(camTarget.x + r() * 0.3, CAM.lookY, CAM.lookZ);
+  camera.position.set(camTarget.x + r(), CAM.lookY + camLiftY + (CAM.y - CAM.lookY) * cs + r(), CAM.lookZ + (CAM.back - CAM.lookZ) * cs);
+  camera.lookAt(camTarget.x + r() * 0.3, CAM.lookY + camLiftY, CAM.lookZ);
 }
 
 // ---------- sprite nhân vật ----------
@@ -452,6 +480,7 @@ function collide(o) {
   }
   for (let i = 0; i < C.boxes.length; i++) {
     const b = C.boxes[i];
+    if (b.npc && o === player) continue;
     if (o.x < b.x0 - o.r || o.x > b.x1 + o.r || o.z < b.z0 - o.r || o.z > b.z1 + o.r) continue;
     const nx = clamp(o.x, b.x0, b.x1), nz = clamp(o.z, b.z0, b.z1);
     const dx = o.x - nx, dz = o.z - nz, d2 = dx * dx + dz * dz;
@@ -3308,7 +3337,7 @@ function clearAcid() {
 // rẽ ở ngã tư phía trước xuống dãy dưới. Co-op: cả đội cùng ở một khu, phải cùng ra một lối.
 // 3 tầng trường (chương 0) nằm ngoài lưới phố nhưng vẫn phải có mã để co-op đồng bộ khu
 const ZONE_IDS = [...GRID.flat(), ...Object.keys(ZONES).filter((k) => /^sf\d$/.test(k) && !GRID.flat().includes(k))];
-const EXITS = [null, 'w', 'e', 'n', 's'];
+const EXITS = [null, 'w', 'e', 'n', 's', 'su', 'sd'];
 const ENTRIES = ['start', 'w', 'e', 'n', 's', 'gate'];
 const OPP = { w: 'e', e: 'w', n: 's', s: 'n' };
 const ITEM_KEYS = Object.keys(ITEMS);
@@ -3345,6 +3374,12 @@ function placeAtEntry(entry) {
   camTarget.x = clamp(player.x, BOUNDS.x0 + 9, BOUNDS.x1 - 9);
 }
 function disposeWorld(w) {
+  if (floorWorlds && Object.values(floorWorlds).includes(w)) {
+    const all = Object.values(floorWorlds);
+    floorWorlds = null;
+    for (const fw of all) disposeWorld(fw);
+    return;
+  }
   scene.remove(w.root);
   const mats = new Set();
   w.root.traverse((o) => {
@@ -3376,7 +3411,16 @@ function makeCorpseProps() {
 }
 // dựng (lại) thế giới cho khu hiện tại và nối các hệ thống phụ thuộc vào nó
 function buildZoneWorld() {
-  world = buildWorld(scene, quality);
+  if (isFloor(ZONE.id)) {
+    // dựng cả 3 tầng một lần (chồng lên nhau), tầng đang đứng là "world"
+    const active = ZONE.id;
+    floorWorlds = {};
+    for (const f of FLOOR_IDS) { setZone(f); floorWorlds[f] = buildWorld(scene, quality, { stacked: true }); }
+    setZone(active);
+    world = floorWorlds[active];
+    FLIGHTS = floorFlights(ZONE);
+    arrangeFloors();
+  } else { floorWorlds = null; FLIGHTS = []; world = buildWorld(scene, quality); }
   for (const m of reflHide) world.hideInReflection.push(m);
   navBuild(); computeTerraceSegs();
   if (SPR) makeCorpseProps();
@@ -3384,7 +3428,67 @@ function buildZoneWorld() {
   if (fx.cones) { scene.remove(fx.cones.mesh); fx.cones.mesh.geometry.dispose(); fx.cones.mesh.material.dispose(); fx.cones = new LampCones(scene, world.lampHeads); }
   if (fx.decals) { fx.decals.clear(); for (const c of world.containers) if (c.corpse) fx.decals.add(c.x, c.z, 1.9); }
 }
+// đi cầu thang sang tầng khác: không dựng lại cảnh, không làm mờ màn hình; người chơi giữ nguyên vị trí trên cầu thang
+function switchFloor(id) {
+  const from = ZONE.id, d = FLOOR_IDS.indexOf(id) - FLOOR_IDS.indexOf(from);
+  clearDrops(); clearAcid(); clearFire(); clearMines(); clearFlowers(); player.pinned = 0;
+  for (const z of zombies) releaseSprite(z);
+  zombies = []; bullets = []; net.zmap.clear();
+  for (const p of pickups) scene.remove(p.mesh);
+  pickups = [];
+  setZone(id);
+  enterZoneHook(id);
+  world = floorWorlds[id];
+  FLIGHTS = floorFlights(ZONE);
+  for (const m of reflHide) if (!world.hideInReflection.includes(m)) world.hideInReflection.push(m);
+  navBuild(); computeTerraceSegs();
+  if (fx.cones) { scene.remove(fx.cones.mesh); fx.cones.mesh.geometry.dispose(); fx.cones.mesh.material.dispose(); fx.cones = new LampCones(scene, world.lampHeads); }
+  if (fx.decals) fx.decals.clear();
+  // giữ nguyên khung hình: cả toà nhà dịch theo tầng mới làm gốc, camera bù lại đúng bằng một tầng
+  camLiftY -= d * FLOOR_H; if (FP.gy !== undefined) FP.gy -= d * FLOOR_H;
+  arrangeFloors();
+  if (Q.gateCut) openMainGate(false);
+  curBuilding = null; interact.target = null; interact.t = 0; player.action = null; player.searching = false;
+  zt.lock = null; player.exit = null;
+  // bot đi theo: đứng trên cầu thang ngay sau lưng người chơi
+  if (!net.active || net.host) {
+    const f = FLIGHTS.find((q) => player.x >= q.x0 - 0.5 && player.x <= q.x1 + 0.5);
+    bots.forEach((b, k) => {
+      if (b.state === 'out' || !f) return;
+      // lên: bot ở mấy bậc ngay dưới lưng; xuống: bot đi trước vài bậc
+      const sDist = d > 0 ? 0.9 + k * 0.75 : 1.4 + k * 0.6;
+      b.x = f.xTop - f.sd * sDist; b.z = clamp(player.z + (k % 2 ? 0.22 : -0.22), WALL_Z + 0.35, FLIGHT_Z1 - 0.3);
+      b.task = null; b.anchor = null; b.search = null; b.pinnedBy = 0;
+      if (b.sp) b.sp.lx = null;
+    });
+  } else { for (const v of botViews.values()) scene.remove(v.sp.group); botViews.clear(); }
+  if (state.mode === 'play' && (!net.active || net.host) && !(calmNow() && isFloor(id))) {
+    spawnLurkers();
+    if (phase === 'night' && Math.random() < 0.3) spawnWeeper();
+  }
+  loadHostDrops();
+  hud.dirty = true;
+  afterZoneLoad(id);
+  toast(ZONE.short ? ZONE.short + ' · Trường Vân Lâm' : ZONE.name);
+  if (!net.active) saveT = Math.min(saveT, 3);
+}
+// đứng trên cầu thang tới đầu bên kia: sang tầng đó (co-op: chờ cả đội cùng tới như các lối ra khác)
+function checkStairs(dt) {
+  if (!floorWorlds || zt.busy || !FLIGHTS.length) return;
+  const gy = groundY(player.x, player.z);
+  let f = null;
+  if (gy >= FLOOR_H - 0.25) f = FLIGHTS.find((q) => q.up && player.x >= q.x0 - 0.1 && player.x <= q.x1 + 0.1);
+  else if (gy <= -0.45) f = FLIGHTS.find((q) => !q.up && player.x >= q.x0 - 0.1 && player.x <= q.x1 + 0.1);
+  if (!f || !floorWorlds[f.to]) return;
+  if (!net.active) { switchFloor(f.to); return; }
+  player.exit = f.up ? 'su' : 'sd';
+  let ready = 1, total = 1;
+  for (const rp of net.players.values()) { if (!rp.inited || !rp.here || rp.flags & (8 | 16 | 128)) continue; total++; if (rp.exit === player.exit) ready++; }
+  if (ready < total) { zt.wait = `Chờ cả đội lên cầu thang (${ready}/${total})`; return; }
+  if (net.host) { net.zoneSeq = (net.zoneSeq || 0) + 1; net.zoneEntry = 'stairs'; net.zoneSeqSeen = net.zoneSeq; requestZone(f.to, 'stairs'); }
+}
 function loadZone(id, entry) {
+  if (floorWorlds && isFloor(ZONE.id) && isFloor(id) && floorWorlds[id] && WORLD_FLAGS.calm === (calmNow() && isFloor(id))) { switchFloor(id); return; }
   clearFlowers(); clearDrops(); clearAcid(); clearFire(); clearMines(); player.pinned = 0;
   for (const z of zombies) releaseSprite(z);
   zombies = []; bullets = []; net.zmap.clear();
@@ -3401,6 +3505,7 @@ function loadZone(id, entry) {
   zt.lock = ['w', 'e', 'n', 's'].includes(entry) ? entry : null;
   camReveal = 0;
   if (player.zombie) { placeAtEntry(entry); turnZombiePlace(); } else placeAtEntry(entry);
+  camLiftY = groundY(player.x, player.z); FP.gy = camLiftY;
   if (!net.active || net.host) placeBots(); else { for (const v of botViews.values()) scene.remove(v.sp.group); botViews.clear(); }
   if (state.mode === 'play' && (!net.active || net.host) && !(calmNow() && isFloor(id))) {
     spawnLurkers();
@@ -3428,6 +3533,8 @@ function zoneSubtitle() {
 // làm mờ màn hình rồi chuyển khu (solo, chủ phòng, hoặc khách theo ảnh chụp của chủ phòng)
 function requestZone(id, entry) {
   if (zt.busy || !ZONES[id]) return;
+  // giữa các tầng trường (đã dựng sẵn): đổi tầng ngay, không làm mờ màn hình
+  if (floorWorlds && isFloor(ZONE.id) && isFloor(id) && floorWorlds[id]) { loadZone(id, entry); return; }
   zt.busy = true; zt.target = id;
   $('zfade').classList.add('on');
   setTimeout(() => {
@@ -3437,7 +3544,8 @@ function requestZone(id, entry) {
   }, 360);
 }
 function exitAt(mx, mz) {
-  const L = ZONE.linkIds || {};
+  const L = { ...(ZONE.linkIds || {}) };
+  if (ZONE.interior) for (const k in L) if (isFloor(L[k])) delete L[k];   // tầng ↔ tầng: đi bằng cầu thang thật
   if (L.w && player.x <= BOUNDS.x0 + 0.4 && mx < -0.3) return 'w';
   if (L.e && player.x >= BOUNDS.x1 - 0.4 && mx > 0.3) return 'e';
   if (L.n && ZONE.alley !== undefined && Math.abs(player.x - ZONE.alley) < 1.35 && player.z < ZB + 1.6 && mz < -0.3) return 'n';
@@ -4200,6 +4308,14 @@ function updateLights(t, A) {
   for (const L of world.lampHeads) L.mat.emissiveIntensity = 4.2 * (L.e.cur / Math.max(0.01, L.e.base));
   for (const m of world.windowMats) m.emissiveIntensity = 2.4 * A.windows;
   for (const gs of world.glowSprites) gs.s.material.color.copy(gs.color).multiplyScalar(gs.base * (gs.kind === 'fire' ? A.fires : A.lamps));
+  // các tầng trường khác (thấy qua hành lang, lỗ cầu thang): đèn và cửa sổ cũng sáng / tắt theo giờ
+  if (floorWorlds) for (const fw of Object.values(floorWorlds)) {
+    if (fw === world) continue;
+    for (const e of fw.emitters) e.cur = e.base * flick(e, t) * emitterMul[e.kind];
+    for (const L of fw.lampHeads) L.mat.emissiveIntensity = 4.2 * (L.e.cur / Math.max(0.01, L.e.base));
+    for (const m of fw.windowMats) m.emissiveIntensity = 2.4 * A.windows;
+    for (const gs of fw.glowSprites) gs.s.material.color.copy(gs.color).multiplyScalar(gs.base * (gs.kind === 'fire' ? A.fires : A.lamps));
+  }
 }
 function applyAtmos(dt, t) {
   const A = atmos.update(dt);
@@ -4413,6 +4529,7 @@ function updatePlayer(dt) {
   collide(player);
   player.moving = mag > 0.1;
   updateExit(mx, mz);
+  checkStairs(dt);
   // đói, khát: cạn thì mất máu dần
   player.water = Math.max(0, player.water - dt * (100 / 420) * (sprint ? 1.7 : 1));
   player.food = Math.max(0, player.food - dt * (100 / 640));
@@ -4720,6 +4837,7 @@ function updateCamera(dt) {
   if (fpw !== FP.on) fpApply(fpw);
   if (FP.on) {
     fpCamera(dt);
+    updateViewModel3D(dt);
     U.push.value[0].set(player.x, 0, player.z, 1.1);
     const nearF = zombies.filter((z) => z.state === 'walk').map((z) => ({ z, d: Math.hypot(z.x - player.x, z.z - player.z) })).sort((a, b) => a.d - b.d);
     for (let i = 1; i < 6; i++) { const o = nearF[i - 1]; if (o) U.push.value[i].set(o.z.x, 0, o.z.z, o.z.r + 0.5); else U.push.value[i].set(0, -99, 0, 0.01); }
@@ -4727,6 +4845,9 @@ function updateCamera(dt) {
   }
   for (const b of world.buildings) b.cut.value += ((curBuilding === b ? 1 : 0) - b.cut.value) * Math.min(1, dt * 6);
   camInside += ((curBuilding ? 1 : 0) - camInside) * Math.min(1, dt * 3);
+  // camera nâng theo chỗ đứng (cầu thang trong trường, bậc thềm ngoài phố)
+  const wantLift = state.mode === 'play' && player ? groundY(player.x, player.z) : 0;
+  camLiftY += (wantLift - camLiftY) * Math.min(1, dt * 4);
   placeCamera(settings.shake ? shake : 0);
   sound.setListener(camTarget.x, camTarget.z);
   tmpV.set(player.x, 1.0, player.z).project(camera);
@@ -4749,7 +4870,7 @@ function draw2D() {
   g.imageSmoothingEnabled = false;
   g.textAlign = 'center';
   g.font = '22px "VT323", monospace';
-  if (FP.on && state.mode === 'play') drawViewModel(g);
+  if (FP.on && state.mode === 'play' && settings.models === '2d') drawViewModel(g);
   g.textAlign = 'center';
   g.font = '18px "VT323", monospace';
   for (let fi = Math.max(0, floaters.length - 5); fi < floaters.length; fi++) {
@@ -4983,6 +5104,7 @@ const fpBillboardMeshes = () => [...pickups.map((p) => p.mesh), ...drops.map((d)
 function fpApply(on) {
   FP.on = on;
   if (world && world.fpOnly) world.fpOnly.visible = on;
+  arrangeFloors();
   if (fx.sky) fx.sky.setFP(on);
   camera.near = on ? 0.05 : 1; camera.fov = on ? 72 : CAM.fov; camera.updateProjectionMatrix();
   const pv = (sp, v) => { if (sp) { sp.mesh.visible = v; sp.blob.visible = v; } };
@@ -4992,7 +5114,8 @@ function fpApply(on) {
   if (on) {
     FP.yaw = player ? player.aim : -Math.PI / 2; FP.pitch = 0;
   } else {
-    for (const sp of SPRITES) { sp.group.rotation.y = 0; sp.xmat.visible = true; if (sp.ghost) setGhost(sp, false); if (sp._dir) setFrame(sp, sp._dir, sp._fr); }
+    for (const sp of SPRITES) { sp.group.rotation.y = 0; sp.xmat.visible = true; if (sp.ghost) setGhost(sp, false); if (sp.is3d && sp !== player.sprite && sp !== zlook) { sp.mesh.visible = true; sp.blob.visible = true; } if (sp._dir) setFrame(sp, sp._dir, sp._fr); }
+    if (VM3) VM3.root.visible = false;
     placeCamera(); camera.updateMatrixWorld(); camQuat.copy(camera.quaternion);
     for (const o of fpBillboardMeshes()) o.quaternion.copy(camQuat);
     if (world) for (const b of world.buildings) b.cut.value = 0;
@@ -5021,7 +5144,9 @@ function fpBillboard() {
   const fx0 = Math.cos(FP.yaw), fz0 = Math.sin(FP.yaw);
   for (const sp of mateSprites()) {
     const dx = sp.group.position.x - camera.position.x, dz = sp.group.position.z - camera.position.z, d = Math.hypot(dx, dz);
-    setGhost(sp, d < 2.4 && dx * fx0 + dz * fz0 > 0);
+    const front = dx * fx0 + dz * fz0 > 0;
+    if (sp.is3d) { const hide = d < 2.1 && front; sp.mesh.visible = !hide; sp.blob.visible = !hide; }
+    else setGhost(sp, d < 2.4 && front);
   }
 }
 function mateSprites() {
@@ -5129,6 +5254,35 @@ function fpReleaseCheck() {
 
 // ---------- tay + vũ khí (pixel art vẽ tay, phóng to kiểu nearest) ----------
 const VM = { cv: null, g: null, W: 160, H: 96 };
+// ---------- tay + vũ khí 3D ở góc nhìn thứ nhất ----------
+let VM3 = null, vmBusy = 0;
+const MELEE_KIND = { fist: 'fist', knife: 'knife', shiv: 'knife', club: 'club', nailbat: 'club', pipe: 'club', spear: 'spear' };
+function updateViewModel3D(dt) {
+  if (!VM3) return;
+  const on = FP.on && state.mode === 'play' && settings.models !== '2d' && !player.dead;
+  VM3.root.visible = on;
+  if (!on) return;
+  const C = CHARS[player.char] || CHARS[0];
+  VM3.setLook({ ...(C.pal || {}) }, !!player.zombie);
+  const w = WEAPONS[player.weapon];
+  let kind, key, left = null;
+  if (player.zombie) { kind = 'zombie'; key = null; }
+  else if (w.melee) { const mk = player.melee || 'fist'; kind = MELEE_KIND[mk] || 'club'; key = kind === 'fist' ? null : kind === 'knife' ? 'knife' : mk; }
+  else if (w.key === 'bow') { kind = 'bow'; key = player.cooldown <= 0 ? 'arrow' : null; left = 'bow'; }
+  else { kind = w.key; key = w.key; }
+  if (player.torchT > 0 && kind !== 'fist' && kind !== 'bow' && kind !== 'zombie') left = 'torch';
+  VM3.setWeapon(key, left);
+  if (player.swing > 0 && FP.lastSwing <= 0) FP.hand ^= 1;
+  FP.lastSwing = player.swing;
+  vmBusy += ((player.action || player.searching ? 1 : 0) - vmBusy) * Math.min(1, dt * 8);
+  const rt = !w.melee && player.reloading > 0 ? (w.reload || 1) * player.mod.reload : 0;
+  poseViewModel(VM3, {
+    bob: FP.bob, bobT: FP.bobT, sway: FP.sway, swayY: FP.swayY, run: FP.run || 0, strafe: FP.strafe || 0,
+    swing: player.swing > 0 ? 1 - player.swing / 0.2 : 0, hand: FP.hand, recoil: player.recoil,
+    reload: rt ? Math.sin(clamp(1 - player.reloading / rt, 0, 1) * Math.PI) : 0, busy: vmBusy,
+    muzzle: muzzleT > 0, kind, bowReady: player.cooldown <= 0, zombie: !!player.zombie, torch: player.torchT > 0,
+  }, dt);
+}
 function drawViewModel(g) {
   if (!VM.cv) { VM.cv = document.createElement('canvas'); VM.cv.width = VM.W; VM.cv.height = VM.H; VM.g = VM.cv.getContext('2d', { willReadFrequently: true }); }
   const c = VM.g, Wv = VM.W, Hv = VM.H;
@@ -5422,6 +5576,8 @@ function cyclePixel() {
 function init() {
   resize();
   setupShadowsAndPool();
+  scene.add(camera);
+  VM3 = makeViewModel(camera);
   placeCamera();
   camera.updateMatrixWorld();
   camQuat.copy(camera.quaternion);
@@ -5661,7 +5817,7 @@ function frame(now) {
   if (state.mode === 'play' || state.mode === 'over') updateHud();
   post.params.maxBlur = quality === 'high' ? 7 : 5;
   post.params.range = 7; post.params.fall = 12; post.params.nearK = 1.3;
-  post.params.dof = state.mode === 'view' ? view.dof : true;
+  post.params.dof = FP.on ? false : state.mode === 'view' ? view.dof : true;
   if (FP.on) { post.params.focus = 14; post.params.range = 13; post.params.fall = 40; post.params.nearK = 0; post.params.maxBlur = 3; beam.visible = false; }
   fpReleaseCheck();
   if (state.mode === 'view' && !view.bloom) post.params.bloom = 0;
@@ -6164,7 +6320,7 @@ function afterOutbreak() {
     spawnLurkers();
   }
   clearNPCs();
-  for (const e of world.emitters) if (e.kind === 'inner' && Math.random() < 0.55) e.flicker = 'broken';
+  for (const fw of floorWorlds ? Object.values(floorWorlds) : [world]) for (const e of fw.emitters) if (e.kind === 'inner' && Math.random() < 0.55) e.flicker = 'broken';
   for (const bt of bots) bt.sp.group.visible = true;
   placeBots();
   phaseT = 0;

@@ -101,6 +101,7 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
   }
 
   // ---------- CHÂN ----------
+  if (!o.noLimbs) {
   const leg = (hipX, footX, lift, near) => {
     const col = near ? pal.pants : pal.pantsS;
     const n = legBot - lift - s.legTop;
@@ -129,6 +130,7 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
     else { drawSide(hip + 3, 0, false); drawSide(hip - 3, 1, true); }
   }
 
+  }
   // ---------- THÂN ----------
   const side = view === 'right';
   const thw = side ? hw - 1 : hw;
@@ -171,6 +173,7 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
   }
 
   // ---------- TAY ----------
+  if (!o.noLimbs) {
   const aw = s.armW;
   if (view === 'down' || view === 'up') {
     const lx0 = cx - hw - aw - (s.belly ? 1 : 0), rx0 = cx + hw + (s.belly ? 1 : 0);
@@ -244,6 +247,7 @@ function figure(P, ox, oy, s, dir, frame, pal, o) {
     }
   }
 
+  }
   // ---------- ĐẦU ----------
   const hx = cx + tilt * 0.5 + (side ? 0.5 + (Z ? 1 : 0) : 0);
   const rx = side ? s.headRx - 0.5 : s.headRx, ry = s.headRy;
@@ -325,7 +329,14 @@ function buildAtlas(spec, pal, o) {
     emissiveMap: o.zombie ? tex(P.emissiveCanvas()) : null,
     w: spec.fw / PPU, h: spec.fh / PPU, cols: 4, rows: 4,
     canvas: P.canvas(),
+    src: { spec, pal, o },
   };
+}
+// ảnh nguồn để dựng mô hình khối: nhìn trước / bên phải / sau, chỉ đầu + thân (tay chân dựng riêng), không viền
+export function voxelSource(src) {
+  const { spec, pal, o } = src;
+  const one = (dir) => { const P = new Pix(spec.fw, spec.fh, { emissive: !!o.zombie }); figure(P, 0, 0, spec, dir, 0, pal, { ...o, weapon: 'fist', noLimbs: true }); return P; };
+  return { spec, pal, o, front: one('down'), side: one('right'), back: one('up') };
 }
 
 // bảng màu người sống sót cho từng người chơi co-op

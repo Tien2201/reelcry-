@@ -12,6 +12,7 @@ import { openTransport, openFirebase, canUseFirebase, makeCode, roomName, cleanC
 import { spriteLit, softDisc, makeRng } from './pixel.js';
 import { Sound } from './audio.js';
 import { cinema } from './cinema.js';
+import { makeModel, animateModel, modelSwing } from './models.js';
 
 const $ = (id) => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -130,15 +131,35 @@ const blobGeo = new THREE.PlaneGeometry(1, 1);
 let sunYaw = 0;
 // hai tấm đổ bóng xếp chéo hình chữ X, cố định theo thế giới (bù góc xoay billboard):
 // nắng từ hướng nào cũng có ít nhất một tấm đổ bóng gần đủ bề ngang
+let animLast = 0;
 function updateSpriteShadows() {
+  const now = performance.now(), adt = animLast ? Math.min(0.1, (now - animLast) / 1000) : 0;
+  animLast = now;
   for (const sp of SPRITES) {
+    if (sp.is3d) {
+      if (!sp.group.parent) { SPRITES.delete(sp); continue; }
+      if (sp.group.visible) animateModel(sp, state.paused ? 0 : adt);
+      continue;
+    }
     if (!sp.shadow) continue;
     if (!sp.group.parent) { SPRITES.delete(sp); continue; }
     const r = sp.group.rotation.y;
     sp.shadow.rotation.y = Math.PI / 4 - r; sp.shadow2.rotation.y = -Math.PI / 4 - r;
   }
 }
+// nhân vật dạng khối 3D (mặc định) — hoặc hình phẳng 2D nếu chọn trong Cài đặt
 function makeSprite(atlasList, xray) {
+  if (settings.models !== '2d' && atlasList[0] && atlasList[0].src) {
+    const a0 = atlasList[0];
+    const blob = new THREE.Mesh(blobGeo, blobMat);
+    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.035;
+    blob.scale.set(a0.w * 0.75, a0.w * 0.5, 1);
+    blob.renderOrder = 1;
+    const sp = makeModel(atlasList, xray, blob);
+    scene.add(sp.group);
+    hideRefl(sp.xr, blob);
+    return sp;
+  }
   const maps = atlasList.map((a) => { const m = a.map.clone(); m.needsUpdate = true; m.repeat.set(1 / 4, 1 / 4); return m; });
   const a0 = atlasList[0];
   let emap = null;
@@ -170,14 +191,21 @@ function makeSprite(atlasList, xray) {
   hideRefl(xr, blob);
   return { group, mesh, mat, maps, emap, depth, xr, xmat, blob, shadow, shadow2, smat, cur: 0, w: a0.w, h: a0.h };
 }
-function setFrame(s, dir, frame) {
+function setFrame(s, dir, frame, ang) {
   s._dir = dir; s._fr = frame; SPRITES.add(s);
+  if (s.is3d) {
+    // khung đổi mà không đi (lục đồ, trồi lên…): tay cử động
+    if (frame !== s.fr && frame && s.amp < 0.25) s.busy = 0.25;
+    s.fr = frame; s.dir = dir; s.ang = ang ?? null;
+    return;
+  }
   if (FP.on) dir = fpDir(s, dir);
   const ox = frame / 4, oy = 1 - (DIR_ROW[dir] + 1) / 4;
   s.maps[s.cur].offset.set(ox, oy);
   if (s.emap) s.emap.offset.set(ox, oy);
 }
 function setSpriteMap(s, i) {
+  if (s.is3d) { s.setWeapon(i); return; }
   if (s.cur === i) return;
   s.cur = i;
   s.mat.map = s.maps[i]; s.depth.map = s.maps[i]; s.xmat.map = s.maps[i]; if (s.smat) s.smat.map = s.maps[i];
@@ -630,6 +658,7 @@ function shoot() {
   }
   player.dryFire = 0;
   g.ammo--; player.cooldown = w.rate * (w.bow ? player.mod.bowRate : 1); player.recoil = w.kick; hud.dirty = true;
+  modelSwing(player.sprite, 0.14);
   if (w.noise) makeNoise(player.x, player.z, w.noise);
   // hỗ trợ ngắm: góc nhìn thấp khó ngắm theo chiều sâu, nên hút nhẹ về zombie gần hướng bắn
   let aim = player.aim, bestDa = 0.24;
@@ -666,6 +695,7 @@ function melee() {
   if (player.cooldown > 0 || player.action) return;
   const M = player.mod;
   player.cooldown = w.rate * M.meleeRate; player.swing = 0.2; player.stamina = Math.max(0, player.stamina - 0.05);
+  modelSwing(player.sprite);
   let hits = 0;
   for (const z of zombies) {
     if (!hittable(z)) continue;
@@ -1398,7 +1428,7 @@ function clientZombies(dt) {
       const d = Math.hypot(player.x - z.x, player.z - z.z);
       if (d < 3) z.dir = dirFromAngle(Math.atan2(player.z - z.z, player.x - z.x));
       z.atkT -= dt;
-      if (d < z.r + player.r + 0.3 && z.atkT <= 0) { z.atkT = z.atkCd; hurtPlayer(z, d); if (state.mode !== 'play') return; }
+      if (d < z.r + player.r + 0.3 && z.atkT <= 0) { z.atkT = z.atkCd; modelSwing(z.sprite, 0.35); hurtPlayer(z, d); if (state.mode !== 'play') return; }
     }
     setFrame(s, z.state === 'rise' ? 'down' : z.dir, Math.floor(z.state === 'rise' ? z.t * 6 : z.walk) % 4);
     s.group.position.set(z.x, z.y, z.z);
@@ -1432,7 +1462,7 @@ function updateRemote(dt) {
     setSpriteMap(sp, rp.weapon);
     const down = rp.flags & 4;
     sp.mesh.rotation.x = down ? -Math.PI / 2 : 0;
-    setFrame(sp, rp.flags & 32 ? 'up' : dirFromAngle(rp.aim), rp.flags & 1 ? Math.floor(rp.walk) % 4 : 0);
+    setFrame(sp, rp.flags & 32 ? 'up' : dirFromAngle(rp.aim), rp.flags & 1 ? Math.floor(rp.walk) % 4 : 0, rp.flags & 32 ? undefined : rp.aim);
     sp.group.position.set(rp.x, down ? 0.05 : 0, rp.z);
     rp.fireT -= dt;
     if (rp.flags & 2 && !down && rp.fireT <= 0) {
@@ -1599,7 +1629,7 @@ function updateZombieForm(dt) {
   player.moving = mag > 0.1;
   if (FP.on) { fpAim(dt, stickVec(sticks.aim)); if (player.moving) player.walk += dt * spd * 1.8; }
   else if (player.moving) { player.walk += dt * spd * 1.8; player.aim = Math.atan2(mz, mx); }
-  setFrame(zlook, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0);
+  setFrame(zlook, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0, player.aim);
   zlook.group.position.set(player.x, 0, player.z);
   player.firing = false; player.searching = false; interact.target = null;
   player.groanT = Math.max(0, player.groanT - dt);
@@ -2436,12 +2466,13 @@ function botMelee(b, z) {
   b.cd = Math.max(0.45, w.rate * 1.35);
   b.firing = true;
   const dmg = Math.round(Math.max(16, w.dmg) * (b.mod.meleeDmg || 1));
+  modelSwing(b.sp);
   damageZombie(z, dmg, Math.atan2(z.z - b.z, z.x - b.x), 0.4, z.x, z.z, true);
   for (let i = 0; i < 5; i++) { const a = b.aim + (i / 4 - 0.5) * 1.4; fx.spark.spawn(b.x + Math.cos(a), 1.0, b.z + Math.sin(a), 0, 0, 0, 0.1, 0.06, '#e8f0ff', { grav: 0, drag: 9, mode: 1 }); }
   sound.swing(true);
 }
 function botShoot(b, z) {
-  b.cd = 1.1; b.firing = true;
+  b.cd = 1.1; b.firing = true; modelSwing(b.sp, 0.14);
   const a = Math.atan2(z.z - b.z, z.x - b.x) + rand(-0.03, 0.03), mx = b.x + Math.cos(a) * 0.7, mz = b.z + Math.sin(a) * 0.7;
   bullets.push({ x: mx, z: mz, px: mx, pz: mz, vx: Math.cos(a) * 26, vz: Math.sin(a) * 26, dmg: 52, life: 0.8, pierce: 0, arrow: true, mine: false, bot: true });
   sound.swing(false);
@@ -2568,7 +2599,7 @@ function updateBots(dt) {
     const s = b.sp;
     if (b.state === 'ok' && !b.pinnedBy) {
       setSpriteMap(s, botSpr(b));
-      setFrame(s, b.searching ? 'up' : dirFromAngle(b.aim), b.moving ? Math.floor(b.walk) % 4 : b.searching ? Math.floor(gtime * 7) % 4 : 0);
+      setFrame(s, b.searching ? 'up' : dirFromAngle(b.aim), b.moving ? Math.floor(b.walk) % 4 : b.searching ? Math.floor(gtime * 7) % 4 : 0, b.searching ? undefined : b.aim);
       s.group.position.set(b.x, 0, b.z);
     }
     s.mat.color.setScalar(b.hitT > 0 ? 2.2 : 1);
@@ -2606,7 +2637,7 @@ function updateBotViews(dt) {
     const down = v.flags & 4;
     sp.mesh.rotation.x = down ? -Math.PI / 2 : 0;
     setSpriteMap(sp, v.weapon);
-    setFrame(sp, dirFromAngle(v.aim || 0), v.flags & 1 ? Math.floor(v.walk) % 4 : 0);
+    setFrame(sp, dirFromAngle(v.aim || 0), v.flags & 1 ? Math.floor(v.walk) % 4 : 0, v.aim || 0);
     sp.group.position.set(v.x, down ? 0.05 : 0, v.z);
     v.fireT -= dt;
     if (v.flags & 2 && !down && v.fireT <= 0 && v.weapon === 4) {
@@ -3032,10 +3063,12 @@ function makeCorpseProps() {
   corpseSprites = [];
   for (const c of world.containers) if (c.corpse) {
     const sp = makeSprite([SPR.zombies[c.label === 'Xác lính' ? 'soldier' : 'walker'][c.x > 0 ? 1 : 0]], '#ff4a4a');
-    setFrame(sp, 'down', 0);
+    // xác nằm ngang (song song mặt đường) để nhìn rõ là người nằm
+    setFrame(sp, sp.is3d ? 'right' : 'down', 0);
     sp.mesh.rotation.x = -Math.PI / 2; sp.xr.visible = false; sp.blob.visible = false;
     sp.mat.color.setRGB(0.75, 0.7, 0.7);
-    sp.group.position.set(c.x, 0.03, c.z + sp.h / 2);
+    if (sp.is3d) sp.group.position.set(c.x + sp.h / 2, 0.03, c.z);
+    else sp.group.position.set(c.x, 0.03, c.z + sp.h / 2);
     corpseSprites.push(sp);
   }
 }
@@ -4002,7 +4035,7 @@ function updateViewer(dt) {
   collide(player);
   player.moving = mag > 0.1;
   if (player.moving) { player.walk += dt * spd * 1.6; player.aim = Math.atan2(mz, mx); view.pan *= Math.exp(-dt * 1.5); }
-  setFrame(player.sprite, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0);
+  setFrame(player.sprite, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0, player.aim);
   player.sprite.group.position.set(player.x, 0, player.z);
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
   flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
@@ -4125,7 +4158,7 @@ function updatePlayer(dt) {
   if (firing) shoot();
   const sp = player.sprite;
   player.dir = player.searching ? 'up' : dirFromAngle(player.aim);
-  setFrame(sp, player.dir, player.moving || player.searching ? Math.floor(player.searching ? gtime * 7 : player.walk) % 4 : 0);
+  setFrame(sp, player.dir, player.moving || player.searching ? Math.floor(player.searching ? gtime * 7 : player.walk) % 4 : 0, player.searching ? undefined : player.aim);
   sp.group.position.set(player.x - Math.cos(player.aim) * player.recoil, 0, player.z - Math.sin(player.aim) * player.recoil);
   sp.mat.color.setScalar(player.inv > 0 && Math.floor(player.inv * 20) % 2 ? 2.2 : 1);
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
@@ -4268,11 +4301,11 @@ function updateZombies(dt) {
     s.group.position.set(z.x, 0, z.z);
     s.mat.color.setScalar(z.hitT > 0 ? 3 : 1);
     if (T.me && d < z.r + player.r + 0.28 && z.atkT <= 0) {
-      z.atkT = z.atkCd;
+      z.atkT = z.atkCd; modelSwing(s, 0.35);
       hurtPlayer(z, d);
       if (state.mode !== 'play') return;
     } else if (T.bot && d < z.r + 0.34 + 0.28 && z.atkT <= 0) {
-      z.atkT = z.atkCd;
+      z.atkT = z.atkCd; modelSwing(s, 0.35);
       hurtBot(T.bot, z.dmg);
     }
   }
@@ -4404,13 +4437,14 @@ function draw2D() {
   g.font = '22px "VT323", monospace';
   if (FP.on && state.mode === 'play') drawViewModel(g);
   g.textAlign = 'center';
-  g.font = '22px "VT323", monospace';
-  for (const f of floaters) {
+  g.font = '18px "VT323", monospace';
+  for (let fi = Math.max(0, floaters.length - 5); fi < floaters.length; fi++) {
+    const f = floaters[fi];
     tmpV.set(f.x, f.y, f.z).project(camera);
     if (tmpV.z > 1) continue;
     const x = (tmpV.x * 0.5 + 0.5) * W, y = (-tmpV.y * 0.5 + 0.5) * H;
     g.globalAlpha = clamp(f.t * 2.5, 0, 1);
-    g.fillStyle = '#000'; g.fillText(f.text, Math.round(x) + 2, Math.round(y) + 2);
+    g.fillStyle = '#000'; g.fillText(f.text, Math.round(x) + 1, Math.round(y) + 1);
     g.fillStyle = f.color; g.fillText(f.text, Math.round(x), Math.round(y));
   }
   g.globalAlpha = 1;
@@ -4451,11 +4485,13 @@ function draw2D() {
     if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
-    g.font = '18px "VT323", monospace';
+    g.font = '15px "VT323", monospace';
+    g.globalAlpha = down ? 1 : 0.75;
     g.fillStyle = '#000'; g.fillText(rp.name, x + 1, y + 1);
     g.fillStyle = CHARS[rp.char || 0].color; g.fillText(rp.name, x, y);
-    if (down) { g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('GỤC NGÃ · giữ E để cứu', x, y - 18); }
-    else { g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 16, y + 4, 32, 5); g.fillStyle = '#7fe07f'; g.fillRect(x - 15, y + 5, 30 * clamp(rp.hp / 100, 0, 1), 3); }
+    g.globalAlpha = 1;
+    if (down) { g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('giữ ' + KN('use') + ' để cứu', x, y - 15); }
+    else { const mx = (CHARS[rp.char || 0] || {}).hp || 100; if (rp.hp < mx - 0.5) { g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 13, y + 4, 26, 4); g.fillStyle = '#7fe07f'; g.fillRect(x - 12, y + 5, 24 * clamp(rp.hp / mx, 0, 1), 2); } }
   }
   // bot đồng đội: tên + máu
   if (state.mode !== 'title') for (const b of allBots()) {
@@ -4466,13 +4502,16 @@ function draw2D() {
     if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
+    // tên đã có ở danh sách đội góc trái: trên đầu chỉ hiện khi gục ngã, thanh máu khi bị thương
     g.font = '15px "VT323", monospace';
-    const nm = CHARS[b.ci].name;
-    g.globalAlpha = down ? 1 : 0.8;
-    g.fillStyle = '#000'; g.fillText(nm, x + 1, y + 1); g.fillStyle = CHARS[b.ci].color; g.fillText(nm, x, y);
-    g.globalAlpha = 1;
-    if (down) { g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('GỤC NGÃ · giữ E để cứu', x, y - 17); }
-    else if (b.hp < b.maxHp - 0.5) { g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 13, y + 4, 26, 4); g.fillStyle = '#7fe07f'; g.fillRect(x - 12, y + 5, 24 * clamp(b.hp / b.maxHp, 0, 1), 2); }
+    if (down) {
+      const nm = CHARS[b.ci].name;
+      g.fillStyle = '#000'; g.fillText(nm, x + 1, y + 1); g.fillStyle = CHARS[b.ci].color; g.fillText(nm, x, y);
+      g.fillStyle = Math.floor(gtime * 3) % 2 ? '#ff6a5a' : '#ffffff'; g.fillText('giữ ' + KN('use') + ' để cứu', x, y - 15);
+    } else if (b.hp < b.maxHp - 0.5) {
+      g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(x - 11, y + 4, 22, 4);
+      g.fillStyle = CHARS[b.ci].color; g.fillRect(x - 10, y + 5, 20 * clamp(b.hp / b.maxHp, 0, 1), 2);
+    }
   }
   // camera an ninh + kỹ năng đánh dấu đồ: chỗ còn đồ chưa lục
   if (state.mode === 'play' && camReveal > 0 && camLootOn) {
@@ -4490,15 +4529,15 @@ function draw2D() {
     tmpV.set(tg.x, 1.7, tg.z).project(camera);
     let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.6); }
-    const text = inf.can ? (isTouch ? inf.label : '[' + KN('use') + '] ' + inf.label) : inf.label;
-    g.font = '20px "VT323", monospace';
-    const tw = Math.ceil(g.measureText(text).width) + 20;
-    g.fillStyle = 'rgba(10,8,14,.8)'; g.fillRect(x - tw / 2, y - 17, tw, 25);
-    g.strokeStyle = inf.can ? '#f2c14e' : '#5a5060'; g.lineWidth = 2; g.strokeRect(x - tw / 2, y - 17, tw, 25);
+    const text = inf.can ? (isTouch ? inf.label : KN('use') + ' · ' + inf.label) : inf.label;
+    g.font = '17px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(text).width) + 14;
+    g.fillStyle = 'rgba(10,8,14,.72)'; g.fillRect(x - tw / 2, y - 14, tw, 20);
+    if (inf.can) { g.fillStyle = '#f2c14e'; g.fillRect(x - tw / 2, y - 14, 2, 20); }
     g.fillStyle = inf.can ? '#fff6dc' : '#a8a0a8'; g.fillText(text, x, y + 1);
     if (inf.can && interact.t > 0) {
-      g.fillStyle = '#000'; g.fillRect(x - tw / 2, y + 9, tw, 5);
-      g.fillStyle = '#f2c14e'; g.fillRect(x - tw / 2, y + 9, tw * Math.min(1, interact.t / inf.time), 5);
+      g.fillStyle = '#000'; g.fillRect(x - tw / 2, y + 6, tw, 4);
+      g.fillStyle = '#f2c14e'; g.fillRect(x - tw / 2, y + 6, tw * Math.min(1, interact.t / inf.time), 4);
     }
   }
   if (state.mode === 'play' && player.pinned) {
@@ -4519,7 +4558,7 @@ function draw2D() {
     let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.56); }
     const k = Math.min(1, player.action.t / player.action.dur);
-    g.font = '18px "VT323", monospace';
+    g.font = '16px "VT323", monospace';
     const at = player.action.label || (player.action.target ? `Giúp ${player.action.targetName}…` : ACTION_TEXT[player.action.item] || '');
     g.fillStyle = '#000'; g.fillText(at, x + 1, y - 7);
     g.fillStyle = '#e8f0d8'; g.fillText(at, x, y - 8);
@@ -4527,11 +4566,11 @@ function draw2D() {
     g.fillStyle = '#7fe07f'; g.fillRect(x - 30, y - 1, 60 * k, 5);
   }
   if (state.mode === 'play' && !state.paused && FP.on && !isTouch && !FP.locked && !bagOpen && !craftUI.open && !mapOpen) {
-    const t = FP.lockFailed ? 'Giữ CHUỘT PHẢI và kéo để nhìn quanh · ← → để xoay' : 'BẤM CHUỘT VÀO MÀN HÌNH ĐỂ ĐIỀU KHIỂN GÓC NHÌN';
-    g.font = '22px "VT323", monospace';
-    const tw = Math.ceil(g.measureText(t).width) + 28, y = Math.round(H * 0.38);
-    g.fillStyle = 'rgba(10,8,14,.78)'; g.fillRect(W / 2 - tw / 2, y - 19, tw, 30);
-    g.fillStyle = '#f2c14e'; g.fillText(t, W / 2, y + 2);
+    const t = FP.lockFailed ? 'giữ chuột phải + kéo để nhìn quanh' : 'bấm vào màn hình để điều khiển góc nhìn';
+    g.font = '17px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(t).width) + 18, y = Math.round(H * 0.62);
+    g.fillStyle = 'rgba(10,8,14,.6)'; g.fillRect(W / 2 - tw / 2, y - 14, tw, 20);
+    g.fillStyle = '#f2c14e'; g.fillText(t, W / 2, y + 1);
   }
   if (state.mode === 'play' && !state.paused) {
     if (FP.on || (!isTouch && mouse.has)) {
@@ -4640,6 +4679,7 @@ function fpBillboard() {
   for (const sp of SPRITES) {
     if (!sp.group.parent) { SPRITES.delete(sp); continue; }
     if (!sp.group.visible) continue;
+    if (sp.is3d) { sp.xmat.visible = camReveal > 0; continue; }
     sp.group.rotation.y = th;
     sp.xmat.visible = camReveal > 0;
     if (sp._dir) {
@@ -5157,6 +5197,7 @@ function init() {
   if (QS.has('debug')) window.__shProxy = (on) => { for (const sp of SPRITES) if (sp.shadow) { sp.shadow.castShadow = sp.shadow2.castShadow = on; sp.mesh.castShadow = !on; } };
   if (QS.has('debug')) window.__hour = (h) => { dayStartHour = h; phaseT = 0; atmos.hour = h; atmos.setWeather('clear', true); };
   if (QS.has('debug')) window.__vm = (sw, rec = 0, mz = false) => { FP.dbg = sw === null ? null : { sw, rec, mz }; };
+  if (QS.has('debug')) window.__triInfo = () => { const out = []; for (const sp of SPRITES) { if (!sp.is3d || !sp.group.visible) continue; let t = 0, m = 0; sp.group.traverse((o) => { if (o.isMesh && o.geometry.index) { t += o.geometry.index.count / 3; m++; } }); out.push([t, m]); } return out; };
   if (QS.has('debug')) window.__fpState = () => ({ on: FP.on, yaw: +FP.yaw.toFixed(3), pitch: +FP.pitch.toFixed(3), locked: FP.locked, failed: !!FP.lockFailed, fails: FP.lockFails || 0, paused: state.paused });
   if (QS.has('debug')) window.__fp = (yaw, pitch = 0) => { settings.view = 'fp'; FP.yaw = yaw; FP.pitch = pitch; return { on: FP.on, near: camera.near, fov: camera.fov, cam: camera.position.toArray().map((v) => +v.toFixed(2)) }; };
   if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }
@@ -5317,7 +5358,7 @@ function frame(now) {
 
 // ================= CÀI ĐẶT · PHÍM · MENU · LƯU GAME · CỐT TRUYỆN =================
 const SET_KEY = 'deadnight_settings';
-const SET_DEF = { vol: { master: 85, music: 70, sfx: 90, amb: 75 }, mute: false, bright: 100, shake: true, cine: true, tsize: 100, talpha: 90, lefty: false, view: 'tp', sens: 100, keys: {} };
+const SET_DEF = { vol: { master: 85, music: 70, sfx: 90, amb: 75 }, mute: false, bright: 100, shake: true, cine: true, tsize: 100, talpha: 90, lefty: false, view: 'tp', sens: 100, models: '3d', keys: {} };
 const settings = (() => {
   try { const s = JSON.parse(store.get(SET_KEY, '{}')) || {}; return { ...SET_DEF, ...s, vol: { ...SET_DEF.vol, ...(s.vol || {}) }, keys: { ...(s.keys || {}) } }; }
   catch (e) { return { ...SET_DEF, vol: { ...SET_DEF.vol }, keys: {} }; }
@@ -5447,6 +5488,7 @@ function renderSettings() {
       pane.appendChild(n);
     }
     pane.append(
+      sRow('Nhân vật', 'Khối 3D đầy đặn hoặc hình phẳng 2D (nhẹ máy) · áp dụng từ ván mới', sSeg([['3d', 'Khối 3D'], ['2d', 'Phẳng 2D']], () => settings.models || '3d', (v) => { settings.models = v; })),
       sRow('Góc nhìn', (isTouch ? 'Nút ⋯ → GÓC NHÌN trên thanh công cụ' : 'Phím ' + KN('view')) + ' để đổi nhanh khi đang chơi', sSeg([['tp', 'Thứ ba · diorama'], ['fp', 'Thứ nhất']], () => settings.view, (v) => { settings.view = v; })),
       sRow('Độ pixel', 'Dựng cảnh ở độ phân giải thấp rồi phóng to sắc nét', sSeg([[1, '1x'], [2, '2x'], [3, '3x']], () => pixelK, (v) => { pixelK = v; store.set('deadnight_px', String(v)); post.setPixel(v); setQualityLabel(); })),
       sRow('Độ sáng', '', sRange(60, 160, () => settings.bright, (v) => { settings.bright = v; })),

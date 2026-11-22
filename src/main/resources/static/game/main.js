@@ -5731,6 +5731,7 @@ function updateSmoke(dt, A) {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
+  if (QS.has('debug')) { renderer.info.autoReset = false; renderer.info.reset(); }
   // khung đầu tiên có thể mang mốc thời gian sớm hơn lúc khởi tạo: không cho dt âm
   let dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
@@ -5842,7 +5843,7 @@ function frame(now) {
       toast('Đã chụp ảnh màn hình');
     } catch (e) { toast('Không chụp được ảnh'); }
   }
-  if (DBG) window.__info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, leaves: world.leafCount, q: quality };
+  if (DBG || QS.has('debug')) window.__info = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, leaves: world.leafCount, q: quality };
   draw2D();
 }
 

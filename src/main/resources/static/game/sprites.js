@@ -401,6 +401,8 @@ export function makeCharacterSprites() {
     spitter: [buildAtlas(SPEC.thin, { ...zombiePalette(61, 'runner'), skin: '#8ab070', skinS: '#5a7a48', skinL: '#a8cc8a', top: '#3a4a3a', topS: '#28322a', topL: '#4e604e', glowEye: '#7aff4a', mouth: '#5aff3a', blood: '#3a8a1a', bloodL: '#6ad83a' }, { zombie: true, kind: 'runner' })],
     pouncer: [buildAtlas(SPEC.thin, { ...zombiePalette(71, 'runner'), top: '#2a2a30', topS: '#1a1a1e', topL: '#3e3e46', pants: '#26262c', pantsS: '#18181c', hair: '#1a1a1e', glowEye: '#ff2a1a' }, { zombie: true, kind: 'runner' })],
     charger: [buildAtlas(SPEC.brute, { ...zombiePalette(81, 'brute'), top: '#7a2a22', topS: '#5a1a16', topL: '#9a3a2e', glowEye: '#ff6a1a' }, { zombie: true, kind: 'brute' })],
+    // Zombie Chúa: tiến sĩ điên áo blouse trắng, mắt đỏ rực (cùng bảng màu với phim)
+    lord: [buildAtlas(SPEC.brute, { ...zombiePalette(99, 'brute'), skin: '#8a8496', skinS: '#625c70', skinL: '#aaa4b8', top: '#c8c4bc', topS: '#8a867e', topL: '#e0dcd4', pants: '#3a3e4a', pantsS: '#262a34', hair: '#6a6a70', hairS: '#3a3a40', hairL: '#8a8a90', glowEye: '#ff1a1a' }, { zombie: true, kind: 'brute' })],
     weeper: [buildAtlas(SPEC.thin, { ...zombiePalette(91, 'runner'), skin: '#e8e4e0', skinS: '#b8b0b0', skinL: '#ffffff', hair: '#f0f0f0', hairS: '#c8c8c8', hairL: '#ffffff', top: '#d8d4d0', topS: '#a8a4a0', topL: '#f0ece8', pants: '#c8c4c0', pantsS: '#a8a4a0', glowEye: '#ff3a3a' }, { zombie: true, kind: 'runner' })],
   };
   return { player, zombies };

@@ -175,6 +175,8 @@ const L = {
   z_pouncer: [[0.45, 'bandage', 1, 2], [0.3, 'battery', 1, 1], [0.3, 'cord', 1, 1]],
   z_charger: [[0.6, 'medkit', 1, 1], [0.4, 'powder', 1, 2], [0.5, 'scrap', 1, 3]],
   z_weeper: [[0.6, 'flower', 1, 1], [0.6, 'antidote', 1, 1]],
+  // Zombie Chúa: mang theo thuốc và mẫu thử của phòng thí nghiệm
+  z_lord: [[1, 'antidote', 2, 3], [1, 'medkit', 1, 2], [1, 'syringe', 1, 2], [1, 'antibio', 1, 2], [0.8, 'powder', 2, 3], [0.6, 'battery', 1, 2]],
 };
 // đồ cố định (sách, nguyên liệu chế súng); đồ nhiệm vụ đặt ngẫu nhiên mỗi ván (main.js: QSPOTS)
 const FIXED = {
@@ -187,6 +189,8 @@ const FIXED = {
   sports_rack: [['book_bow', 1], ['bow', 1]],
   canteen_counter: [['knife', 1]],
 };
+// bảng rơi đồ (để hiện "nhặt ở đâu" trong bảng hướng dẫn vật phẩm)
+export const LOOT = L, FIXED_LOOT = FIXED;
 export const SEARCH_TIME = { fridge: 1.0, drinks: 1.0, trunk: 2.0, truck: 2.4, armory: 2.4, ammo_crate: 1.8, body: 1.4, corpse: 1.3, storage: 1.8, shelf_food: 1.5, wood_pile: 1.2, stall: 1.3 };
 export const searchTime = (kind) => SEARCH_TIME[kind] || 1.6;
 

@@ -711,6 +711,20 @@
   body.cine #hud, body.cine #tpad, body.cine #msg, body.cine #saveflash { visibility: hidden !important; }
   #cine-skip { position: fixed; right: calc(12px + var(--sr)); top: calc(10px + var(--st)); z-index: 32; font-family: inherit; font-size: 19px; color: var(--ink); background: rgba(10,8,14,.65); border: 2px solid rgba(217,192,138,.6); padding: 3px 12px 4px; cursor: pointer; }
   #cine-skip:hover { border-color: var(--edge); }
+  /* bảng hướng dẫn vật phẩm (giữ lâu vào món đồ) */
+  #iteminfo { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; width: min(340px, 88vw); max-height: 80vh; overflow-y: auto; padding: 10px 14px 12px; font-size: 17px; line-height: 1.2; color: var(--ink); pointer-events: auto; }
+  #iteminfo .ii-head { display: flex; align-items: center; gap: 8px; margin: 0 24px 6px 0; font-size: 21px; color: var(--gold); }
+  #iteminfo .ii-head img { width: 32px; height: 32px; image-rendering: pixelated; }
+  #iteminfo .ii-head span { color: var(--ink-dim); font-size: 17px; }
+  #iteminfo .ii-sec { margin-top: 7px; color: var(--gold); font-size: 15px; letter-spacing: 1px; }
+  #iteminfo small { color: var(--ink-dim); }
+  #iteminfo .ii-mats { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  #iteminfo .ii-mats i { font-style: normal; display: inline-flex; align-items: center; gap: 3px; }
+  #iteminfo .ii-mats i.no { color: #e8a090; } #iteminfo .ii-mats i.ok { color: #9ae08a; }
+  #iteminfo .ii-mats img { width: 18px; height: 18px; image-rendering: pixelated; }
+  .ii-bar { display: block; width: 64px; height: 4px; margin-top: 3px; background: #2a2020; }
+  .ii-bar u { display: block; height: 100%; background: #9ae08a; }
+  .ii-hint { grid-column: 1 / -1; margin-top: 6px; font-size: 14px; color: var(--ink-dim); text-align: center; opacity: .8; }
   #cine-skip.wait { pointer-events: none; opacity: .55; border-style: dashed; font-size: 16px; }
   @media (max-height: 520px) {
     #cine-box { padding: 5px 10px 6px 6px; gap: 8px; min-height: 60px; margin: 4px 0 4px; }
@@ -821,6 +835,7 @@
   
 </div></div>
 
+<div id="iteminfo" class="win hidden"><button class="xclose" id="ii-close" aria-label="Đóng">✕</button><div id="ii-body"></div></div>
 <div id="craft" class="screen hidden"><div class="card win"><button class="xclose" id="cr-close" aria-label="Đóng">✕</button>
   <h2>BÀN CHẾ ĐỒ</h2>
   <div class="cr-main">
@@ -829,7 +844,6 @@
       <div id="cr-name"></div>
       <div id="cr-msg"></div>
       <div class="btns"><button class="btn" id="cr-go">CHẾ</button><button class="btn ghost" id="cr-clear">Trả đồ</button></div>
-      <div class="cr-tip">Bấm đồ trong túi để đặt vào lưới · bấm ô trong lưới để lấy ra · mở <b>Sách công thức</b> và bấm một món đã học để tự xếp nguyên liệu</div>
     </div>
     <div class="cr-right">
       <div class="crtabs"><button class="crtab on" data-tab="inv">Túi đồ</button><button class="crtab" data-tab="book">Sách công thức</button></div>

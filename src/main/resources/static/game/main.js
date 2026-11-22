@@ -1127,11 +1127,20 @@ function refreshHost() {
   const m = roomMembers();
   if (!m.length) return;
   const newHost = m[0].peer;
+  // đang chơi: chỉ đổi chủ phòng khi chủ cũ vắng mặt liên tục 4 giây (mạng chập chờn thì giữ nguyên)
+  if (net.active && net.hostPeer && newHost !== net.hostPeer) {
+    const now = performance.now();
+    if (net.hostCand !== newHost) { net.hostCand = newHost; net.hostCandT = now; return; }
+    if (now - net.hostCandT < 4000) return;
+  }
+  net.hostCand = null;
   const wasHost = net.host;
   net.hostPeer = newHost;
   net.host = m[0].me;
   net.colorIdx = Math.max(0, m.findIndex((x) => x.me));
   if (net.active && net.host && !wasHost) becomeHost();
+  // không còn là chủ phòng: bỏ bot thật, chỉ hiện bot theo ảnh chụp của chủ mới
+  if (net.active && wasHost && !net.host) { for (const b of bots) scene.remove(b.sp.group); bots = []; }
   if (!net.host && net.room) net.room.presence({ w: null }).catch(() => {});
   advertise(m.length);
 }
@@ -1215,6 +1224,20 @@ let skinIdx = 0;
 function setPlayerSkin(i) { skinIdx = i; }
 // chủ phòng cũ rời đi: dựng lại zombie đầy đủ từ ảnh chụp cuối cùng
 function becomeHost() {
+  // giữ nguyên mã ván cũ: máy khác không bị "chơi lại", đồ nhiệm vụ và hoa vẫn ở chỗ cũ
+  if (net.gameSeen) net.gameId = net.gameSeen;
+  // bot: dựng bot thật từ bản sao đang thấy (giữ vị trí, máu, vũ khí, trạng thái)
+  const views = [...botViews.values()].map((v) => ({ ci: v.ci, x: v.tx ?? v.x, z: v.tz ?? v.z, hp: v.hp, flags: v.flags | 0, weapon: v.weapon | 0 }));
+  clearBots();
+  const SPR_MELEE = { 0: 'knife', 6: 'club', 7: 'spear' };
+  views.forEach((v, k) => {
+    const b = newBot(v.ci, k);
+    b.x = v.x; b.z = v.z;
+    if (v.hp > 0) b.hp = Math.min(b.maxHp, v.hp);
+    if (v.weapon === 4) b.weapon = 4; else if (SPR_MELEE[v.weapon]) b.melee = SPR_MELEE[v.weapon];
+    if (v.flags & 8) b.state = 'out'; else if (v.flags & 4) { b.state = 'down'; b.hp = 0; b.downT = 30; }
+    bots.push(b);
+  });
   for (const z of zombies) {
     if (z.state === 'dead') continue;
     z.x = z.tx ?? z.x; z.z = z.tz ?? z.z;
@@ -1227,6 +1250,7 @@ function netTargetsInto(list) {
 }
 function netTick(dt) {
   if (!net.active || !net.room) return;
+  if (net.hostCand) refreshHost();
   // nhận
   const seen = new Set();
   for (const p of net.room.peers()) {
@@ -2334,14 +2358,29 @@ function botSprite(ci) {
   sp.group.scale.setScalar(C.scale || 1);
   return sp;
 }
+function newBot(ci, k) {
+  const C = CHARS[ci], m = { ...computeMod(C.id, new Set()) };
+  return { ci, k, r: 0.34, hp: C.hp, maxHp: C.hp, aim: 0, weapon: 0, melee: 'fist', idleT: rand(0.5, 2), anchor: null, search: null, searchT: 0, walk: 0, cd: rand(0, 0.5), state: 'ok', downT: 0, task: null, sp: botSprite(ci), side: k % 2 ? 1 : -1, stuck: 0, hitT: 0, moving: false, firing: false, pinnedBy: 0, mod: m, x: 0, z: 0 };
+}
 function makeBots() {
   clearBots(); botLooted.clear();
-  botChars().forEach((ci, k) => {
-    const C = CHARS[ci], m = { ...computeMod(C.id, new Set()) };
-    const b = { ci, k, r: 0.34, hp: C.hp, maxHp: C.hp, aim: 0, weapon: 0, melee: 'fist', idleT: rand(0.5, 2), anchor: null, search: null, searchT: 0, walk: 0, cd: rand(0, 0.5), state: 'ok', downT: 0, task: null, sp: botSprite(ci), side: k % 2 ? 1 : -1, stuck: 0, hitT: 0, moving: false, firing: false, pinnedBy: 0, mod: m, x: 0, z: 0 };
-    bots.push(b);
-  });
+  botChars().forEach((ci, k) => bots.push(newBot(ci, k)));
   placeBots();
+}
+// chủ phòng: có người vào / rời phòng giữa ván thì bớt / thêm bot cho đủ đội 4 người (không trùng nhân vật với người chơi)
+let botRecT = 2;
+function reconcileBots() {
+  if (state.mode !== 'play' || (net.active && !net.host) || calmNow()) return;
+  const want = botChars();
+  for (const b of [...bots]) if (!want.includes(b.ci)) { scene.remove(b.sp.group); bots.splice(bots.indexOf(b), 1); }
+  for (const ci of want) if (!findBot(ci)) {
+    const b = newBot(ci, bots.length);
+    for (let t = 0; t < 12; t++) {
+      const x = clamp(player.x + rand(-2, 2), BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5), z = clamp(player.z + rand(-0.8, 0.8), BOUNDS.z0 + 0.4, BOUNDS.z1 - 0.3);
+      if (!insideSolid(x, z, 0.4) || t === 11) { b.x = x; b.z = z; break; }
+    }
+    bots.push(b);
+  }
 }
 // bot cũng vào game tay trắng: tự lục đồ tìm vũ khí, hoặc được bạn đưa cho
 function armBots() {}
@@ -2442,7 +2481,7 @@ function hurtBot(key, dmg) {
   for (let i = 0; i < 6; i++) fx.blood.spawn(b.x, rand(0.7, 1.3), b.z, rand(-2, 2), rand(0.5, 2.5), rand(-2, 2), 1.4, rand(0.05, 0.09), '#a51c16', { grav: 11, drag: 0.8 });
   if (b.hp <= 0) {
     b.hp = 0; b.state = 'down'; b.downT = 40; b.task = null; b.pinnedBy = 0;
-    showMsg(`${CHARS[b.ci].name.toUpperCase()} (BOT) GỤC NGÃ`, 'Lại gần giữ E để cứu');
+    showMsg(`${CHARS[b.ci].name.toUpperCase()} GỤC NGÃ`, 'Lại gần giữ ' + KN('use') + ' để cứu · bạn khác cũng sẽ tới kéo dậy');
   }
 }
 function reviveBot(ci, byMe) {
@@ -2490,6 +2529,8 @@ function downedMate() {
   let t = null;
   if (player.downed > 0 && !player.zombie) t = { x: player.x, z: player.z, local: true };
   else if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && rp.flags & 4 && !(rp.flags & (8 | 128))) { t = { x: rp.x, z: rp.z, peer: rp.peer }; break; }
+  // không có người gục: bot cứu bot
+  if (!t) for (const db of bots) if (db.state === 'down') { t = { x: db.x, z: db.z, mate: db }; break; }
   if (!t) return null;
   let bd = 1e9;
   for (const b of bots) if (b.state === 'ok' && !b.pinnedBy) { const d = Math.hypot(b.x - t.x, b.z - t.z); if (d < bd) { bd = d; t.bot = b; } }
@@ -2546,7 +2587,7 @@ function updateBots(dt) {
         b.revT = (b.revT || 0) + dt; b.searching = true; b.aim = Math.atan2(R.z - b.z, R.x - b.x);
         if (b.revT > 2.5) {
           b.revT = 0;
-          if (R.local) revived({ name: CHARS[b.ci].name }); else netEvent('rv', R.peer);
+          if (R.local) revived({ name: CHARS[b.ci].name }); else if (R.mate) reviveBot(R.mate.ci, false); else netEvent('rv', R.peer);
           floaters.push({ x: b.x, y: 2.5, z: b.z, text: 'Dậy đi!', t: 1.2, color: CHARS[b.ci].color });
         }
       }
@@ -5191,8 +5232,10 @@ function init() {
   if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
   if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
   if (QS.has('debug')) { window.__set = () => ({ settings, KB: { ...KB } }); window.__save = () => loadSave(); window.__saveNow = () => saveGame(true); window.__story = () => [...story.seen]; }
-  if (QS.has('debug')) window.__qplan = () => { const P = questPlan(); const out = {}; for (const it in QSPOTS) out[it] = P[it].map((i) => QSPOTS[it][i].t); return { seed: P.seed, out, here: world.containers.map((c) => [c.id, c.kind, c.label, questLoot(c).map((q) => q[0]).join(','), c.x, c.z]).filter((x) => x[3]), checked: [...player.qChecked], counts: Object.entries(QSPOTS).flatMap(([it, L]) => L.filter((sp) => sp.z === ZONE.id).map((sp) => [it, sp.t, world.containers.filter((o) => spotMatch(sp, o)).length])) }; };
+  if (QS.has('debug')) window.__qplan = () => { const P = questPlan(); const out = {}; for (const it in QSPOTS) out[it] = P[it].map((i) => QSPOTS[it][i].t + ' @' + QSPOTS[it][i].z); return { seed: P.seed, out, here: world.containers.map((c) => [c.id, c.kind, c.label, questLoot(c).map((q) => q[0]).join(','), c.x, c.z]).filter((x) => x[3]), checked: [...player.qChecked], counts: Object.entries(QSPOTS).flatMap(([it, L]) => L.filter((sp) => sp.z === ZONE.id).map((sp) => [it, sp.t, world.containers.filter((o) => spotMatch(sp, o)).length])) }; };
   if (QS.has('debug')) window.__qseed = (n) => { net.gameId = n; };
+  if (QS.has('debug')) window.__hurtBot = (ci, d) => hurtBot('b' + ci, d);
+  if (QS.has('debug')) window.__poi = (k) => (world.pois[k] ? [world.pois[k].x, world.pois[k].z] : null);
   if (QS.has('debug')) window.__shInfo = () => { const out = []; for (const sp of SPRITES) { if (!sp.group.visible) continue; const e = sp.shadow.matrixWorld.elements; out.push([+sp.shadow.rotation.y.toFixed(2), sp.shadow.castShadow, sp.mesh.castShadow, sp.shadow.visible, !!sp.smat.map, e.slice(12, 15).map((v) => +v.toFixed(1)), sp.shadow.parent === sp.mesh]); if (out.length > 4) break; } return { sunYaw, n: SPRITES.size, out }; };
   if (QS.has('debug')) window.__shProxy = (on) => { for (const sp of SPRITES) if (sp.shadow) { sp.shadow.castShadow = sp.shadow2.castShadow = on; sp.mesh.castShadow = !on; } };
   if (QS.has('debug')) window.__hour = (h) => { dayStartHour = h; phaseT = 0; atmos.hour = h; atmos.setWeather('clear', true); };
@@ -5269,6 +5312,7 @@ function frame(now) {
         updateBullets(dt); updatePickups(dt);
         if ((!net.active || net.host) && !calmHere) { updateWaves(dt); if (phase !== 'shot') updatePhase(dt); }
         updateHeli(dt); hostCheckWipe();
+        if (net.active && net.host && (botRecT -= dt) <= 0) { botRecT = 2; reconcileBots(); }
       }
     }
     if (!net.active && state.mode === 'play' && !state.paused) { saveT -= dt; if (saveT <= 0) { saveT = 60; saveGame(); } }

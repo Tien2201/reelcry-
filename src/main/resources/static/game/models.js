@@ -244,6 +244,86 @@ export function makeModel(atlasList, xray, blob) {
   setWeapon(0);
   return s;
 }
+// ---------- mèo đột biến (4 chân, dựng thẳng từ khối) ----------
+const CAT = {};
+function hsh(x, y, z) { let h = (x * 73856093) ^ (y * 19349663) ^ (z * 83492791); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function catParts() {
+  if (CAT.body) return CAT;
+  const fur = hex('#8a6a48'), furD = hex('#5e4632'), belly = hex('#b49674'), rot = hex('#7d8c62'), rotD = hex('#5a6848'), blood = hex('#7e1212');
+  const bone = hex('#d8d0b8'), sock = hex('#200808'), mouth = hex('#2a0a0a'), earIn = hex('#a8706a'), nose = hex('#3a2420');
+  const X = 6, Y = 16, Z = 22, ox = -3, oz = -11;
+  const solid = (gx, gy, gz) => {
+    const x = gx + ox, y = gy, z = gz + oz;
+    if (y >= 5 && y < 10 && z >= -7 && z < 5) return true;                       // thân
+    if (y >= 7 && y < 13 && z >= 4 && z < 10) return true;                       // đầu
+    if (y >= 13 && y < 15 && z >= 6 && z < 8 && (x <= -2 || x >= 1)) return true;  // tai
+    if (y >= 8 && y < 10 && z === 10 && x >= -1 && x < 1) return true;           // mõm
+    return false;
+  };
+  const col = (gx, gy, gz, f) => {
+    const x = gx + ox, y = gy, z = gz + oz, head = z >= 4 && y >= 7;
+    if (y >= 13) return f === 4 ? earIn : furD;
+    if (head && f === 4) {
+      if (y === 11 && (x === -2 || x === 1)) return sock;
+      if (y === 8 && x >= -2 && x < 2) return x === -2 || x === 1 ? bone : mouth;
+      if (z === 10) return y === 9 ? nose : fur;
+    }
+    if (f === 3) return belly;
+    const r = hsh(Math.floor(x / 2), Math.floor(y / 2), Math.floor(z / 2));
+    if (!head && r < 0.16) return f === 2 ? rotD : rot;                          // da thối lộ ra
+    if (!head && r > 0.93) return blood;
+    if (!head && (z + 20) % 3 === 0 && f !== 4) return furD;                     // vằn mướp
+    return fur;
+  };
+  const out = newOut();
+  mesher([X, Y, Z], solid, col, out, [ox, 0, oz]);
+  CAT.body = toGeo(out);
+  const g = newOut();
+  const eye = hex('#ff3a2a');
+  mesher([X, Y, Z], solid, (gx, gy, gz, f) => (f === 4 && gy === 11 && gz + oz === 9 && (gx + ox === -2 || gx + ox === 1) ? eye : -1), g, [ox, 0, oz], 0.08, 3.5);
+  CAT.glow = toGeo(g);
+  const leg = newOut();
+  mesher([2, 5, 2], () => true, (x, y, z, f) => (y === 0 || f === 3 ? furD : f === 4 ? fur : furD), leg, [-1, -5, -1]);
+  CAT.leg = toGeo(leg);
+  const tail = newOut();
+  mesher([2, 2, 9], () => true, (x, y, z) => ((z % 3) === 0 ? furD : z === 0 ? rot : fur), tail, [-1, -1, -9]);
+  CAT.tail = toGeo(tail);
+  return CAT;
+}
+export function makeCatModel(xray, blob) {
+  const C = catParts();
+  const mat = spriteLit(new THREE.MeshLambertMaterial({ vertexColors: true }), 0.5);
+  const xmat = new THREE.MeshBasicMaterial({ color: new THREE.Color(xray).multiplyScalar(0.55), blending: THREE.AdditiveBlending, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false });
+  const xclones = [];
+  const part = (geo) => { const o = new THREE.Mesh(geo, mat); o.castShadow = true; o.renderOrder = 2; const x = new THREE.Mesh(geo, xmat); x.renderOrder = 1; o.add(x); xclones.push(x); return o; };
+  const group = new THREE.Group(), yaw = new THREE.Group(), mesh = new THREE.Group(), roll = new THREE.Group(), body = new THREE.Group();
+  group.add(yaw); yaw.add(mesh); mesh.add(roll); roll.add(body);
+  body.add(part(C.body));
+  const gl = new THREE.Mesh(C.glow, GLOW_MAT); gl.renderOrder = 2; body.add(gl);
+  const legAt = (x, z) => { const p = new THREE.Group(); p.position.set(x * V, 5 * V, z * V); p.add(part(C.leg)); roll.add(p); return p; };
+  const legFL = legAt(-2, 3), legFR = legAt(2, 3), legBL = legAt(-2, -5.5), legBR = legAt(2, -5.5);
+  const tail = new THREE.Group(); tail.position.set(0, 9 * V, -7 * V); tail.rotation.x = -0.7; tail.add(part(C.tail)); body.add(tail);
+  group.add(blob);
+  const xr = { _v: true, get visible() { return this._v; }, set visible(v) { this._v = v; for (const x of xclones) x.visible = v; } };
+  return {
+    is3d: true, quad: true, group, mesh, mat, xmat, xr, blob, yawNode: yaw, roll, body, legFL, legFR, legBL, legBR, tail,
+    maps: [], emap: null, shadow: null, cur: 0, w: 1.1, h: 1.0, P: { quad: true }, weapon: 'fist', setWeapon() {},
+    yaw: 0, vx: 0, vz: 0, phase: 0, amp: 0, lx: null, lz: null, atk: 0, atkMax: 0.3, busy: 0, dir: 'down', fr: 0, ang: null, seed: Math.random() * 10,
+  };
+}
+function animateCat(s, dt, sw, a) {
+  const t = performance.now() / 1000, r = s.mesh.rotation.x;
+  // game đặt mesh.rotation.x khi chết (ngã ngửa): mèo thì lăn nghiêng
+  s.mesh.rotation.x = 0; s.mesh.position.y = 0;
+  s.roll.rotation.z = r; s.roll.position.y = Math.abs(Math.sin(r)) * 3 * V;
+  const dead = r < -0.05, leg = dead ? 0.5 : sw * 0.85 * a;
+  s.legFL.rotation.x = leg; s.legBR.rotation.x = leg; s.legFR.rotation.x = -leg; s.legBL.rotation.x = -leg;
+  s.tail.rotation.y = dead ? 0 : Math.sin(t * (a > 0.3 ? 12 : 5) + s.seed) * 0.45;
+  s.tail.rotation.x = dead ? -0.1 : -0.7 - a * 0.25;
+  const q = s.atk > 0 ? Math.sin((1 - s.atk / s.atkMax) * Math.PI) : 0;
+  s.body.rotation.x = -q * 0.35 + (dead ? 0 : Math.sin(s.phase * 2) * 0.04 * a);
+  s.body.position.y = Math.abs(Math.cos(s.phase)) * a * 0.04;
+}
 // vung tay đánh (gọi lúc ra đòn)
 export function modelSwing(s, t = 0.28) { if (s && s.is3d) s.atk = s.atkMax = t; }
 
@@ -268,10 +348,11 @@ export function animateModel(s, dt) {
   s.phase += dist * Math.PI / 0.5;
   s.amp += (clamp(sp / 2.6, 0, 1) - s.amp) * Math.min(1, dt * 8);
   const P = s.P, sw = Math.sin(s.phase), a = s.amp;
-  const lying = s.mesh.rotation.x < -0.05;
-  s.mesh.position.y = lying ? P.backZ * Math.sin(-s.mesh.rotation.x) : 0;
   s.busy = Math.max(0, s.busy - dt);
   s.atk = Math.max(0, s.atk - dt);
+  if (P.quad) { animateCat(s, dt, sw, a); return; }
+  const lying = s.mesh.rotation.x < -0.05;
+  s.mesh.position.y = lying ? P.backZ * Math.sin(-s.mesh.rotation.x) : 0;
   const t = performance.now() / 1000;
   let rR, rL, zR = 0, zL = 0, lean = 0, legA = lying ? 0 : sw * 0.75 * a;
   if (lying) { rR = rL = -0.25; }

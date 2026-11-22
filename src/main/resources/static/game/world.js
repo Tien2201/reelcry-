@@ -734,8 +734,15 @@ export function buildWorld(scene, quality) {
     }
     batch.add(boxGeo(XMAX - XMIN, BY - TY, 0.6, 2, 1), mWall, mat4(0, TY + (BY - TY) / 2, BACK_Z - 0.3));
     batch.add(boxGeo(XMAX - XMIN, 0.16, 0.78, 2, 1), mWallDark, mat4(0, BY + 0.08, BACK_Z - 0.3));
-    // khối đất bậc thềm chặn người chơi (trừ lòng các toà nhà)
-    for (const [a, b] of freeIntervals(bIv)) addBox(a, WALL_Z - 12, b, WALL_Z + 0.05);
+    // bậc thềm đi lên được qua cầu thang: chỉ chặn mặt tường kè, hai bên lòng cầu thang và các vật trên thềm
+    for (const [a, b] of wallSegs) addBox(a, WALL_Z - 0.6, b, WALL_Z + 0.05);
+    for (const st of STAIRS) {
+      addBox(st.x - st.w / 2 - 0.3, WALL_Z - STAIR_DEPTH - 0.35, st.x - st.w / 2, WALL_Z + 0.05);
+      addBox(st.x + st.w / 2, WALL_Z - STAIR_DEPTH - 0.35, st.x + st.w / 2 + 0.3, WALL_Z + 0.05);
+    }
+    for (const h of Z.terrace || []) if (h.by === TY) addBox(h.x - h.w / 2 - 0.1, h.zf - h.d - 0.1, h.x + h.w / 2 + 0.1, h.zf + 0.15);
+    for (const [x, z, sc] of Z.trees || []) if (z > ZB && z < WALL_Z) addCircle(x, z, 0.28 * (sc || 1));
+    for (const x of Z.terraceLamps || []) addCircle(x, -3.3, 0.2);
   }
   for (let i = 0; !IN && i < 46; i++) {
     const x = XMIN + 4 + rng() * (XMAX - XMIN - 8);
@@ -2020,6 +2027,7 @@ export function buildWorld(scene, quality) {
       else stones.add(x, TY + 0.25, z, 0.7, 0.5, 0.3, '#6a6660', 0.25);
       soil.add(x, TY + 0.06, z + 1.05, 0.8, 0.14, 1.5, '#ffffff');
       graves.push({ x, z: z + 1.05 });
+      if (z > ZB && z < WALL_Z) addBox(x - 0.36, z - 0.14, x + 0.36, z + 0.14);
     }
     const cx = 51.5, cz = -12.6;
     stones.add(cx, TY + 1.2, cz, 3.2, 2.4, 2.6, '#8a8680');
@@ -2027,6 +2035,7 @@ export function buildWorld(scene, quality) {
     stones.add(cx, TY + 2.9, cz, 2.2, 0.4, 2.0, '#7a7670');
     misc.add(cx, TY + 0.85, cz + 1.31, 1.0, 1.7, 0.04, '#141414');
     stones.add(cx, TY + 3.35, cz, 0.18, 0.6, 0.18, '#8a8680'); stones.add(cx, TY + 3.45, cz, 0.5, 0.16, 0.16, '#8a8680');
+    addCircle(45.2, -3.3, 0.2);
     const e = emit(45.2, TY + 1.4, -3, '#9adf8a', 7, 7, 'lamp', 'broken');
     misc.add(45.2, TY + 0.7, -3.3, 0.1, 1.4, 0.1, '#26262c');
     const gl = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.22), lamb({ color: '#202a20', emissive: new THREE.Color('#9adf8a'), emissiveIntensity: 3.5 }));

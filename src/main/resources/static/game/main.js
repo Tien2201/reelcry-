@@ -106,6 +106,15 @@ const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 // ---------- góc nhìn thứ nhất (cùng thế giới HD-2D, camera đặt ở tầm mắt nhân vật) ----------
 const FP = { on: false, yaw: -Math.PI / 2, pitch: 0, bobT: 0, bob: 0, run: 0, strafe: 0, sway: 0, swayY: 0, hand: 0, lastSwing: 0, locked: false, lockFailed: false, releasing: false };
 const SPRITES = new Set();
+// độ cao mặt đất: phố = 0, bậc thềm sau tường kè = TY, trên cầu thang thì dốc dần (lên thềm bằng cầu thang)
+function groundY(x, z) {
+  if (ZONE.interior || z >= WALL_Z) return 0;
+  for (const st of STAIRS) if (Math.abs(x - st.x) <= st.w / 2 + 0.05 && z > WALL_Z - STAIR_DEPTH) return TY * clamp((WALL_Z - z) / STAIR_DEPTH, 0, 1);
+  for (const b of BUILDINGS) if (x >= b.x0 && x <= b.x1) return 0;
+  return TY;
+}
+// zombie đang đi theo kịch bản trên thềm / trồi lên / lội nước: game tự đặt độ cao
+const NOGROUND = { terrace: 1, edge: 1, drop: 1, stairtop: 1, stairs: 1, rise: 1, wade: 1 };
 const DIR_ANG = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0), qYaw = new THREE.Quaternion();
 // hướng khung hình theo vị trí camera: zombie đi về phía mình thì thấy mặt, đi ra xa thì thấy lưng
@@ -136,13 +145,18 @@ function updateSpriteShadows() {
   const now = performance.now(), adt = animLast ? Math.min(0.1, (now - animLast) / 1000) : 0;
   animLast = now;
   for (const sp of SPRITES) {
+    if (!sp.group.parent) { SPRITES.delete(sp); continue; }
+    // đứng trên bậc thềm / cầu thang: nâng hình lên theo mặt đất
+    if (sp.group.visible) {
+      const gp = sp.group.position, off = sp.groundOK === false ? 0 : sp.groundOK === true || (gp.y <= 0.2 && gp.y >= -1) ? groundY(gp.x, gp.z) : 0;
+      if (sp.is3d) sp.yawNode.position.y = off; else sp.mesh.position.y = off;
+      sp.blob.position.y = 0.035 + off;
+    }
     if (sp.is3d) {
-      if (!sp.group.parent) { SPRITES.delete(sp); continue; }
       if (sp.group.visible) animateModel(sp, state.paused ? 0 : adt);
       continue;
     }
     if (!sp.shadow) continue;
-    if (!sp.group.parent) { SPRITES.delete(sp); continue; }
     const r = sp.group.rotation.y;
     sp.shadow.rotation.y = Math.PI / 4 - r; sp.shadow2.rotation.y = -Math.PI / 4 - r;
   }
@@ -643,7 +657,7 @@ function reload() {
 }
 function muzzlePos(out) {
   if (FP.on) { const c = Math.cos(player.aim), s2 = Math.sin(player.aim); return out.set(player.x + c * 0.75 - s2 * 0.12, camera.position.y - 0.28, player.z + s2 * 0.75 + c * 0.12); }
-  return out.set(player.x + Math.cos(player.aim) * 0.75, 1.0, player.z + Math.sin(player.aim) * 0.75);
+  return out.set(player.x + Math.cos(player.aim) * 0.75, 1.0 + groundY(player.x, player.z), player.z + Math.sin(player.aim) * 0.75);
 }
 let muzzleT = 0;
 function shoot() {
@@ -893,7 +907,7 @@ function addPickup(x, z, type, life = 22) {
   const mat = spriteLit(new THREE.MeshLambertMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, emissive: new THREE.Color(0.35, 0.35, 0.35), emissiveMap: map }));
   const geo = new THREE.PlaneGeometry(pickupAtlas.w * 1.2, pickupAtlas.h * 1.2); geo.translate(0, pickupAtlas.h * 0.6, 0);
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, 0.1, z); mesh.quaternion.copy(camQuat);
+  mesh.position.set(x, 0.1 + groundY(x, z), z); mesh.quaternion.copy(camQuat);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: type === 'med' ? new THREE.Color(1.2, 0.35, 0.3) : new THREE.Color(1.1, 0.9, 0.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
   glow.scale.set(1.3, 1.3, 1); glow.position.set(0, 0.5, -0.05);
   mesh.add(glow);
@@ -1432,6 +1446,7 @@ function clientZombies(dt) {
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i], s = z.sprite;
     z.t += dt; z.predT = (z.predT || 0) - dt;
+    s.groundOK = !NOGROUND[z.state];
     if (z.state === 'dead') {
       const k = Math.min(1, z.t / 0.35);
       s.mesh.rotation.x = -k * k * Math.PI / 2;
@@ -2442,7 +2457,8 @@ function botIdle(b, leader, ld, dt) {
       let a = rand(0, TAU);
       if (fpMe) a = FP.yaw + Math.PI + rand(-1.1, 1.1);
       const r = rand(1.6, 4.2), x = clamp(leader.x + Math.cos(a) * r, BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5), z = clamp(leader.z + Math.sin(a) * r * 0.7, BOUNDS.z0 + 0.3, BOUNDS.z1 - 0.3);
-      if (!insideSolid(x, z, 0.4)) { b.anchor = { x, z }; break; }
+      // đứng cùng độ cao với người dẫn đầu (người trên thềm thì bot leo cầu thang lên theo)
+      if (!insideSolid(x, z, 0.4) && Math.abs(groundY(x, z) - groundY(leader.x, leader.z)) < 0.6) { b.anchor = { x, z }; break; }
     }
   }
   if (fpMe && b.anchor) {
@@ -2451,6 +2467,7 @@ function botIdle(b, leader, ld, dt) {
     if (ax * Math.cos(FP.yaw) + az * Math.sin(FP.yaw) > 0.5 && Math.hypot(ax, az) < 5) b.idleT = 0;
   }
   const lx = leader.x + 0, lz = leader.z + 0;
+  if (b.anchor && Math.abs(groundY(b.anchor.x, b.anchor.z) - groundY(lx, lz)) > 0.6) b.idleT = 0;
   if (ld > 6 && b.anchor && Math.hypot(b.anchor.x - lx, b.anchor.z - lz) > 5) b.idleT = 0;
   if (b.anchor && Math.hypot(b.anchor.x - b.x, b.anchor.z - b.z) > 0.6) return [b.anchor.x, b.anchor.z];
   return null;
@@ -3051,7 +3068,7 @@ const EXITS = [null, 'w', 'e', 'n', 's'];
 const ENTRIES = ['start', 'w', 'e', 'n', 's', 'gate'];
 const OPP = { w: 'e', e: 'w', n: 's', s: 'n' };
 const ITEM_KEYS = Object.keys(ITEMS);
-const zt = { busy: false, wait: '', target: null };
+const zt = { busy: false, wait: '', target: null, lock: null };
 const zoneIdx = () => ZONE_IDS.indexOf(ZONE.id);
 let corpseSprites = [], camReveal = 0;
 // gợi ý đường đi tới một khu (tìm đường trên lưới các lối ra)
@@ -3136,6 +3153,8 @@ function loadZone(id, entry) {
   if (power) applyPowerVisual();
   if (Q.armory) unlockArmory(false);
   curBuilding = null; interact.target = null; interact.t = 0; player.action = null; player.searching = false;
+  // vừa tới nơi bằng lối/cầu thang phía nào thì khoá lối đó cho tới khi nhả phím (không bị đẩy qua lại giữa hai tầng)
+  zt.lock = ['w', 'e', 'n', 's'].includes(entry) ? entry : null;
   camReveal = 0;
   if (player.zombie) { placeAtEntry(entry); turnZombiePlace(); } else placeAtEntry(entry);
   if (!net.active || net.host) placeBots(); else { for (const v of botViews.values()) scene.remove(v.sp.group); botViews.clear(); }
@@ -3182,8 +3201,11 @@ function exitAt(mx, mz) {
   return null;
 }
 // đứng ở lối ra: solo thì đi luôn; co-op thì chờ cả đội cùng tới lối đó (chủ phòng quyết định)
+const pushing = (side, mx, mz) => (side === 'w' ? mx < -0.3 : side === 'e' ? mx > 0.3 : side === 'n' ? mz < -0.3 : mz > 0.3);
 function updateExit(mx, mz) {
+  if (zt.lock && !pushing(zt.lock, mx, mz)) zt.lock = null;
   player.exit = zt.busy ? null : exitAt(mx, mz);
+  if (player.exit && player.exit === zt.lock) player.exit = null;
   zt.wait = '';
   if (player.exit && ZONE.gateLock === player.exit && !Q.gateCut) player.exit = null;
   if (!player.exit) return;
@@ -3380,7 +3402,7 @@ function dropMesh(it) {
   return mesh;
 }
 function addDropLocal(d) {
-  d.mesh = dropMesh(d.it); d.mesh.position.set(d.x, 0.02, d.z);
+  d.mesh = dropMesh(d.it); d.mesh.position.set(d.x, 0.02 + groundY(d.x, d.z), d.z);
   drops.push(d);
   return d;
 }
@@ -3612,7 +3634,7 @@ function placeMine() {
   const body = new THREE.Mesh(mineGeo, mineMat); body.position.y = 0.06; body.castShadow = true; g.add(body);
   const led = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.06), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.3, 0.2) }));
   led.position.y = 0.14; g.add(led);
-  g.position.set(x, 0, z); scene.add(g);
+  g.position.set(x, groundY(x, z), z); scene.add(g);
   mines.push({ x, z, g, led, t: 0 });
   lootFeed('mine', 'Đã đặt mìn · tránh xa 3 m');
   sound.use('heal'); hud.dirty = true; renderBagIfOpen();
@@ -4079,7 +4101,7 @@ function updateViewer(dt) {
   setFrame(player.sprite, dirFromAngle(player.aim), player.moving ? Math.floor(player.walk) % 4 : 0, player.aim);
   player.sprite.group.position.set(player.x, 0, player.z);
   const ca = Math.cos(player.aim), sa = Math.sin(player.aim);
-  flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
+  flashlight.position.set(player.x + ca * 0.3, 1.15 + groundY(player.x, player.z), player.z + sa * 0.3);
   flashlight.target.position.set(player.x + ca * 9, 0.15, player.z + sa * 9);
   const hh = ((atmos.hour % 24) + 24) % 24;
   $('view-clock').textContent = String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0') + ' · ' + atmos.weatherName;
@@ -4209,13 +4231,15 @@ function updatePlayer(dt) {
     flashlight.target.position.set(player.x + ca * 9 * cp, Math.max(0, ey + Math.sin(FP.pitch) * 9 - 0.6), player.z + sa * 9 * cp);
     return;
   }
-  flashlight.position.set(player.x + ca * 0.3, 1.15, player.z + sa * 0.3);
+  flashlight.position.set(player.x + ca * 0.3, 1.15 + groundY(player.x, player.z), player.z + sa * 0.3);
   flashlight.target.position.set(player.x + ca * 9, 0.15, player.z + sa * 9);
 }
 
 function zombieTerrace(z, dt) {
   const s = z.sprite;
   const spd = z.speed * 0.9;
+  // có người đứng trên thềm gần đó: thôi đi theo đường cũ, đuổi thẳng trên thềm
+  if (z.state === 'terrace' && z.aggro !== false && TG.some((t) => groundY(t.x, t.z) > 1.2 && Math.hypot(t.x - z.x, t.z - z.z) < 8)) { z.state = 'walk'; z.y = 0; return; }
   if (z.state === 'terrace') {
     const dx = z.tx - z.x;
     if (Math.abs(dx) > 0.15) { z.x += Math.sign(dx) * Math.min(Math.abs(dx), spd * dt); z.dir = dx > 0 ? 'right' : 'left'; }
@@ -4263,6 +4287,7 @@ function updateZombies(dt) {
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i], s = z.sprite;
     z.t += dt;
+    s.groundOK = !NOGROUND[z.state];
     if (z.state === 'dead') {
       const k = Math.min(1, z.t / 0.35);
       s.mesh.rotation.x = -k * k * Math.PI / 2;
@@ -4491,7 +4516,7 @@ function draw2D() {
   g.globalAlpha = 1;
   for (const z of zombies) {
     if (z.state === 'dead' || (z.hp >= z.maxHp && z.type !== 'brute')) continue;
-    tmpV.set(z.x, z.y + z.sprite.h + 0.25, z.z).project(camera);
+    tmpV.set(z.x, z.y + z.sprite.h + 0.25 + (z.sprite.groundOK === false ? 0 : groundY(z.x, z.z)), z.z).project(camera);
     if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
@@ -4522,7 +4547,7 @@ function draw2D() {
       continue;
     }
     const down = rp.flags & 4;
-    tmpV.set(rp.x, down ? 0.9 : 2.3, rp.z).project(camera);
+    tmpV.set(rp.x, (down ? 0.9 : 2.3) + groundY(rp.x, rp.z), rp.z).project(camera);
     if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
@@ -4539,7 +4564,7 @@ function draw2D() {
     if (b.state === 'out') continue;
     const down = b.state === 'down';
     if (FP.on && !down && Math.hypot(b.x - player.x, b.z - player.z) > 7) continue;
-    tmpV.set(b.x, down ? 0.9 : 2.3, b.z).project(camera);
+    tmpV.set(b.x, (down ? 0.9 : 2.3) + groundY(b.x, b.z), b.z).project(camera);
     if (tmpV.z > 1) continue;
     const x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (x < -60 || x > W + 60 || y < -40 || y > H + 40) continue;
@@ -4567,7 +4592,7 @@ function draw2D() {
   }
   if (state.mode === 'play' && interact.target && !bagOpen) {
     const tg = interact.target, inf = tg.info;
-    tmpV.set(tg.x, 1.7, tg.z).project(camera);
+    tmpV.set(tg.x, 1.7 + groundY(tg.x, tg.z), tg.z).project(camera);
     let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.6); }
     const text = inf.can ? (isTouch ? inf.label : KN('use') + ' · ' + inf.label) : inf.label;
@@ -4595,7 +4620,7 @@ function draw2D() {
     g.fillStyle = '#f2c14e'; g.fillText(zt.wait, W / 2, H * 0.3 + 2);
   }
   if (state.mode === 'play' && player.action) {
-    tmpV.set(player.x, 2.35, player.z).project(camera);
+    tmpV.set(player.x, 2.35 + groundY(player.x, player.z), player.z).project(camera);
     let x = Math.round((tmpV.x * 0.5 + 0.5) * W), y = Math.round((-tmpV.y * 0.5 + 0.5) * H);
     if (FP.on) { x = Math.round(W / 2); y = Math.round(H * 0.56); }
     const k = Math.min(1, player.action.t / player.action.dur);
@@ -4780,7 +4805,8 @@ function fpCamera(dt) {
   const yaw = FP.yaw + (Math.random() - 0.5) * sk * 0.06;
   const pitch = clamp(FP.pitch + player.recoil * 0.7 + (Math.random() - 0.5) * sk * 0.06, -1.3, 1.3);
   const rx = -Math.sin(yaw), rz = Math.cos(yaw);
-  camera.position.set(player.x + rx * bx, eyeH + by, player.z + rz * bx);
+  FP.gy = (FP.gy ?? 0) + (groundY(player.x, player.z) - (FP.gy ?? 0)) * Math.min(1, dt * 14);
+  camera.position.set(player.x + rx * bx, eyeH + by + FP.gy, player.z + rz * bx);
   const cp = Math.cos(pitch);
   tmpV.set(camera.position.x + Math.cos(yaw) * cp, camera.position.y + Math.sin(pitch), camera.position.z + Math.sin(yaw) * cp);
   camera.lookAt(tmpV);
@@ -5235,6 +5261,7 @@ function init() {
   if (QS.has('debug')) window.__qplan = () => { const P = questPlan(); const out = {}; for (const it in QSPOTS) out[it] = P[it].map((i) => QSPOTS[it][i].t + ' @' + QSPOTS[it][i].z); return { seed: P.seed, out, here: world.containers.map((c) => [c.id, c.kind, c.label, questLoot(c).map((q) => q[0]).join(','), c.x, c.z]).filter((x) => x[3]), checked: [...player.qChecked], counts: Object.entries(QSPOTS).flatMap(([it, L]) => L.filter((sp) => sp.z === ZONE.id).map((sp) => [it, sp.t, world.containers.filter((o) => spotMatch(sp, o)).length])) }; };
   if (QS.has('debug')) window.__qseed = (n) => { net.gameId = n; };
   if (QS.has('debug')) window.__hurtBot = (ci, d) => hurtBot('b' + ci, d);
+  if (QS.has('debug')) window.__gy = () => [+player.x.toFixed(2), +player.z.toFixed(2), +groundY(player.x, player.z).toFixed(2), +player.sprite.yawNode?.position.y.toFixed(2)];
   if (QS.has('debug')) window.__poi = (k) => (world.pois[k] ? [world.pois[k].x, world.pois[k].z] : null);
   if (QS.has('debug')) window.__shInfo = () => { const out = []; for (const sp of SPRITES) { if (!sp.group.visible) continue; const e = sp.shadow.matrixWorld.elements; out.push([+sp.shadow.rotation.y.toFixed(2), sp.shadow.castShadow, sp.mesh.castShadow, sp.shadow.visible, !!sp.smat.map, e.slice(12, 15).map((v) => +v.toFixed(1)), sp.shadow.parent === sp.mesh]); if (out.length > 4) break; } return { sunYaw, n: SPRITES.size, out }; };
   if (QS.has('debug')) window.__shProxy = (on) => { for (const sp of SPRITES) if (sp.shadow) { sp.shadow.castShadow = sp.shadow2.castShadow = on; sp.mesh.castShadow = !on; } };

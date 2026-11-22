@@ -3,7 +3,7 @@
 
 export const BASE_MOD = {
   meleeDmg: 1, meleeRate: 1, gunDmg: 1, bowDmg: 1, bowRate: 1, bowPierce: 0, reload: 1,
-  craftTime: 1, healMul: 1, reviveTime: 1, maxHp: 0, infectTime: 300, carry: 1,
+  craftTime: 1, healMul: 1, reviveTime: 1, maxHp: 0, infectTime: 600, carry: 1,
   detect: 1, bite: 1, dodge: 0, stamina: 1, speed: 0,
   camTime: 25, camLoot: 0, battery: 1, search: 1, arrows: 3, arrowRecover: 0.6,
   takedown: 0, lift: 0, liftTime: 1, hack: 0, antidoteOut: 1, ammoCraft: 0, shove: 0, shoveCd: 1,

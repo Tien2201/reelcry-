@@ -756,10 +756,10 @@ function ensureDom() {
   boxEl = root.querySelector('#cine-box'); whoEl = boxEl.querySelector('.who'); txtEl = boxEl.querySelector('.txt'); ptEl = boxEl.querySelector('canvas');
   skipEl = root.querySelector('#cine-skip');
   fadeEl = root.querySelector('#cine-fade');
-  skipEl.addEventListener('click', (e) => { e.stopPropagation(); skip(); });
-  skipEl.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); skip(); }, { passive: false });
-  root.addEventListener('mousedown', (e) => { if (e.target !== skipEl) advance(); });
-  root.addEventListener('touchstart', (e) => { if (e.target !== skipEl) { e.preventDefault(); advance(); } }, { passive: false });
+  skipEl.addEventListener('click', (e) => { e.stopPropagation(); userSkip(); });
+  skipEl.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); userSkip(); }, { passive: false });
+  root.addEventListener('mousedown', (e) => { if (e.target !== skipEl) userAdvance(); });
+  root.addEventListener('touchstart', (e) => { if (e.target !== skipEl) { e.preventDefault(); userAdvance(); } }, { passive: false });
 }
 function portrait(key) {
   const sp = SPK[key];
@@ -821,6 +821,33 @@ function finish() {
   done();
 }
 function skip() { if (cur) finish(); }
+// co-op: chỉ chủ phòng được bỏ qua / tua thoại; máy khách đi theo chủ phòng
+let POLICY = null;
+const isLead = () => !POLICY || POLICY.lead();
+function setPolicy(p) { POLICY = p; }
+function updSkip() {
+  const lead = isLead();
+  skipEl.textContent = lead ? 'Bỏ qua ▶▶' : 'Chủ phòng sẽ bỏ qua';
+  skipEl.classList.toggle('wait', !lead);
+}
+function userSkip() {
+  if (!cur || !isLead()) return;
+  if (POLICY && POLICY.onSkip) POLICY.onSkip(cinema.id);
+  finish();
+}
+function userAdvance() {
+  if (!cur || !isLead()) return;
+  advance();
+  if (cur && POLICY && POLICY.onAdvance) POLICY.onAdvance(cinema.id, cur.i, cur.t);
+}
+// máy khách nhận vị trí phim của chủ phòng (chỉ tua tới, không lùi)
+function syncTo(id, i, t) {
+  if (!cur || cinema.id !== id || i < cur.i || i >= cur.list.length) return;
+  if (i > cur.i) { jump(i, t); return; }
+  if (t <= cur.t) return;
+  for (const c of cur.shot.cues || []) if (c[0] < t) cur.fired.add(c);
+  cur.t = t;
+}
 function lineAt(t) { const L = cur.shot.lines || []; let k = -1; for (let i = 0; i < L.length; i++) if (L[i][0] <= t) k = i; return k; }
 function advance() {
   if (!cur) return;
@@ -893,7 +920,10 @@ function play(id, opts = {}) {
     cinema.active = true; cinema.id = id;
     root.classList.remove('hidden');
     document.body.classList.add('cine');
+    updSkip();
     nextShot();
+    // chủ phòng đã bỏ qua phim này (hoặc tắt phim) trước khi máy này kịp chiếu
+    if (POLICY && POLICY.skipped && POLICY.skipped(id)) finish();
   });
 }
 // cảnh 3D do game định nghĩa (dựng bằng chính thế giới trong game)
@@ -906,4 +936,4 @@ function init(o) { sound = o.sound; ZA = o.zombies; }
 // gỡ lỗi: nhảy tới cảnh i, thời điểm t
 function jump(i, t = 0) { if (!cur) return; cur.i = i - 1; nextShot(); cur.t = t; cur.fired = new Set((cur.shot.cues || []).filter((c) => c[0] < t)); }
 function state() { return cur ? { id: cinema.id, i: cur.i, n: cur.list.length, t: +cur.t.toFixed(2) } : null; }
-export const cinema = { active: false, id: null, init, play, frame, skip, advance, amb, jump, state, define, is3D, titleShot, shot: (id) => SH[id], setTeam, who };
+export const cinema = { active: false, id: null, init, play, frame, skip, advance, userSkip, userAdvance, setPolicy, syncTo, amb, jump, state, define, is3D, titleShot, shot: (id) => SH[id], setTeam, who };

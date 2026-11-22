@@ -138,6 +138,8 @@ const L = {
   backpack: [[0.7, 'food', 1, 2], [0.6, 'water', 1, 2], [0.5, 'cloth', 1, 2], [0.35, 'bandage', 1, 1], [0.25, 'antibio', 1, 1], [0.3, 'battery', 1, 1], [0.3, 'cord', 1, 1]],
   locker: [[0.35, 'casing', 3, 8], [0.2, 'nails', 1, 3], [0.45, 'casing', 1, 3], [0.3, 'tape', 1, 1], [0.2, 'antibio', 1, 1], [0.3, 'battery', 1, 2], [0.06, 'flashlight', 1, 1]],
   chief_desk: [[0.5, 'casing', 3, 6], [0.4, 'casing', 2, 4]],
+  fuel: [[0.5, 'bottle', 1, 1], [0.4, 'cloth', 1, 1], [0.35, 'scrap', 1, 2], [0.2, 'alcohol', 1, 1]],
+  radio_desk: [[0.6, 'battery', 1, 2], [0.5, 'cord', 1, 1], [0.4, 'scrap', 1, 2]],
   trunk: [[0.4, 'water', 1, 2], [0.35, 'food', 1, 1], [0.5, 'scrap', 1, 2], [0.3, 'tape', 1, 1], [0.3, 'cord', 1, 1], [0.3, 'bottle', 1, 1], [0.2, 'battery', 1, 1]],
   truck: [[0.6, 'casing', 4, 10], [0.4, 'nails', 2, 4], [0.6, 'powder', 1, 2], [0.5, 'medkit', 1, 1], [0.6, 'scrap', 1, 3], [0.5, 'cord', 1, 2]],
   ambulance: [[0.9, 'bandage', 1, 3], [0.7, 'medkit', 1, 1], [0.8, 'antibio', 1, 2], [0.8, 'syringe', 1, 2], [0.3, 'antidote', 1, 1], [0.7, 'alcohol', 1, 2]],
@@ -174,17 +176,13 @@ const L = {
   z_charger: [[0.6, 'medkit', 1, 1], [0.4, 'powder', 1, 2], [0.5, 'scrap', 1, 3]],
   z_weeper: [[0.6, 'flower', 1, 1], [0.6, 'antidote', 1, 1]],
 };
-// đồ cố định (sách, nguyên liệu chế súng, đồ nhiệm vụ)
+// đồ cố định (sách, nguyên liệu chế súng); đồ nhiệm vụ đặt ngẫu nhiên mỗi ván (main.js: QSPOTS)
 const FIXED = {
-  fuel: [['fuel', 1]],
-  radio_desk: [['part', 1]],
-  truck: [['part', 1]],
-  chief_desk: [['key', 1], ['book_arms', 1]],
+  chief_desk: [['book_arms', 1]],
   armory: [['powder', 3], ['pipe', 1]],
   guard_desk: [['pipe', 1], ['flashlight', 1], ['book_arms', 1]],
   mall_guard: [['flashlight', 1]],
   teacher_desk: [['book_basic', 1]],
-  tool_shelf: [['cutters', 1]],
   med_cabinet: [['book_med', 1]],
   sports_rack: [['book_bow', 1], ['bow', 1]],
   canteen_counter: [['knife', 1]],

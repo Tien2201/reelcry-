@@ -287,6 +287,13 @@
   .sk-lock { color: #c88ae8; font-size: 16px; margin-bottom: 6px; }
   .bi button:disabled { opacity: .35; cursor: default; }
   #inf-row { font-size: 17px; color: #c8ffb8; }
+  /* hướng dẫn chữa khi bị nhiễm */
+  #cure-box { pointer-events: auto; width: min(330px, 32vw); padding: 6px 10px 8px; border-color: #6ae08a; font-size: 16px; line-height: 1.25; }
+  #cure-box .cb-t { color: #c8ffb8; font-size: 18px; margin-bottom: 3px; }
+  #cure-box.low .cb-t b { color: #ff6a5a; animation: blink .4s infinite alternate; }
+  #cb-list div { color: var(--ink); } #cb-list .ok { color: #8ae07a; } #cb-list .no { color: #e0a85a; } #cb-list small { color: var(--ink-dim); font-size: 14px; }
+  #cb-go { margin-top: 6px; width: 100%; font-family: inherit; font-size: 17px; padding: 4px 6px; background: #2e5a2a; color: #e8ffe0; border: 2px solid #8ae07a; cursor: pointer; }
+  body.touch #cure-box { font-size: 14px; width: 36vw; } body.touch #cure-box .cb-t { font-size: 15px; }
   #inf-row.low #inf-time { color: #ff6a5a; animation: blink .4s infinite alternate; }
   body.zmode #weapon-box, body.zmode #quick { opacity: .25; }
   #zbanner { position: absolute; left: 50%; top: calc(98px + var(--st)); transform: translateX(-50%); font-size: 22px; color: #d8ffc8; text-align: center;
@@ -532,6 +539,10 @@
   #quest-box { pointer-events: auto; cursor: pointer; }
   #quest-box:not(.open) #q-sub { display: none; }
   #quest-box.open #q-title i { display: inline-block; transform: rotate(180deg); }
+  #quest-box.open #q-sub { white-space: pre-wrap; max-height: 46vh; overflow-y: auto; }
+  body.touch #quest-box.open #q-sub { display: block; -webkit-line-clamp: unset; }
+  .qspots { display: flex; flex-direction: column; margin: 0 0 4px 18px; font-size: .86em; line-height: 1.15; color: var(--ink-dim); }
+  .qspots span.no { text-decoration: line-through; opacity: .6; }
   body.touch .ring { width: 48px; height: 48px; }
   body.touch .ring b { top: 10px; font-size: 19px; }
   body.touch .ring i { bottom: 7px; font-size: 11px; }
@@ -700,6 +711,7 @@
   body.cine #hud, body.cine #tpad, body.cine #msg, body.cine #saveflash { visibility: hidden !important; }
   #cine-skip { position: fixed; right: calc(12px + var(--sr)); top: calc(10px + var(--st)); z-index: 32; font-family: inherit; font-size: 19px; color: var(--ink); background: rgba(10,8,14,.65); border: 2px solid rgba(217,192,138,.6); padding: 3px 12px 4px; cursor: pointer; }
   #cine-skip:hover { border-color: var(--edge); }
+  #cine-skip.wait { pointer-events: none; opacity: .55; border-style: dashed; font-size: 16px; }
   @media (max-height: 520px) {
     #cine-box { padding: 5px 10px 6px 6px; gap: 8px; min-height: 60px; margin: 4px 0 4px; }
     #cine-box canvas { width: 54px; height: 45px; }
@@ -745,6 +757,7 @@
         <button class="tb" id="tb-pause" title="Tạm dừng (P)"><img alt=""><span>Dừng</span><kbd>P</kbd></button>
       </div>
       <div id="quest-box" class="win" title="Bấm để xem chi tiết"><div id="q-title">NHIỆM VỤ <i>▾</i></div><div id="q-text"></div><div id="q-sub"></div></div>
+      <div id="cure-box" class="win hidden"><div class="cb-t">☣ NHIỄM VIRUS · còn <b id="cb-time"></b></div><div id="cb-list"></div><button id="cb-go" class="hidden">CHẾ &amp; TIÊM THUỐC GIẢI</button></div>
     </div>
   </div>
   <div id="zbanner" class="hidden">BẠN ĐANG LÀ ZOMBIE · chờ đồng đội cho ăn <b>hoa bỉ ngạn</b> · gầm để gọi họ</div>

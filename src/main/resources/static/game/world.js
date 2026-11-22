@@ -1319,7 +1319,7 @@ export function buildWorld(scene, quality) {
       for (let i = 0; i < 3; i++) fb(misc, -44.15 + i * 0.36 - 0.15, -44.15 + i * 0.36 + 0.15, -7.4, -6.95, 0, 0.5, '#c8281e');
       shelfUnit(-44.5, -43.25, -7.45, -6.95, 1.5, 2, ['#c8281e', '#2a2a2e', '#d8a020'], 0.7);
       addBox(-44.55, -7.5, -43.2, -6.9);
-      container('fuel', -43.9, -6.45, 'Can xăng', b, { quest: true });
+      container('fuel', -43.9, -6.45, 'Kệ can xăng', b);
       for (let i = 0; i < 3; i++) misc.add(-49.0, 0.13 + i * 0.26, -3.0, 0.75, 0.24, 0.75, '#1a1a1c');
       addCircle(-49.0, -3.0, 0.4);
       for (let i = 0; i < 2; i++) { batch.add(fireBarrelGeoS, mDrum, mat4(-43.7 - i * 0.7, 0.45, -3.0)); }

@@ -290,8 +290,8 @@ const sticks = { move: null, aim: null };
 addEventListener('keydown', (e) => {
   if (quitted) return;
   if (cinema.active) {
-    if (e.code === 'Escape') cinema.skip();
-    else if (['Space', 'Enter', 'KeyE', 'NumpadEnter'].includes(e.code) && !e.repeat) cinema.advance();
+    if (e.code === 'Escape') cinema.userSkip();
+    else if (['Space', 'Enter', 'KeyE', 'NumpadEnter'].includes(e.code) && !e.repeat) cinema.userAdvance();
     e.preventDefault();
     return;
   }
@@ -549,7 +549,7 @@ function newPlayer() {
     bag: Object.fromEntries(Object.keys(ITEMS).map((k) => [k, 0])),
     melee: 'fist', durs: {}, armor: 0, pack: false, recipes: new Set(), books: new Set(),
     flashOn: true, battery: 0, torchT: 0, exit: null,
-    looted: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
+    looted: new Set(), qChecked: new Set(), lootCount: 0, action: null, swing: 0, searching: false,
     infected: 0, zombie: false, picked: new Set(), groanT: 0, coughT: 12,
     sprite: sp, char: ci, xp: 0, level: 1, sp: 0, learned: new Set(), shoveT: 0,
   };
@@ -1270,6 +1270,8 @@ function handleEvents(rp, list) {
     else if (type === 'ups' && net.host) { const z = zombies.find((o) => o.id === (ev[2] | 0)); if (z && z.state === 'pin') releasePin(z, 2.4, true); }
     else if (type === 'dr' && net.host) hostAddDrop(String(ev[2]), clamp(ev[3] | 0, 1, 99), (+ev[4] || 0) / 10, (+ev[5] || 0) / 10, rp.zone);
     else if (type === 'pk' && net.host) hostPickDrop(ev[2] | 0, rp.peer);
+    else if (type === 'cskip' && !net.host) { net.cskip = { id: String(ev[2]), at: performance.now() }; if (cinema.active && cinema.id === net.cskip.id) cinema.skip(); }
+    else if (type === 'cadv' && !net.host) cinema.syncTo(String(ev[2]), ev[3] | 0, (+ev[4] || 0) / 100);
     else if (type === 'ob' && !net.host) { if (calmNow() && !outbreakQueued && state.mode === 'play') { outbreakQueued = true; startOutbreak(); } }
   }
 }
@@ -1288,7 +1290,7 @@ function makeSnapshot(base) {
     gr: net.grants.slice(-6),
     bt: bots.map((b) => [b.ci, Math.round(b.x * 10), Math.round(b.z * 10), Math.round(b.aim * 100), botSpr(b), (b.moving ? 1 : 0) | (b.firing ? 2 : 0) | (b.state === 'down' || b.pinnedBy ? 4 : 0) | (b.state === 'out' ? 8 : 0), Math.round(b.hp)]),
     gt: GATE_CODES.indexOf((gateStates[ZONE.id] || { s: 'closed' }).s),
-    ob: story.seen.has('outbreak') ? 1 : 0, gc: Q.gateCut ? 1 : 0,
+    ob: story.seen.has('outbreak') ? 1 : 0, gc: Q.gateCut ? 1 : 0, cn: settings.cine ? 1 : 0,
   };
   // giữ presence dưới 4 KiB
   while (z.length > 8 && base + JSON.stringify(w).length > 3900) z.splice(z.length - 8, 8);
@@ -1331,6 +1333,7 @@ function applySnapshot(w) {
   if (Array.isArray(w.dp) && !zt.busy) syncDrops(w.dp);
   if (Array.isArray(w.bt) && !zt.busy) syncBotViews(w.bt);
   if (w.gt !== undefined && !zt.busy && world.pois.gate) gateVisual(GATE_CODES[w.gt | 0] || 'closed');
+  if (w.cn !== undefined) net.hostCine = w.cn !== 0;
   if (w.ob && calmNow() && !outbreakQueued && !cinema.active && !zt.busy) coopLateOutbreak();
   if (w.gc && !Q.gateCut) { Q.gateCut = true; openMainGate(true); }
   if (Array.isArray(w.gr)) for (const g of w.gr) if (Array.isArray(g) && g[0] === net.me && !net.grantSeen.has(g[3])) { net.grantSeen.add(g[3]); const it = ITEM_KEYS[g[1] | 0]; if (it) giveItems([[it, g[2] | 0]], true); }
@@ -1463,7 +1466,14 @@ function hurtPlayer(z, d) {
   infectPlayer(z);
 }
 function playerDied() {
-  if (!net.active) { gameOver(); return; }
+  if (!net.active) {
+    // chơi đơn: còn bạn (bot) đứng được thì gục chờ được cứu, không thì thua
+    if (player.downed > 0) return;
+    if (!bots.some((b) => b.state === 'ok')) { gameOver(); return; }
+    player.hp = 0; player.downed = 30; player.action = null; player.searching = false; player.pinned = 0;
+    showMsg('BẠN ĐÃ GỤC', 'Đồng đội đang tới cứu · còn 30 giây');
+    hud.dirty = true; return;
+  }
   if (player.downed > 0 || player.dead || player.zombie) return;
   player.hp = 0; player.downed = 35; player.action = null; player.searching = false;
   showMsg('BẠN ĐÃ GỤC', 'Chờ đồng đội tới cứu · còn 35 giây');
@@ -1484,18 +1494,49 @@ function hostCheckWipe() {
 }
 
 // ================= NHIỄM VIRUS · HOÁ ZOMBIE · HOA BỈ NGẠN =================
-// bị cắn có thể nhiễm virus: 5 phút để chế & tiêm thuốc giải (Kháng sinh + Ống tiêm),
+// bị cắn có thể nhiễm virus: 10 phút để chế & tiêm thuốc giải (Kháng sinh + Ống tiêm),
 // không kịp thì hoá zombie ở một chỗ bất kỳ; đồng đội tìm hoa bỉ ngạn cho ăn để hồi sinh.
-const INFECT_TIME = 300;
-const BITE_CHANCE = { walker: 0.35, runner: 0.35, brute: 0.6, bloater: 0.1, spitter: 0.15, pouncer: 0.45, charger: 0.15, weeper: 0.5 };
+const INFECT_TIME = 600;   // 10 phút từ lúc bị cắn tới lúc hoá zombie
+// tỉ lệ một đòn trúng là vết cắn lây virus: cào/cắn thì có, húc/đấm/nổ thì không
+const BITE_CHANCE = { walker: 0.25, runner: 0.3, brute: 0.1, bloater: 0, spitter: 0.05, pouncer: 0.55, charger: 0, weeper: 0.6 };
 function infectPlayer(z) {
   if (player.zombie || player.boarded || state.mode !== 'play') return;
-  if (player.infected > 0) { player.infected = Math.max(20, player.infected - 15); return; }
-  if (Math.random() >= (BITE_CHANCE[z.type] || 0.35) * player.mod.bite) return;
+  let p = BITE_CHANCE[z.type] ?? 0.25;
+  if (player.armor > 0) p *= 0.5;   // áo giáp đệm chặn bớt vết cắn
+  if (Math.random() >= p * player.mod.bite) return;
+  // đang nhiễm mà bị cắn tiếp: virus lan nhanh hơn (bớt 15 giây), không bao giờ làm tăng thời gian còn lại
+  if (player.infected > 0) {
+    player.infected = Math.max(Math.min(player.infected, 10), player.infected - 15);
+    floaters.push({ x: player.x, y: 2.4, z: player.z, text: 'VIRUS LAN NHANH HƠN', t: 1.2, color: '#9ae07a' });
+    hud.dirty = true; return;
+  }
   player.infected = player.infMax = player.mod.infectTime;
-  showMsg('BỊ CẮN — NHIỄM VIRUS!', `Có ${Math.round(player.infMax / 60)} phút chế thuốc giải: Kháng sinh + Ống tiêm` + (isTouch ? '' : ' (phím ' + KN('cure') + ')'));
+  showMsg('BỊ CẮN — NHIỄM VIRUS!', `Còn ${Math.round(player.infMax / 60)} phút trước khi hoá zombie · xem hướng dẫn chữa bên phải`);
+  player.recipes.add('antidote');   // ai bị nhiễm cũng biết cách chế thuốc giải, không cần sách
   sound.infect();
   hud.dirty = true;
+}
+// bảng hướng dẫn chữa: còn bao lâu, đã có gì, tìm ở đâu, bấm gì
+function updateCureGuide(inf) {
+  const box = $('cure-box');
+  box.classList.toggle('hidden', !inf || player.zombie);
+  if (!inf) { box._sig = ''; return; }
+  setText('cb-time', `${Math.floor(inf / 60)}:${String(inf % 60).padStart(2, '0')}`);
+  box.classList.toggle('low', inf < 90);
+  const has = (k) => (player.bag[k] || 0) > 0, key = isTouch ? 'nút bên dưới' : 'phím ' + KN('cure');
+  const ready = has('antidote') || (has('antibio') && has('syringe'));
+  const sig = [has('antidote'), has('antibio'), has('syringe'), net.active, isTouch].join();
+  if (sig !== box._sig) {
+    box._sig = sig;
+    const row = (ok, name, where) => `<div class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${name}${ok ? '' : ` <small>· ${where}</small>`}</div>`;
+    $('cb-list').innerHTML = has('antidote')
+      ? `<div class="ok">✓ Đã có Thuốc giải · tiêm ngay: ${key}</div>`
+      : 'Cách chữa: chế Thuốc giải từ'
+        + row(has('antibio'), 'Kháng sinh', 'phòng y tế, nhà thuốc, xe cứu thương, ba lô')
+        + row(has('syringe'), 'Ống tiêm', 'phòng y tế, phòng thí nghiệm, xe cứu thương')
+        + `<div><small>${has('antibio') && has('syringe') ? 'Đủ rồi · ' + key + ' để chế và tiêm' : 'Đủ 2 thứ thì ' + key + ' để chế và tiêm'}${net.active ? ' · hoặc nhờ bạn có thuốc giải tiêm giúp' : ''}</small></div>`;
+    $('cb-go').classList.toggle('hidden', !ready);
+  }
 }
 function cureInfection(byName) {
   player.infected = 0;
@@ -1622,6 +1663,76 @@ function questDone(it) {
   if (ITEMS[it] && ITEMS[it].book) return (player.bag[it] || 0) > 0;
   return false;
 }
+// ---------- đồ nhiệm vụ: mỗi ván nằm ở một chỗ khác (cả phòng co-op giống nhau, theo mã ván) ----------
+const QSPOTS = {
+  cutters: [
+    { z: 'sf3', k: ['tool_shelf', 'toolbox'], bk: 'storage', t: 'Kho dụng cụ · tầng 3' },
+    { z: 'sf1', k: ['guard_desk', 'locker'], bk: 'guardroom', t: 'Phòng bảo vệ · tầng 1' },
+    { z: 'sf3', k: ['storage_club', 'sports_rack'], bk: 'club', t: 'CLB bắn cung · tầng 3' },
+    { z: 'sf2', k: ['lab_shelf'], bk: 'lab', t: 'Phòng thí nghiệm · tầng 2' },
+    { z: 'sf1', k: ['cabinet', 'teacher_desk'], bk: 'teachers', t: 'Phòng giáo viên · tầng 1' },
+  ],
+  fuel: [
+    { z: 'downtown', k: ['fuel', 'toolbox'], bk: 'garage', t: 'Gara sửa xe · Trung tâm' },
+    { z: 'market', k: ['fuel', 'toolbox'], bk: 'garage', t: 'Gara sửa xe · Phố chợ' },
+    { z: 'downtown', k: ['register', 'shelf_food', 'drinks'], b: 'kiosk', t: 'Cửa hàng xăng dầu · Trung tâm' },
+    { z: 'residential', k: ['trunk'], t: 'Cốp xe ngoài phố · Khu dân cư' },
+    { z: 'market', k: ['trunk'], t: 'Cốp xe, xe giao hàng · Phố chợ' },
+  ],
+  part: [
+    { z: 'downtown', k: ['radio_desk', 'parts_shelf', 'backpack'], b: 'radio', t: 'Nhà ông Tư · Trung tâm' },
+    { z: 'downtown', k: ['truck', 'ammo_crate'], t: 'Xe quân sự, chốt kiểm soát · Trung tâm' },
+    { z: 'downtown', k: ['locker', 'desk'], b: 'police', t: 'Tủ đồ, bàn làm việc trong đồn · Trung tâm' },
+    { z: 'market', k: ['mall_guard', 'register'], bk: 'mall', t: 'Trung tâm thương mại · Phố chợ' },
+  ],
+  key: [
+    { z: 'downtown', k: ['chief_desk'], b: 'police', t: 'Bàn trưởng đồn' },
+    { z: 'downtown', k: ['locker'], b: 'police', t: 'Tủ đồ cảnh sát trong đồn' },
+    { z: 'downtown', k: ['desk', 'register'], b: 'police', t: 'Bàn làm việc, quầy tiếp dân trong đồn' },
+    { z: 'downtown', k: ['trunk'], lb: 'cảnh sát', t: 'Cốp xe cảnh sát trước đồn' },
+  ],
+};
+function spotMatch(sp, c) {
+  if (!sp.k.includes(c.kind) || (sp.b && c.b !== sp.b)) return false;
+  if (sp.bk) { const b = BUILDINGS.find((o) => o.id === c.b); if (!b || b.kind !== sp.bk) return false; }
+  return !sp.lb || (c.label || '').toLowerCase().includes(sp.lb);
+}
+let QP = { seed: null };
+function questPlan() {
+  const seed = (net.active && !net.host ? net.gameSeen : net.gameId) || 7;
+  if (QP.seed === seed) return QP;
+  const r = makeRng(Math.abs(seed % 1e6) * 17 + 4241), pick = (n) => Math.floor(r() * n);
+  QP = { seed };
+  for (const it of ['cutters', 'fuel', 'key']) QP[it] = [pick(QSPOTS[it].length)];
+  const a = pick(QSPOTS.part.length); let b = pick(QSPOTS.part.length - 1); if (b >= a) b++;
+  QP.part = [a, b];
+  return QP;
+}
+// đồ nhiệm vụ nằm trong chỗ c (nếu ván này nó được đặt đúng ở đây)
+function questLoot(c) {
+  const P = questPlan(), out = [];
+  for (const it in QSPOTS) for (const i of P[it]) {
+    const sp = QSPOTS[it][i];
+    if (sp.z !== ZONE.id || !spotMatch(sp, c) || questDone(it)) continue;
+    const list = world.containers.filter((o) => spotMatch(sp, o));
+    const k = Math.floor(makeRng(Math.abs(P.seed % 1e6) * 7 + i * 131 + it.length * 977)() * list.length);
+    if (list[k] === c) out.push([it, 1]);
+  }
+  return out;
+}
+// đánh dấu chỗ đã lục hết (để gợi ý nhiệm vụ gạch bớt)
+function questCheck(c) {
+  for (const it in QSPOTS) QSPOTS[it].forEach((sp, i) => {
+    if (sp.z !== ZONE.id || !spotMatch(sp, c)) return;
+    if (world.containers.filter((o) => spotMatch(sp, o)).every((o) => player.looted.has(o.id))) player.qChecked.add(it + i);
+  });
+  hud.dirty = true;
+}
+// danh sách chỗ có thể có đồ (✗ = đã lục hết)
+function spotLines(it) {
+  return QSPOTS[it].map((sp, i) => (player.qChecked.has(it + i) ? '✗ ' + sp.t + ' (đã lục)' : '• ' + sp.t));
+}
+const spotHint = (it) => 'Có thể ở:\n' + spotLines(it).join('\n');
 function questDescribe(key) {
   if (key === 'radio') {
     if (!Q.found) return { label: 'Kiểm tra bộ đàm', can: true, time: 0.7 };
@@ -1690,7 +1801,7 @@ function questText() {
   if (Q.won) return ['ĐÃ ĐƯỢC GIẢI CỨU', ''];
   if (player.zombie) return ['BẠN ĐANG LÀ ZOMBIE', 'Chờ đồng đội cho ăn hoa bỉ ngạn · ' + (isTouch ? 'GẦM' : 'E') + ': gầm gọi họ'];
   if (net.active) { const zf = [...net.players.values()].find((r) => r.flags & 128); if (zf) return [`CỨU ${zf.name.toUpperCase()}!`, player.bag.flower > 0 ? 'Mang hoa bỉ ngạn tới cho bạn ăn' : 'Tìm HOA BỈ NGẠN (đỏ, phát sáng) rồi cho bạn ăn']; }
-  if (player.infected > 0) return ['NHIỄM VIRUS · CHẾ THUỐC GIẢI', 'Kháng sinh + Ống tiêm · nhà thuốc, xe cứu thương' + (isTouch ? '' : ' · phím ' + KN('cure'))];
+  if (player.infected > 0) return ['NHIỄM VIRUS · CHẾ THUỐC GIẢI', 'Kháng sinh + Ống tiêm · xem bảng hướng dẫn chữa bên dưới'];
   const toDT = routeHint('downtown');
   if (Q.heli && Q.heli.stage === 'wait') return ['LÊN TRỰC THĂNG Ở BÃI ĐÁP!', `Còn ${Math.ceil(Q.heli.left)} giây · ` + (toDT || 'bãi đáp cuối phố →')];
   if (Q.heli) return ['Trực thăng đang tới…', toDT || 'Chạy về bãi đáp cuối phố →'];
@@ -1699,14 +1810,15 @@ function questText() {
   if (isFloor(ZONE.id)) {
     const hint = !player.books.has('basic') ? 'Lục bàn giáo viên tìm sách chế đồ' : !armed ? 'Chế vũ khí: 2 thanh gỗ = gậy gỗ' : '';
     if (calmNow()) return ['Đến lớp 11A', ZONE.id === 'sf2' ? 'Tiết Sinh học sắp bắt đầu · lớp 11A ở phía đông hành lang' : ZONE.id === 'sf1' ? 'Lên tầng 2: cầu thang cuối hành lang →' : 'Xuống tầng 2'];
-    if (!Q.gateCut && !(player.bag.cutters > 0)) return ['Tìm KỀM CẮT', (ZONE.id === 'sf3' ? 'Kho dụng cụ ở tầng này' : ZONE.id === 'sf2' ? 'Kho dụng cụ tầng 3: cầu thang phía tây ←' : 'Kho dụng cụ ở tầng 3') + (hint ? '\n' + hint : '')];
+    if (!Q.gateCut && !(player.bag.cutters > 0)) return ['Tìm KỀM CẮT', spotHint('cutters') + (hint ? '\n' + hint : '')];
     if (!Q.gateCut) return ['Cắt khoá cổng chính', ZONE.id === 'sf1' ? 'Cổng ở cuối hành lang phía tây ←' : 'Xuống tầng 1'];
     return ['Ra khỏi trường', ZONE.id === 'sf1' ? 'Đi qua cổng chính ←' : 'Xuống tầng 1, ra cổng chính'];
   }
   if (!Q.found) return ['Tìm bộ đàm ở ĐỒN CẢNH SÁT', toDT ? 'Ở Trung tâm thành phố · ' + toDT : 'Đồn cảnh sát ở cuối phố phía đông →'];
   if (power && Q.parts >= 2) return ['Dùng bộ đàm GỌI CỨU HỘ', toDT || 'Bàn bộ đàm trong đồn cảnh sát'];
-  const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm can xăng ở GARA (Trung tâm, Phố chợ)');
-  const b = `• Linh kiện bộ đàm ${Q.parts}/2` + (player.bag.part ? ` (đang mang ${player.bag.part})` : ' · nhà ông Tư, xe quân sự (Trung tâm)');
+  const a = power ? '✓ Máy phát đã có điện' : (player.bag.fuel ? '• Đổ xăng vào máy phát cạnh đồn' : '• Tìm CAN XĂNG · ' + spotHint('fuel').replace(/\n/g, '\n   '));
+  const needP = Q.parts + (player.bag.part || 0) < 2;
+  const b = `• Linh kiện bộ đàm ${Q.parts}/2` + (player.bag.part ? ` (đang mang ${player.bag.part})` : '') + (needP ? ' · ' + spotHint('part').replace(/\n/g, '\n   ') : ' · mang về bộ đàm trong đồn');
   return ['Sửa bộ đàm để gọi cứu hộ', a + '\n' + b];
 }
 function questListHtml() {
@@ -1714,20 +1826,21 @@ function questListHtml() {
   const ready = power && Q.parts >= 2;
   const book = player.books.has('basic'), armed = player.melee !== 'fist' || player.guns.some((g, i) => i > 0 && g.owned);
   const out = !isFloor(ZONE.id) || Q.gateCut;
+  const spots = (k, need) => need ? '<div class="qspots">' + spotLines(k).map((l) => `<span class="${l[0] === '✗' ? 'no' : ''}">${l}</span>`).join('') + '</div>' : '';
   return '<b style="color:var(--gold);font-weight:400">NHIỆM VỤ</b>'
     + it(!calmNow(), calmNow(), 'Đến lớp 11A (tầng 2) học tiết Sinh')
     + it(book, !calmNow() && !book, 'Lục bàn giáo viên để tìm sách chế đồ')
     + it(armed, book && !armed, 'Chế vũ khí đầu tiên ở bàn chế đồ')
-    + it(!!Q.gateCut || player.bag.cutters > 0, !calmNow() && !Q.gateCut && !(player.bag.cutters > 0), 'Tìm kềm cắt ở kho dụng cụ tầng 3')
+    + it(!!Q.gateCut || player.bag.cutters > 0, !calmNow() && !Q.gateCut && !(player.bag.cutters > 0), 'Tìm kềm cắt (mỗi ván một chỗ khác)') + spots('cutters', !Q.gateCut && !(player.bag.cutters > 0))
     + it(!!Q.gateCut, player.bag.cutters > 0 && !Q.gateCut, 'Cắt khoá cổng chính ở tầng 1, ra khỏi trường')
     + (out ? '' : '<div style="margin:4px 0;color:var(--ink-dim)">— Sau khi ra khỏi trường —</div>')
     + it(Q.found, !Q.found, 'Tìm bộ đàm ở đồn cảnh sát (Trung tâm thành phố)')
-    + it(power, Q.found && !power, 'Can xăng ở gara → đổ vào máy phát cạnh đồn')
-    + it(Q.parts >= 2, Q.found && Q.parts < 2, `Linh kiện bộ đàm ${Q.parts}/2 · nhà ông Tư, xe quân sự ở chốt kiểm soát`)
+    + it(power, Q.found && !power, 'Tìm can xăng → đổ vào máy phát cạnh đồn') + spots('fuel', !power && !(player.bag.fuel > 0))
+    + it(Q.parts >= 2, Q.found && Q.parts < 2, `Linh kiện bộ đàm ${Q.parts}/2 (cần 2)`) + spots('part', Q.parts + (player.bag.part || 0) < 2)
     + it(Q.called, ready && !Q.called, 'Gọi trực thăng cứu hộ')
     + it(!!Q.heli, Q.called && !Q.heli, 'Cầm cự tới bình minh')
     + it(Q.won, !!Q.heli, 'Lên trực thăng ở bãi đáp')
-    + '<div style="margin-top:6px;color:var(--ink-dim)">Không có súng thật: súng, đạn và mìn đều phải <b>tự chế</b> (ống thép, thuốc pháo, bi sắt, đinh)<br>Kho vật chứng trong đồn cần chìa khoá · bàn trưởng đồn</div>';
+    + '<div style="margin-top:6px;color:var(--ink-dim)">Không có súng thật: súng, đạn và mìn đều phải <b>tự chế</b> (ống thép, thuốc pháo, bi sắt, đinh)<br>Kho vật chứng trong đồn cần chìa khoá</div>' + (Q.armory || player.bag.key > 0 ? '' : '<div class="qspots"><b style="font-weight:400">Chìa khoá kho vật chứng có thể ở:</b>' + spotLines('key').map((l) => `<span class="${l[0] === '✗' ? 'no' : ''}">${l}</span>`).join('') + '</div>');
 }
 
 // ---------- trực thăng cứu hộ ----------
@@ -1904,7 +2017,8 @@ function doInteract(tg) {
   if (tg.type === 'c') {
     const c = tg.c;
     player.looted.add(c.id);
-    giveItems(rollLoot(c.kind, Math.random, questDone));
+    giveItems([...questLoot(c), ...rollLoot(c.kind, Math.random, questDone)]);
+    questCheck(c);
     gainXP(2, false);
   } else if (tg.type === 'z') {
     tg.zo.looted = true;
@@ -2340,9 +2454,20 @@ function botTask(id, poi) {
   b.task = { poi, t: 0, stuckT: 0 };
   floaters.push({ x: b.x, y: 2.5, z: b.z, text: 'Để tôi!', t: 1.2, color: CHARS[b.ci].color });
 }
+// người đang gục chờ cứu (chính mình, hoặc bạn co-op khi mình là chủ phòng); bot rảnh gần nhất tới cứu
+function downedMate() {
+  let t = null;
+  if (player.downed > 0 && !player.zombie) t = { x: player.x, z: player.z, local: true };
+  else if (net.active) for (const rp of net.players.values()) if (rp.inited && rp.here && rp.flags & 4 && !(rp.flags & (8 | 128))) { t = { x: rp.x, z: rp.z, peer: rp.peer }; break; }
+  if (!t) return null;
+  let bd = 1e9;
+  for (const b of bots) if (b.state === 'ok' && !b.pinnedBy) { const d = Math.hypot(b.x - t.x, b.z - t.z); if (d < bd) { bd = d; t.bot = b; } }
+  return t.bot ? t : null;
+}
 function updateBots(dt) {
   if (net.active && !net.host) { updateBotViews(dt); return; }
   const humans = TG.filter((t) => !t.bot);
+  const downed = downedMate();
   for (const b of bots) {
     const s = b.sp;
     b.firing = false; b.moving = false; b.hitT -= dt;
@@ -2366,6 +2491,7 @@ function updateBots(dt) {
     b.cd -= dt;
     let gx, gz, tz = null, td = 1e9;
     b.searching = false;
+    const R = downed && downed.bot === b ? downed : null;
     for (const z of zombies) {
       if (z.state === 'dead' || z.y > 0.3 || z.state === 'rise' || (z.type === 'weeper' && !z.aggro)) continue;
       const d = Math.hypot(z.x - b.x, z.z - b.z), range = b.weapon === 4 ? 11 : 6.5;
@@ -2379,6 +2505,19 @@ function updateBots(dt) {
       else {
         b.task.t += dt; b.aim = Math.atan2(P.z - b.z, P.x - b.x);
         if (b.task.t > 1.6) { botDoTask(b, b.task.poi); b.task = null; }
+      }
+    } else if (R && !(tz && td < 1.8)) {
+      // tới kéo bạn dậy (trừ khi zombie đang sát bên)
+      const d = Math.hypot(R.x - b.x, R.z - b.z);
+      b.search = null; b.anchor = null;
+      if (d > 1.1) { gx = R.x; gz = R.z; b.revT = 0; }
+      else {
+        b.revT = (b.revT || 0) + dt; b.searching = true; b.aim = Math.atan2(R.z - b.z, R.x - b.x);
+        if (b.revT > 2.5) {
+          b.revT = 0;
+          if (R.local) revived({ name: CHARS[b.ci].name }); else netEvent('rv', R.peer);
+          floaters.push({ x: b.x, y: 2.5, z: b.z, text: 'Dậy đi!', t: 1.2, color: CHARS[b.ci].color });
+        }
       }
     } else if (tz) {
       b.aim = Math.atan2(tz.z - b.z, tz.x - b.x);
@@ -2730,6 +2869,7 @@ function releasePin(z, stun, fromVictim = false) {
 function setPinned(id) {
   if (player.pinned === id) return;
   player.pinned = id; player.struggle = 0; player.pinDmgT = 0.6; player.action = null; player.searching = false;
+  infectPlayer({ type: 'pouncer' });   // bị vồ ghì xuống: có thể bị cắn lây
   showMsg('BỊ ZOMBIE VỒ!', isTouch ? 'Bấm VÙNG liên tục để thoát' : 'Bấm ' + KN('use') + ' liên tục để vùng ra');
 }
 function breakPin() {
@@ -3266,7 +3406,7 @@ function craft(id) {
   const R = RECIPES.find((r) => r.id === id);
   if (!R || player.zombie || state.mode !== 'play') return;
   if (R.book === 'naryne' && !naryneHelp()) { lootFeed(R.out, naryneNote(), true); return; }
-  if (R.book !== 'naryne' && !player.recipes.has(R.id)) { lootFeed(R.out, 'Chưa biết cách chế · tìm ' + BOOKS[R.book].name, true); return; }
+  if (R.book !== 'naryne' && !player.recipes.has(R.id) && !(R.id === 'antidote' && player.infected > 0)) { lootFeed(R.out, 'Chưa biết cách chế · tìm ' + BOOKS[R.book].name, true); return; }
   if (!canCraft(R)) { lootFeed(R.out, 'Thiếu ' + Object.keys(R.need).filter((k) => (player.bag[k] || 0) < R.need[k]).map((k) => ITEMS[k].name).join(' + '), true); return; }
   for (const [k, v] of Object.entries(R.need)) player.bag[k] -= v;
   finishCraft(R);
@@ -3615,6 +3755,7 @@ function updateHud() {
   $('hp-box').classList.toggle('low', player.hp < 30);
   const inf = player.infected > 0 ? Math.ceil(player.infected) : 0;
   $('inf-row').classList.toggle('hidden', !inf);
+  updateCureGuide(inf);
   if (inf) { setText('inf-time', `${Math.floor(inf / 60)}:${String(inf % 60).padStart(2, '0')}`); $('inf-row').classList.toggle('low', inf < 60); }
   $('zbanner').classList.toggle('hidden', !player.zombie);
   document.body.classList.toggle('zmode', !!player.zombie);
@@ -3873,10 +4014,11 @@ function updateViewer(dt) {
 // ================= CẬP NHẬT =================
 function updatePlayer(dt) {
   if (player.zombie) { updateZombieForm(dt); return; }
-  if (net.active && (player.downed > 0 || player.dead || player.boarded)) {
+  if ((net.active && (player.downed > 0 || player.dead || player.boarded)) || (!net.active && player.downed > 0)) {
     if (player.downed > 0) {
       player.downed -= dt;
-      if (player.downed <= 0) { player.downed = 0; turnZombie(); return; }
+      if (!net.active && !bots.some((b) => b.state === 'ok')) { gameOver(); return; }
+      if (player.downed <= 0) { player.downed = 0; if (!net.active) { gameOver('KHÔNG AI KỊP CỨU'); return; } turnZombie(); return; }
     }
     player.sprite.mesh.rotation.x = player.downed > 0 ? -Math.PI / 2 : 0;
     player.sprite.group.position.set(player.x, 0.05, player.z);
@@ -4384,6 +4526,13 @@ function draw2D() {
     g.fillStyle = 'rgba(0,0,0,.75)'; g.fillRect(x - 31, y - 2, 62, 7);
     g.fillStyle = '#7fe07f'; g.fillRect(x - 30, y - 1, 60 * k, 5);
   }
+  if (state.mode === 'play' && !state.paused && FP.on && !isTouch && !FP.locked && !bagOpen && !craftUI.open && !mapOpen) {
+    const t = FP.lockFailed ? 'Giữ CHUỘT PHẢI và kéo để nhìn quanh · ← → để xoay' : 'BẤM CHUỘT VÀO MÀN HÌNH ĐỂ ĐIỀU KHIỂN GÓC NHÌN';
+    g.font = '22px "VT323", monospace';
+    const tw = Math.ceil(g.measureText(t).width) + 28, y = Math.round(H * 0.38);
+    g.fillStyle = 'rgba(10,8,14,.78)'; g.fillRect(W / 2 - tw / 2, y - 19, tw, 30);
+    g.fillStyle = '#f2c14e'; g.fillText(t, W / 2, y + 2);
+  }
   if (state.mode === 'play' && !state.paused) {
     if (FP.on || (!isTouch && mouse.has)) {
       const sp = (FP.on ? 5 : 7) + player.recoil * 30, x = Math.round(FP.on ? W / 2 : mouse.x), y = Math.round(FP.on ? H / 2 : mouse.y);
@@ -4445,12 +4594,6 @@ function fpAim(dt, as) {
     const k = Math.pow(as.m, 1.6) * (settings.sens || 100) / 100;
     FP.yaw += as.x * k * 3.0 * dt;
     FP.pitch = clamp(FP.pitch - as.y * k * 1.8 * dt, -1.2, 1.2);
-  }
-  // không khoá được con trỏ (khung nhúng): đưa chuột sát mép màn hình để xoay tiếp
-  if (!isTouch && !FP.locked && mouse.has && !state.paused) {
-    const ex = mouse.x / W;
-    if (ex < 0.07) FP.yaw -= dt * 2.4 * (1 - ex / 0.07);
-    else if (ex > 0.93) FP.yaw += dt * 2.4 * ((ex - 0.93) / 0.07);
   }
   FP.yaw = angDiff(FP.yaw, 0);
   let firing = !!interact.atkHold || (!isTouch && mouse.down && (FP.locked || FP.lockFailed));
@@ -4577,22 +4720,38 @@ function toggleView() {
   toast(settings.view === 'fp' ? 'Góc nhìn thứ nhất' + (isTouch ? ' · kéo bên phải để nhìn quanh' : ' · bấm chuột để khoá con trỏ') : 'Góc nhìn thứ ba (diorama)');
   if (settingsOpen) renderSettings();
 }
+// xoay nhìn bằng chuột: chỉ khi đã khoá con trỏ (bấm vào màn hình); trang không cho khoá thì giữ chuột phải + kéo
 addEventListener('mousemove', (e) => {
-  if (!FP.on || state.paused || bagOpen || craftUI.open || mapOpen || skillsOpen || settingsOpen) return;
-  if (!FP.locked && e.target !== canvas) return;
+  if (!FP.on || state.paused || bagOpen || craftUI.open || mapOpen || skillsOpen || settingsOpen || cinema.active) return;
+  const dx = e.movementX || 0, dy = e.movementY || 0;
+  if (FP.locked) { if (Math.abs(dx) > 300 || Math.abs(dy) > 300) return; }   // bỏ cú giật bất thường của trình duyệt
+  else if (!(FP.lockFailed && e.buttons & 2)) return;
   const k = 0.0022 * (settings.sens || 100) / 100;
-  FP.yaw += e.movementX * k; FP.pitch = clamp(FP.pitch - e.movementY * k, -1.25, 1.25);
-  FP.sway = clamp(FP.sway - e.movementX * 0.06, -9, 9); FP.swayY = clamp(FP.swayY + e.movementY * 0.05, -6, 6);
+  FP.yaw += dx * k; FP.pitch = clamp(FP.pitch - dy * k, -1.25, 1.25);
+  FP.sway = clamp(FP.sway - dx * 0.06, -9, 9); FP.swayY = clamp(FP.swayY + dy * 0.05, -6, 6);
 });
 document.addEventListener('pointerlockchange', () => {
   FP.locked = document.pointerLockElement === canvas;
+  if (FP.locked) FP.lockFails = 0; else FP.unlockT = performance.now();
   if (!FP.locked && !FP.releasing && FP.on && state.mode === 'play' && !state.paused && !bagOpen && !craftUI.open && !mapOpen && !skillsOpen) togglePause();
   FP.releasing = false;
 });
-document.addEventListener('pointerlockerror', () => { FP.lockFailed = true; });
+// lỗi khoá chuột thường chỉ tạm thời (vd. bấm lại ngay sau Esc): chỉ coi là "không khoá được" sau 3 lần liên tiếp
+const fpLockFail = () => { FP.lockFails = (FP.lockFails || 0) + 1; if (FP.lockFails >= 3) FP.lockFailed = true; };
+document.addEventListener('pointerlockerror', fpLockFail);
 function fpLock() {
   if (FP.locked || FP.lockFailed || isTouch || !canvas.requestPointerLock) return false;
-  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { FP.lockFailed = true; }); } catch (e) { FP.lockFailed = true; return false; }
+  if (performance.now() - (FP.unlockT || 0) < 1200) return true;   // Chrome không cho khoá lại ngay sau khi vừa thoát
+  try {
+    // unadjustedMovement: chuột thô, không gia tốc của hệ điều hành (Chrome); trình duyệt khác thì khoá thường
+    const r = FP.noRaw ? canvas.requestPointerLock() : canvas.requestPointerLock({ unadjustedMovement: true });
+    if (r && r.catch) r.catch((err) => {
+      // máy không hỗ trợ chuột thô: lần sau khoá thường (thử luôn bây giờ)
+      if (!FP.noRaw && err && err.name === 'NotSupportedError') { FP.noRaw = true; try { const r2 = canvas.requestPointerLock(); if (r2 && r2.catch) r2.catch(() => {}); } catch (e2) { /* bấm lại là được */ } }
+      else if (err && err.name === 'SecurityError') FP.lockFailed = true;   // khung nhúng cấm khoá chuột: dùng chuột phải kéo
+      else fpLockFail();
+    });
+  } catch (e) { fpLockFail(); return false; }
   return true;
 }
 // thả con trỏ khi mở túi đồ / bảng / tạm dừng
@@ -4827,10 +4986,11 @@ function startGame(opts = {}) {
   if ((!net.active || net.host) && !calmStart) { spawnLurkers(); for (let i = 0; i < 3; i++) spawnStray(); }
   for (const k in gateStates) delete gateStates[k];
   if (!net.active || net.host) makeBots(); else clearBots();
+  // mã ván: quyết định chỗ đặt đồ nhiệm vụ (giữ nguyên khi chơi tiếp bản lưu)
+  net.gameId = (L && L.qs) || Math.floor(Math.random() * 1e9);
   if (L) applySave(L);
   afterZoneLoad(ZONE.id);
   saveT = 60;
-  net.gameId = Math.floor(Math.random() * 1e9);
   sound.generator(false); sound.heli(false);
   // chế độ chụp ảnh để kiểm tra đồ hoạ: ?shot=<giờ>&w=<rain|storm|fog|blood>&px=..
   if (QS.has('shot')) {
@@ -4900,6 +5060,13 @@ function init() {
   setZone(QS.get('zone') && ZONES[QS.get('zone')] ? QS.get('zone') : START_ZONE);
   SPR = makeCharacterSprites();
   cinema.init({ sound, zombies: SPR.zombies });
+  // co-op: chủ phòng điều khiển phim (bỏ qua / tua thoại) cho cả phòng
+  cinema.setPolicy({
+    lead: () => !net.active || net.host,
+    onSkip: (id) => { if (net.active && net.host) netEvent('cskip', id); },
+    onAdvance: (id, i, t) => { if (net.active && net.host) netEvent('cadv', id, i, Math.round(t * 100)); },
+    skipped: (id) => net.active && !net.host && (net.hostCine === false || (!!net.cskip && net.cskip.id === id && performance.now() - net.cskip.at < 60000)),
+  });
   buildZoneWorld();
   pickupAtlas = makePickupAtlas();
   buildIcons(); buildQuickBar(); buildToolbarIcons();
@@ -4984,10 +5151,13 @@ function init() {
   if (QS.has('debug')) window.__mod = (k, v) => { player.mod[k] = v; hud.dirty = true; };
   if (QS.has('debug')) window.__fire = () => ({ poolXZ: firePools.map((f) => [+f.x.toFixed(1), +f.z.toFixed(1)]), pools: firePools.length, globs: globs.length, burning: zombies.filter((o) => o.burnT > 0).length, alive: zombies.filter((o) => o.state !== 'dead').length, melee: player.melee, durs: { ...player.durs }, armor: player.armor, hp: Math.round(player.hp), molotov: player.bag.molotov });
   if (QS.has('debug')) { window.__set = () => ({ settings, KB: { ...KB } }); window.__save = () => loadSave(); window.__saveNow = () => saveGame(true); window.__story = () => [...story.seen]; }
+  if (QS.has('debug')) window.__qplan = () => { const P = questPlan(); const out = {}; for (const it in QSPOTS) out[it] = P[it].map((i) => QSPOTS[it][i].t); return { seed: P.seed, out, here: world.containers.map((c) => [c.id, c.kind, c.label, questLoot(c).map((q) => q[0]).join(','), c.x, c.z]).filter((x) => x[3]), checked: [...player.qChecked], counts: Object.entries(QSPOTS).flatMap(([it, L]) => L.filter((sp) => sp.z === ZONE.id).map((sp) => [it, sp.t, world.containers.filter((o) => spotMatch(sp, o)).length])) }; };
+  if (QS.has('debug')) window.__qseed = (n) => { net.gameId = n; };
   if (QS.has('debug')) window.__shInfo = () => { const out = []; for (const sp of SPRITES) { if (!sp.group.visible) continue; const e = sp.shadow.matrixWorld.elements; out.push([+sp.shadow.rotation.y.toFixed(2), sp.shadow.castShadow, sp.mesh.castShadow, sp.shadow.visible, !!sp.smat.map, e.slice(12, 15).map((v) => +v.toFixed(1)), sp.shadow.parent === sp.mesh]); if (out.length > 4) break; } return { sunYaw, n: SPRITES.size, out }; };
   if (QS.has('debug')) window.__shProxy = (on) => { for (const sp of SPRITES) if (sp.shadow) { sp.shadow.castShadow = sp.shadow2.castShadow = on; sp.mesh.castShadow = !on; } };
   if (QS.has('debug')) window.__hour = (h) => { dayStartHour = h; phaseT = 0; atmos.hour = h; atmos.setWeather('clear', true); };
   if (QS.has('debug')) window.__vm = (sw, rec = 0, mz = false) => { FP.dbg = sw === null ? null : { sw, rec, mz }; };
+  if (QS.has('debug')) window.__fpState = () => ({ on: FP.on, yaw: +FP.yaw.toFixed(3), pitch: +FP.pitch.toFixed(3), locked: FP.locked, failed: !!FP.lockFailed, fails: FP.lockFails || 0, paused: state.paused });
   if (QS.has('debug')) window.__fp = (yaw, pitch = 0) => { settings.view = 'fp'; FP.yaw = yaw; FP.pitch = pitch; return { on: FP.on, near: camera.near, fov: camera.fov, cam: camera.position.toArray().map((v) => +v.toFixed(2)) }; };
   if (QS.has('debug')) { window.__cine = (id) => { sound.init(); cinema.play(id); }; window.__cineJump = (i, t) => cinema.jump(i, t); window.__cineState = () => cinema.state(); }
   if (QS.has('debug')) window.__post = () => ({ flash: post.params.flash, gain: post.params.gain, lift: post.params.lift, hour: +atmos.hour.toFixed(2), kind: atmos.kind, hurt: hurtFlash, mode: state.mode });
@@ -5368,7 +5538,7 @@ function saveGame(flash) {
     hp: P.hp, food: P.food, water: P.water, bag: { ...P.bag }, melee: P.melee, durs: { ...P.durs }, armor: P.armor, pack: !!P.pack,
     recipes: [...P.recipes], books: [...P.books], guns: P.guns.map((g) => ({ owned: g.owned, ammo: g.ammo })), weapon: P.weapon,
     battery: P.battery, flashOn: P.flashOn, torchT: P.torchT, infected: P.infected, infMax: P.infMax || 0,
-    looted: [...P.looted], picked: [...P.picked], lootCount: P.lootCount,
+    looted: [...P.looted], picked: [...P.picked], lootCount: P.lootCount, qs: net.gameId, qc: [...P.qChecked],
     Q: { ...Q, heli: null }, power, dayNo, wave, phase, phaseT, dayStartHour, hourFrom, toSpawn, nightTotal, nightKills, hour: atmos.hour, weather: atmos.kind,
     durKey, gates: JSON.parse(JSON.stringify(gateStates)), drops: JSON.parse(JSON.stringify(dropStore)), kills, score, playTime: gtime - playStart,
     story: [...story.seen], bots: bots.map((b) => ({ ci: b.ci, hp: b.hp, state: b.state === 'out' ? 'out' : 'ok' })),
@@ -5389,7 +5559,7 @@ function applySave(S) {
   P.weapon = P.guns[S.weapon] && P.guns[S.weapon].owned ? S.weapon : 0;
   P.battery = S.battery || 0; P.flashOn = S.flashOn; P.torchT = S.torchT || 0;
   P.infected = S.infected || 0; if (S.infMax) P.infMax = S.infMax;
-  P.looted = new Set(S.looted); P.picked = new Set(S.picked); P.lootCount = S.lootCount || 0;
+  P.looted = new Set(S.looted); P.picked = new Set(S.picked); P.lootCount = S.lootCount || 0; P.qChecked = new Set(S.qc || []);
   Object.assign(Q, S.Q, { heli: null }); power = !!S.power;
   dayNo = S.dayNo; wave = S.wave; dayStartHour = S.dayStartHour; hourFrom = S.hourFrom;
   phase = S.phase === 'shot' ? 'day' : S.phase; phaseT = S.phaseT;
@@ -5623,7 +5793,7 @@ function afterOutbreak() {
   placeBots();
   phaseT = 0;
   hud.dirty = true; saveT = 2;
-  showMsg('CHƯƠNG 0 · TIẾT HỌC CUỐI', 'Tìm kềm cắt ở kho tầng 3 · cắt khoá cổng chính tầng 1');
+  showMsg('CHƯƠNG 0 · TIẾT HỌC CUỐI', 'Tìm kềm cắt trong trường · bấm NHIỆM VỤ để xem nơi có thể có');
   if (!partyIds().includes(CHARS[bench].id)) setTimeout(() => toast(`${CHARS[bench].name} chạy lạc khỏi nhóm trong lúc hỗn loạn`), 2600);
   sound.wave();
 }
@@ -5641,7 +5811,7 @@ function describeMainGate() {
   if (!g || g.state === 'open' || Q.gateCut) return { label: 'Cổng chính đã mở', can: false };
   if (calmNow()) return { label: 'Cổng chính đang khoá (giờ học)', can: false };
   if (player.bag.cutters > 0) return { label: 'Cắt ổ khoá cổng chính', can: true, time: 2.4 };
-  return { label: 'Cổng khoá xích · cần KỀM CẮT (kho tầng 3)', can: false };
+  return { label: 'Cổng khoá xích · cần KỀM CẮT (bấm NHIỆM VỤ xem nơi tìm)', can: false };
 }
 function openMainGate(feed) {
   const g = world.pois.mainGate;
@@ -5844,7 +6014,7 @@ function defineOutbreak() {
     },
     exit() { c3End(); },
   });
-  shots.push(cinema.titleShot('CHƯƠNG 0', 'TIẾT HỌC CUỐI', 'Mục tiêu: tìm KỀM CẮT ở kho dụng cụ tầng 3 · cắt khoá cổng chính tầng 1', 5));
+  shots.push(cinema.titleShot('CHƯƠNG 0', 'TIẾT HỌC CUỐI', 'Mục tiêu: tìm KỀM CẮT trong trường · cắt khoá cổng chính tầng 1', 5));
   cinema.define('outbreak', shots);
 }
 
@@ -5997,6 +6167,7 @@ $('minimap').addEventListener('click', () => toggleMap(true));
 $('minimap').addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); toggleMap(true); }, { passive: false });
 tapBind('tb-skill', () => toggleSkills());
 tapBind('tb-pause', () => togglePause());
+tapBind('cb-go', () => quickAntidote());
 tapBind('tb-view', () => { if (state.mode === 'play') toggleView(); });
 // "⋯": mở / gom các nút ít dùng; tự gom lại sau vài giây
 let tbMoreT = 0;
